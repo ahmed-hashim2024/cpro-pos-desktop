@@ -199,6 +199,11 @@ function Header({ collapsed, onToggle }) {
             <div className="text-xs text-muted">{roles[me?.role]}</div>
           </div>
           <span className="bg-brand flex size-8 items-center justify-center rounded-full text-sm font-bold text-white">{initials}</span>
+          {can('settings.manage') && (
+            <button onClick={() => navigate('/settings')} className={iconBtn} aria-label={T('الإعدادات')} title={T('الإعدادات')}>
+              <Settings className="size-5" aria-hidden />
+            </button>
+          )}
         </div>
       </div>
     </header>
