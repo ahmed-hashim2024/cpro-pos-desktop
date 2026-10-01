@@ -75,7 +75,11 @@ wails build                            # build/bin/
 
 # or in a browser:
 go run ./cmd/devserver -addr 127.0.0.1:8787 -ui frontend/dist
+cd frontend && CPRO_API=http://127.0.0.1:8787 npm run dev   # hot reload in the browser
 ```
+
+Under `wails dev`, Vite must answer 404 for `/api` so Wails hands the request to the Go handler.
+`vite.config.js` does this unless `CPRO_API` is set.
 
 Schema changes go in a new numbered file in
 `internal/store/sqlite/migrations/`. Never edit an applied migration.

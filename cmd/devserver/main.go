@@ -3,7 +3,7 @@
 // to localhost only and uses the "app" channel, exactly like the window.
 //
 //	go run ./cmd/devserver -addr 127.0.0.1:8787 -ui frontend/dist
-//	cd frontend && npm run dev   # Vite proxies /api to it
+//	cd frontend && CPRO_API=http://127.0.0.1:8787 npm run dev   # Vite proxies /api to it
 package main
 
 import (
