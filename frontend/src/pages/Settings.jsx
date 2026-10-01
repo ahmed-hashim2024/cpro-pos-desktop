@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { Plus, Trash2, Download, HardDriveDownload, Settings as SettingsIcon } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useTab } from '@/lib/useTab';
+import { useTheme, fontScales } from '@/lib/theme';
 import { useApp, toast } from '@/lib/store';
 import { toMinor, minorInput, toBP, dateTime } from '@/lib/format';
 import { Badge, Button, Card, Checkbox, Field, Input, PageHeader, Select, Spinner, Table, Td, Tabs, Textarea, useLoad, useAction } from '@/components/ui';
 
 export default function Settings() {
-  const [tab, setTab] = useState('general');
+  const [tab, setTab] = useTab('general');
   return (
     <div>
       <PageHeader title="الإعدادات" icon={SettingsIcon} subtitle="بيانات المطعم والضرائب والطباعة والأجهزة" crumb="الإدارة" />
-      <Tabs value={tab} onChange={setTab} tabs={[['general', 'عام'], ['payments', 'طرق الدفع'], ['devices', 'الأجهزة والشبكة'], ['backups', 'النسخ الاحتياطي'], ['account', 'حسابي']]} />
+      <Tabs value={tab} onChange={setTab} tabs={[['general', 'عام'], ['display', 'العرض'], ['payments', 'طرق الدفع'], ['devices', 'الأجهزة والشبكة'], ['backups', 'النسخ الاحتياطي'], ['account', 'حسابي']]} />
       {tab === 'general' && <General />}
+      {tab === 'display' && <Display />}
       {tab === 'payments' && <Payments />}
       {tab === 'devices' && <Devices />}
       {tab === 'backups' && <Backups />}
@@ -199,5 +202,33 @@ function Account() {
         <Button busy={busy} onClick={() => run(async () => { await api.post('/me/password', { Current: f.current, Next: f.next }); toast('تم التغيير'); setF({ current: '', next: '' }); })}>حفظ</Button>
       </div>
     </Card>
+  );
+}
+
+// Per-device display preferences (stored on this device only).
+export function Display() {
+  const { scale, setScale, dark, toggle } = useTheme();
+  return (
+    <div className="grid max-w-3xl gap-4">
+      <Card title="حجم الخط">
+        <p className="mb-4 text-sm text-muted">يُطبَّق على هذا الجهاز فقط — اختر الحجم المناسب لشاشة الكاشير أو التابلت.</p>
+        <div className="grid grid-cols-5 gap-2" role="radiogroup" aria-label="حجم الخط">
+          {fontScales.map(([k, label, size]) => (
+            <button key={k} role="radio" aria-checked={scale === k} onClick={() => setScale(k)}
+              className={`flex flex-col items-center gap-2 rounded-2xl border-2 p-4 transition ${scale === k ? 'border-primary bg-primary-soft text-primary-ink' : 'border-line bg-surface hover:border-primary/40'}`}>
+              <span className="font-bold leading-none" style={{ fontSize: size + 6 }}>أب</span>
+              <span className="text-sm font-semibold">{label}</span>
+              <span className="num text-xs text-muted">{size}px</span>
+            </button>
+          ))}
+        </div>
+      </Card>
+      <Card title="المظهر">
+        <div className="flex gap-2">
+          <Button variant={dark ? 'secondary' : 'primary'} onClick={() => dark && toggle()}>فاتح</Button>
+          <Button variant={dark ? 'primary' : 'secondary'} onClick={() => !dark && toggle()}>داكن</Button>
+        </div>
+      </Card>
+    </div>
   );
 }

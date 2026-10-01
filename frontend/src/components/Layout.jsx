@@ -97,7 +97,7 @@ export function Logo({ compact }) {
       {!compact && (
         <div className="leading-tight">
           <div className="text-brand text-xl font-black tracking-tight" dir="ltr">CPro</div>
-          <div className="text-[11px] font-semibold text-muted">نظام المطاعم</div>
+          <div className="text-xs font-semibold text-muted">نظام المطاعم</div>
         </div>
       )}
     </div>
@@ -161,7 +161,7 @@ function NavItem({ item, collapsed, active, sub }) {
   return (
     <NavLink to={item.to} title={collapsed ? item.label : undefined}
       className={cx('group relative my-0.5 flex items-center gap-3 rounded-xl transition',
-        collapsed ? 'justify-center py-2.5' : sub ? 'px-3 py-2 text-[14px]' : 'px-3 py-2.5 font-bold',
+        collapsed ? 'justify-center py-2.5' : sub ? 'px-3 py-2 text-sm' : 'px-3 py-2.5 font-bold',
         active ? 'bg-primary-soft text-primary-ink' : 'text-muted hover:bg-surface-2 hover:text-fg')}>
       <Icon className={cx(sub ? 'size-[18px]' : 'size-5', active && 'text-primary')} aria-hidden />
       {!collapsed && <span>{item.label}</span>}
@@ -172,7 +172,7 @@ function NavItem({ item, collapsed, active, sub }) {
 
 function Header({ collapsed, onToggle }) {
   const { me, shift, can } = useApp();
-  const { dark, toggle } = useTheme();
+  const { dark, toggle, step, scale } = useTheme();
   const navigate = useNavigate();
   const [now, setNow] = useState(new Date());
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t); }, []);
@@ -195,6 +195,11 @@ function Header({ collapsed, onToggle }) {
         <span className="hidden items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-sm text-muted lg:flex">
           <Clock className="size-4" aria-hidden />{now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
         </span>
+        <div className="flex items-center rounded-xl border border-line" role="group" aria-label="حجم الخط">
+          <button onClick={() => step(-1)} disabled={scale === 'xs'} aria-label="تصغير الخط" className="px-2.5 py-1.5 text-sm font-bold text-muted hover:text-fg disabled:opacity-30">A−</button>
+          <span className="h-5 w-px bg-line" />
+          <button onClick={() => step(1)} disabled={scale === 'xl'} aria-label="تكبير الخط" className="px-2.5 py-1.5 text-sm font-bold text-muted hover:text-fg disabled:opacity-30">A+</button>
+        </div>
         <button onClick={toggle} aria-label={dark ? 'الوضع الفاتح' : 'الوضع الداكن'} className="rounded-xl p-2.5 text-muted hover:bg-surface-2 hover:text-fg">
           {dark ? <Sun className="size-5" /> : <Moon className="size-5" />}
         </button>

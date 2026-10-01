@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useApp } from '@/lib/store';
 import { setUnauthorizedHandler } from '@/lib/api';
@@ -33,10 +33,14 @@ function permittedPaths(can) {
   return [...ok];
 }
 
+// Where to land after login: a one-off target set by the login screen
+// (first-run setup, kitchen devices), else the first screen the role can use.
 function Home() {
   const can = useApp((s) => s.can);
   const paths = permittedPaths(can);
-  const first = ['/dashboard', '/pos', '/kitchen'].find((p) => paths.includes(p)) || paths[0];
+  const [next] = useState(() => sessionStorage.getItem('cpro.next'));
+  useEffect(() => sessionStorage.removeItem('cpro.next'), []);
+  const first = [next, '/dashboard', '/pos', '/kitchen'].find((p) => p && paths.includes(p)) || paths[0];
   return <Navigate to={first || '/login'} replace />;
 }
 

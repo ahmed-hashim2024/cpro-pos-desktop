@@ -119,7 +119,7 @@ export function Stat({ label, value, sub, icon: Icon, tone = 'primary' }) {
         <div className="text-sm font-semibold text-muted">{label}</div>
         {Icon && <span className={cx('flex size-10 shrink-0 items-center justify-center rounded-xl', tones[tone] || tones.primary)}><Icon className="size-5" aria-hidden /></span>}
       </div>
-      <div className="num mt-2 text-[26px] font-bold leading-tight" style={{ direction: 'rtl' }}>{value}</div>
+      <div className="num mt-2 text-[1.75rem] font-bold leading-tight" style={{ direction: 'rtl' }}>{value}</div>
       {sub && <div className="mt-1 text-xs text-muted">{sub}</div>}
     </div>
   );

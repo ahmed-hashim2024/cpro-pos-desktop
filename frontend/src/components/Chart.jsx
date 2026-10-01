@@ -17,7 +17,7 @@ export function Bars({ data, height = 200, tone = 'primary' }) {
               {money(d.value)}
             </div>
           </div>
-          <div className="num truncate text-[11px] text-muted">{d.label}</div>
+          <div className="num truncate text-xs text-muted">{d.label}</div>
         </div>
       ))}
     </div>

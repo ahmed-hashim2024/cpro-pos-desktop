@@ -195,7 +195,7 @@ export default function POS() {
                 </div>
               )}
               {inCart[i.id] > 0 && <span className="bg-brand num absolute left-2 top-2 flex size-7 items-center justify-center rounded-full text-sm font-bold text-white shadow">{inCart[i.id]}</span>}
-              {i.modifier_group_ids.length > 0 && <span className="absolute right-2 top-2 rounded-full bg-surface/90 px-2 py-0.5 text-[11px] font-semibold text-muted shadow-sm">+ إضافات</span>}
+              {i.modifier_group_ids.length > 0 && <span className="absolute right-2 top-2 rounded-full bg-surface/90 px-2 py-0.5 text-xs font-semibold text-muted shadow-sm">+ إضافات</span>}
               <div className="flex flex-1 flex-col justify-between gap-2 p-3">
                 <div className="line-clamp-2 font-semibold leading-snug">{i.name}</div>
                 <div className="num text-lg font-bold text-primary">{money(i.price_minor)} <span className="text-xs font-semibold text-muted">{currencyLabel()}</span></div>

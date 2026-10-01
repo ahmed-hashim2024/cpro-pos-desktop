@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Delete, KeyRound, UserRound, ShoppingCart, ChefHat, FlaskConical, ShieldCheck } from 'lucide-react';
 import { api, deviceId } from '@/lib/api';
 import { useApp, toastError } from '@/lib/store';
@@ -49,7 +48,6 @@ export default function Login() {
 
 function Setup() {
   const signedIn = useApp((s) => s.signedIn);
-  const navigate = useNavigate();
   const [f, setF] = useState({ restaurant_name: '', owner_name: '', username: '', password: '', pin: '' });
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -57,8 +55,8 @@ function Setup() {
     e.preventDefault();
     setBusy(true);
     try {
+      sessionStorage.setItem('cpro.next', '/settings');
       await signedIn(await api.post('/setup', f));
-      navigate('/settings');
     } catch (err) {
       toastError(err);
     } finally {
@@ -84,7 +82,6 @@ function Setup() {
 
 function SignIn({ channel }) {
   const signedIn = useApp((s) => s.signedIn);
-  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [picked, setPicked] = useState(null);
   const [pin, setPin] = useState('');
@@ -105,8 +102,8 @@ function SignIn({ channel }) {
         try { localStorage.setItem(DEVICE_NAME, device.name); localStorage.setItem(DEVICE_KIND, device.kind); } catch { /* ignore */ }
       }
       const s = await api.post('/auth/login', { ...body, device_id: deviceId(), device_name: device.name, device_kind: device.kind });
+      if (lan && device.kind === 'kds') sessionStorage.setItem('cpro.next', '/kitchen');
       await signedIn(s);
-      navigate(device.kind === 'kds' && lan ? '/kitchen' : '/');
     } catch (e) {
       toastError(e);
       setPin('');
