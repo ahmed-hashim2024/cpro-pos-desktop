@@ -7,18 +7,20 @@ import { useApp, toast } from '@/lib/store';
 import { toMinor, minorInput, toBP, dateTime } from '@/lib/format';
 import { Badge, Button, Card, Checkbox, Field, Input, PageHeader, Select, Spinner, Table, Td, Tabs, Textarea, useLoad, useAction } from '@/components/ui';
 import { T, lang, languages, setLang } from '@/lib/i18n';
+import Platform from './settings/Platform';
 
 export default function Settings() {
   const [tab, setTab] = useTab('general');
   return (
     <div>
       <PageHeader title={T('الإعدادات')} icon={SettingsIcon} subtitle={T('بيانات المطعم والضرائب والطباعة والأجهزة')} crumb={T('الإدارة')} />
-      <Tabs value={tab} onChange={setTab} tabs={[['general', T('عام')], ['display', T('العرض')], ['payments', T('طرق الدفع')], ['devices', T('الأجهزة والشبكة')], ['backups', T('النسخ الاحتياطي')], ['account', T('حسابي')]]} />
+      <Tabs value={tab} onChange={setTab} tabs={[['general', T('عام')], ['display', T('العرض')], ['payments', T('طرق الدفع')], ['devices', T('الأجهزة والشبكة')], ['backups', T('النسخ الاحتياطي')], ['platform', T('الاشتراك والمنيو الإلكتروني')], ['account', T('حسابي')]]} />
       {tab === 'general' && <General />}
       {tab === 'display' && <Display />}
       {tab === 'payments' && <Payments />}
       {tab === 'devices' && <Devices />}
       {tab === 'backups' && <Backups />}
+      {tab === 'platform' && <Platform />}
       {tab === 'account' && <Account />}
     </div>
   );

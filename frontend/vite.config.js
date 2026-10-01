@@ -24,4 +24,8 @@ export default defineConfig({
   plugins: [tailwindcss(), react(), ...(api ? [] : [apiNotFound])],
   resolve: { alias: { '@': path.resolve(__dirname, 'src') } },
   server: api ? { proxy: { '/api': api } } : {},
+  build: {
+    // Two pages: the staff app and the guest e-menu (served on the tunnel).
+    rollupOptions: { input: { main: path.resolve(__dirname, 'index.html'), menu: path.resolve(__dirname, 'menu.html') } },
+  },
 })

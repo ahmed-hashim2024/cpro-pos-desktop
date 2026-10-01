@@ -22,10 +22,14 @@ type App struct {
 	paths paths.Paths
 	log   *slog.Logger
 	now   func() time.Time
+
+	platform     *platformLink       // nil: licensing off (tests, tools)
+	tunnelStatus func() TunnelStatus // set by main
+	limits       *rateLimiter        // public e-menu endpoints
 }
 
 func New(db *sqlite.DB, p paths.Paths, log *slog.Logger) *App {
-	return &App{db: db, paths: p, log: log, now: time.Now}
+	return &App{db: db, paths: p, log: log, now: time.Now, limits: newRateLimiter()}
 }
 
 // Channel is how a request reached the app.

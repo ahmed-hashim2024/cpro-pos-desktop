@@ -234,8 +234,8 @@ func (a *App) importEntities() []importEntity {
 				sortField, activeField,
 			},
 			insert: func(ctx context.Context, tx *sql.Tx, a *App, v rowValues) error {
-				_, err := tx.ExecContext(ctx, `INSERT INTO dining_tables(id, name, area, seats, sort, active) VALUES (?,?,?,?,?,?)`,
-					sqlite.NewID(), v.str("name"), v.str("area"), orInt(v, "seats", 4), orInt(v, "sort", 0), sqlite.Int(orBool(v, "active", true)))
+				_, err := tx.ExecContext(ctx, `INSERT INTO dining_tables(id, name, area, seats, sort, active, qr_token) VALUES (?,?,?,?,?,?,?)`,
+					sqlite.NewID(), v.str("name"), v.str("area"), orInt(v, "seats", 4), orInt(v, "sort", 0), sqlite.Int(orBool(v, "active", true)), newPublicToken())
 				return err
 			},
 			update: func(ctx context.Context, tx *sql.Tx, a *App, id string, v rowValues) error {

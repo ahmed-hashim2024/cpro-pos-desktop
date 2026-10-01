@@ -21,13 +21,13 @@ const css = () => `
   .xl { font-size: 22px; font-weight: bold; }
 `;
 
-function printHTML(body) {
+function printHTML(body, style = css()) {
   const frame = document.createElement('iframe');
   frame.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
   document.body.appendChild(frame);
   const doc = frame.contentDocument;
   doc.open();
-  doc.write(`<!doctype html><html dir="${dir}"><head><meta charset="utf-8"><style>${css()}</style></head><body>${body}</body></html>`);
+  doc.write(`<!doctype html><html dir="${dir}"><head><meta charset="utf-8"><style>${style}</style></head><body>${body}</body></html>`);
   doc.close();
   setTimeout(() => {
     frame.contentWindow.focus();
@@ -100,4 +100,21 @@ export function printReport(title, subtitle, sections) {
     <table>${head ? `<tr>${head.map((h) => `<td><b>${esc(h)}</b></td>`).join('')}</tr>` : ''}
     ${rows.map((r) => `<tr>${r.map((c, i) => `<td class="${i ? 'n' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</table><hr>`).join('');
   printHTML(`<h1>${esc(title)}</h1><div class="c muted">${esc(subtitle)}</div><hr>${html}`);
+}
+
+// One A4 page of table QR cards (the e-menu link of each table).
+export function printTableQRs(restaurant, cards) {
+  const style = `
+    @page { size: A4; margin: 10mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Tahoma, 'Segoe UI', Arial, sans-serif; direction: ${dir}; color: #111; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6mm; }
+    .card { border: 1px solid #bbb; border-radius: 4mm; padding: 5mm; text-align: center; break-inside: avoid; }
+    .card svg { width: 42mm; height: 42mm; }
+    .r { font-size: 11px; color: #555; } .t { font-size: 20px; font-weight: bold; margin: 2mm 0; } .h { font-size: 11px; }
+  `;
+  const body = `<div class="grid">${cards.map((c) => `
+    <div class="card"><div class="r">${esc(restaurant)}</div><div class="t">${esc(c.title)}</div>${c.svg}
+    <div class="h">${esc(T('امسح الكود لعرض المنيو والطلب'))}</div></div>`).join('')}</div>`;
+  printHTML(body, style);
 }

@@ -1,0 +1,65 @@
+@import "tailwindcss" source(".");
+@import "@fontsource/ibm-plex-sans-arabic/400.css";
+@import "@fontsource/ibm-plex-sans-arabic/500.css";
+@import "@fontsource/ibm-plex-sans-arabic/600.css";
+@import "@fontsource/ibm-plex-sans-arabic/700.css";
+
+/*
+ * Guest menu tokens. The theme (set by the owner on the Platform) picks the
+ * surfaces; primary/accent come from the owner's colours.
+ *   bg page · card surfaces · card2 wells/chips · fg text · mut secondary · line borders
+ *   p primary (prices, buttons) · onp text on primary · a accent (badges, calls)
+ */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-card2: var(--card2);
+  --color-fg: var(--fg);
+  --color-mut: var(--mut);
+  --color-line: var(--line);
+  --color-p: var(--p);
+  --color-onp: var(--onp);
+  --color-a: var(--a);
+  --font-sans: "IBM Plex Sans Arabic", system-ui, sans-serif;
+}
+
+:root, [data-theme="midnight"] {
+  --bg: #121110; --card: #1c1a18; --card2: #27241f; --fg: #f6f1ea; --mut: #b4ab9f; --line: #34302b;
+  --p: #d4a24c; --onp: #1a1206; --a: #e8604c; color-scheme: dark;
+}
+[data-theme="espresso"] {
+  --bg: #1a120d; --card: #241912; --card2: #30221a; --fg: #f7eee6; --mut: #c6b19f; --line: #3e2d22; color-scheme: dark;
+}
+[data-theme="cream"] {
+  --bg: #fbf6ee; --card: #ffffff; --card2: #f3ebdf; --fg: #2a2118; --mut: #6b5e51; --line: #e8dccb; color-scheme: light;
+}
+[data-theme="fresh"] {
+  --bg: #f3f8f4; --card: #ffffff; --card2: #e6f0e8; --fg: #13221a; --mut: #52665a; --line: #d6e5d9; color-scheme: light;
+}
+
+html, body { background: var(--bg); color: var(--fg); -webkit-tap-highlight-color: transparent; }
+body { font-family: var(--font-sans); min-height: 100dvh; }
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.num { font-variant-numeric: tabular-nums; }
+
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop { 0% { transform: scale(.6); opacity: 0; } 70% { transform: scale(1.08); } 100% { transform: scale(1); opacity: 1; } }
+@keyframes shimmer { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+.anim-sheet { animation: sheet-up .32s cubic-bezier(.2, .8, .2, 1); }
+.anim-fade { animation: fade-in .2s ease-out; }
+.anim-pop { animation: pop .45s cubic-bezier(.2, .8, .2, 1); }
+.skeleton {
+  background: linear-gradient(90deg, var(--card2) 25%, var(--line) 50%, var(--card2) 75%);
+  background-size: 200% 100%; animation: shimmer 1.4s infinite linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+/* The owner's custom section (sanitised HTML). */
+.custom-html img { max-width: 100%; height: auto; border-radius: 12px; display: inline-block; }
+.custom-html a { color: var(--p); text-decoration: underline; }
+.custom-html h1, .custom-html h2, .custom-html h3 { font-weight: 700; margin: .5em 0; }
+.custom-html p { margin: .4em 0; line-height: 1.7; }

@@ -7,6 +7,7 @@ export const useApp = create((set, get) => ({
   me: null,
   settings: null,
   shift: null,
+  platform: null, // license + e-menu link (GET /platform)
   ready: false,
 
   can: (perm) => !!get().me?.permissions?.includes(perm),
@@ -16,7 +17,7 @@ export const useApp = create((set, get) => ({
     try {
       const me = await api.get('/me');
       set({ me });
-      await Promise.all([get().loadSettings(), get().loadShift()]);
+      await Promise.all([get().loadSettings(), get().loadShift(), get().loadPlatform()]);
     } catch {
       session.token = '';
       set({ me: null });
@@ -27,7 +28,21 @@ export const useApp = create((set, get) => ({
   async signedIn({ token, me }) {
     session.token = token;
     set({ me });
-    await Promise.all([get().loadSettings(), get().loadShift()]);
+    await Promise.all([get().loadSettings(), get().loadShift(), get().loadPlatform()]);
+  },
+
+  async loadPlatform() {
+    try {
+      set({ platform: await api.get('/platform') });
+    } catch {
+      set({ platform: null });
+    }
+  },
+
+  // Selling is allowed when licensing is off or the license is valid.
+  canSell: () => {
+    const p = get().platform;
+    return !p?.enabled || ['active', 'trial', 'grace'].includes(p.state);
   },
 
   async loadSettings() {

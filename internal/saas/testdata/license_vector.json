@@ -1,0 +1,29 @@
+{
+ "platform_private": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+ "platform_public": "A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg",
+ "license_payload": {
+  "tenant": "TEN-00001",
+  "tenant_name": "مطعم الكرامة",
+  "device_id": "01JDEVICE0000000000000000A",
+  "status": "active",
+  "features": {
+   "emenu": true,
+   "emenu_ordering": true,
+   "remote_access": false
+  },
+  "iat": 1790000000,
+  "exp": 1790604800,
+  "grace_days": 14,
+  "ver": 3
+ },
+ "license_token": "eyJhbGciOiJFZERTQSIsImtpZCI6ImNwcm8tMSIsInR5cCI6IkpXVCJ9.eyJkZXZpY2VfaWQiOiIwMUpERVZJQ0UwMDAwMDAwMDAwMDAwMDAwQSIsImV4cCI6MTc5MDYwNDgwMCwiZmVhdHVyZXMiOnsiZW1lbnUiOnRydWUsImVtZW51X29yZGVyaW5nIjp0cnVlLCJyZW1vdGVfYWNjZXNzIjpmYWxzZX0sImdyYWNlX2RheXMiOjE0LCJpYXQiOjE3OTAwMDAwMDAsInN0YXR1cyI6ImFjdGl2ZSIsInRlbmFudCI6IlRFTi0wMDAwMSIsInRlbmFudF9uYW1lIjoi2YXYt9i52YUg2KfZhNmD2LHYp9mF2KkiLCJ2ZXIiOjN9.MiNIEk2bleGrg3fBir8TQg5zpt7T08hq6Na1UfnVaqrzyLZFBfm1QHSGBR8S1NZT0ePo93z3y9BfVlaa9He0Dw",
+ "device_private": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8",
+ "device_public": "Kay64UG8yvCyLhqU000LxzYeUm0L_hLIl5S8kyKWbdc",
+ "request": {
+  "device_id": "01JDEVICE0000000000000000A",
+  "ts": 1790000000,
+  "nonce": "a1b2c3",
+  "body": "{\"activation_code\": \"ACT-ABCDEFGHIJ\", \"device_name\": \"الكاشير\"}",
+  "sig": "KT-abh0taQswHa_txs8hvnQOwhVUYv_S50-m3g7crJqe1s2ZrUCvc5bi6X0KUYeBJWMPI-7MFNE1yibB1jznAQ"
+ }
+}

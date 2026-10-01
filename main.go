@@ -8,14 +8,18 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"time"
 
 	"cpro/internal/app"
+	"cpro/internal/license"
 	"cpro/internal/platform/logging"
 	"cpro/internal/platform/paths"
+	"cpro/internal/saas"
 	"cpro/internal/store/sqlite"
 	"cpro/internal/transport/httpapi"
 	"cpro/internal/transport/native"
+	"cpro/internal/tunnel"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -24,6 +28,10 @@ import (
 
 //go:embed all:frontend/dist
 var assets embed.FS
+
+// publicAddr is where Cloudflare delivers the restaurant's domain
+// (saas integrations/cloudflare.py DESKTOP_TUNNEL_ORIGIN). Loopback only.
+const publicAddr = "127.0.0.1:8788"
 
 func main() {
 	if err := run(); err != nil {
@@ -63,6 +71,43 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
+	// Platform link: license, domain and e-menu settings.
+	id, err := saas.LoadIdentity(filepath.Join(p.Data, "device.json"))
+	if err != nil {
+		return err
+	}
+	if license.Key() != "" {
+		if err := a.EnablePlatform(ctx, saas.NewClient(id)); err != nil {
+			return err
+		}
+	} else {
+		// Development build (wails dev). Release builds always embed the
+		// key: scripts/build.sh refuses to build without it.
+		log.Warn("no license key built in: licensing is OFF (development build)")
+	}
+	tun := tunnel.New(p.Data, log)
+	a.SetTunnelStatusFunc(func() app.TunnelStatus {
+		st := tun.Status()
+		return app.TunnelStatus{State: st.State, Error: st.Error}
+	})
+	applyTunnel := func() {
+		// Read the config inside the goroutine: Apply calls are serialised,
+		// so the last one always runs the latest config.
+		go func() {
+			token, _ := a.TunnelConfig()
+			tun.Apply(ctx, token)
+		}()
+	}
+	a.OnPlatformChange(applyTunnel)
+	applyTunnel()
+	go a.RunPlatformSync(ctx)
+	go func() {
+		// The guest e-menu, reached through the tunnel.
+		if err := httpapi.Listen(ctx, publicAddr, httpapi.NewPublic(a, log, dist), log); err != nil {
+			log.Error("public server", "err", err)
+		}
+	}()
 	settings, err := a.Settings(ctx, app.Actor{})
 	if err != nil {
 		return err
@@ -97,6 +142,7 @@ func run() error {
 		Bind:             []any{nat},
 		OnShutdown: func(context.Context) {
 			cancel()
+			tun.Stop()
 			if _, err := a.BackupNow(context.Background(), app.Actor{}, "exit"); err != nil {
 				log.Error("exit backup", "err", err)
 			}

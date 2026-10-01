@@ -73,12 +73,13 @@ type ModifierGroup struct {
 }
 
 type Table struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Area   string `json:"area"`
-	Seats  int    `json:"seats"`
-	Sort   int    `json:"sort"`
-	Active bool   `json:"active"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Area    string `json:"area"`
+	Seats   int    `json:"seats"`
+	Sort    int    `json:"sort"`
+	Active  bool   `json:"active"`
+	QRToken string `json:"qr_token"` // e-menu link /t/{token}; set by the server
 }
 
 func isUnique(err error) bool { return err != nil && strings.Contains(err.Error(), "UNIQUE") }
@@ -503,7 +504,7 @@ func (a *App) SaveModifierGroup(ctx context.Context, actor Actor, g ModifierGrou
 // ---- tables ----------------------------------------------------------------
 
 func (a *App) Tables(ctx context.Context, _ Actor) ([]Table, error) {
-	rows, err := a.db.Read.QueryContext(ctx, `SELECT id, name, area, seats, sort, active FROM dining_tables WHERE deleted_at IS NULL ORDER BY area, sort, name`)
+	rows, err := a.db.Read.QueryContext(ctx, `SELECT id, name, area, seats, sort, active, coalesce(qr_token,'') FROM dining_tables WHERE deleted_at IS NULL ORDER BY area, sort, name`)
 	if err != nil {
 		return nil, err
 	}
@@ -512,7 +513,7 @@ func (a *App) Tables(ctx context.Context, _ Actor) ([]Table, error) {
 	for rows.Next() {
 		var t Table
 		var active int64
-		if err := rows.Scan(&t.ID, &t.Name, &t.Area, &t.Seats, &t.Sort, &active); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.Area, &t.Seats, &t.Sort, &active, &t.QRToken); err != nil {
 			return nil, err
 		}
 		t.Active = active == 1
@@ -536,7 +537,8 @@ func (a *App) SaveTable(ctx context.Context, actor Actor, t Table) (Table, error
 		var err error
 		if t.ID == "" {
 			t.ID = sqlite.NewID()
-			_, err = tx.ExecContext(ctx, `INSERT INTO dining_tables(id, name, area, seats, sort, active) VALUES (?,?,?,?,?,?)`, t.ID, t.Name, t.Area, t.Seats, t.Sort, sqlite.Int(t.Active))
+			t.QRToken = newPublicToken()
+			_, err = tx.ExecContext(ctx, `INSERT INTO dining_tables(id, name, area, seats, sort, active, qr_token) VALUES (?,?,?,?,?,?,?)`, t.ID, t.Name, t.Area, t.Seats, t.Sort, sqlite.Int(t.Active), t.QRToken)
 		} else {
 			err = mustAffect(tx.ExecContext(ctx, `UPDATE dining_tables SET name=?, area=?, seats=?, sort=?, active=? WHERE id=?`, t.Name, t.Area, t.Seats, t.Sort, sqlite.Int(t.Active), t.ID))
 		}

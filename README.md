@@ -35,6 +35,23 @@ owner's own domain.
   validated, and errors are shown by row and column. Nothing is saved unless
   the whole file is valid.
 - **Languages:** Arabic (RTL), English and French (LTR), chosen per device.
+- **Platform link and license:** the app is activated with the owner's code
+  from the CPro Platform. Selling is blocked until it is activated, and when
+  the subscription ends, the trial ends or the device is revoked. Reports,
+  exports and backups always work. The license is signed by the Platform,
+  bound to this computer's key, and refreshed every few hours. A change on the
+  Platform (domain, e-menu settings, suspension) reaches the app within a
+  minute. When offline, a paid license keeps working for its grace days.
+- **E-menu:** the restaurant's domain (a Cloudflare tunnel the Platform
+  creates) is served from this computer.
+  - Guests browse a mobile menu in ar/en/fr with themes and colours set on
+    the Platform.
+  - Each table has its own QR code (printable, regenerable).
+  - Guests can call the waiter or ask for the bill. When the owner allows it,
+    they can order at the table or for takeaway.
+  - Online orders wait in the POS inbox until staff accept them. Accepted
+    orders become normal orders and go to the kitchen. Prices always come
+    from the menu.
 - **Operations:**
   - Automatic and on-exit backups with an integrity check.
   - An automatic backup before every schema migration.
@@ -53,15 +70,22 @@ internal/
   app/                      use cases; every call takes an Actor and checks permissions
   auth/                     bcrypt passwords and PINs, hashed session tokens
   store/sqlite/             modernc SQLite (no CGO), WAL, single writer, goose migrations, backups
-  transport/httpapi/        JSON API under /api/v1, one handler per channel
+  transport/httpapi/        JSON API under /api/v1, one handler per channel; public.go = guest e-menu only
+  license/                  license (EdDSA JWS) verification and states — pure
+  saas/                     signed client for the Platform (+ saastest: in-memory fake Platform)
+  tunnel/                   cloudflared supervisor (pinned version, SHA-256 verified download)
   platform/                 per-OS data dir, logging
-frontend/                   React 19 + Vite + Tailwind 4
+frontend/                   React 19 + Vite + Tailwind 4 (index.html = staff app, menu.html = guest e-menu)
 ```
 
 There is one API for every client. Inside the window, Wails routes `/api/v1`
 to the Go handler, with no open port. When LAN access is enabled, the same
 handler and UI are served on `:8787` for tablets and kitchen screens. Session
 tokens are bound to the channel they were issued on.
+
+The restaurant's domain reaches a second listener on `127.0.0.1:8788`
+(`httpapi.NewPublic`). It serves only the guest menu page, its assets, item
+images and `/api/public/v1`. The staff API is not routed there at all.
 
 All totals are computed on the server from catalog prices. Money is stored as
 `int64` piasters and quantities as thousandths (`0.150 kg` = `150`). Every
@@ -82,8 +106,23 @@ wails build                            # build/bin/
 
 # or in a browser:
 go run ./cmd/devserver -addr 127.0.0.1:8787 -ui frontend/dist
+# …with a fake Platform (activation code ACT-DEMO) and the guest menu on :8788
+go run ./cmd/devserver -addr 127.0.0.1:8787 -ui frontend/dist -fake-saas -public 127.0.0.1:8788
 cd frontend && CPRO_API=http://127.0.0.1:8787 npm run dev   # hot reload in the browser
 ```
+
+### Release builds
+
+```sh
+CPRO_SAAS_URL=https://your-platform.com \
+CPRO_LICENSE_PUBKEY=<SCP Settings → License Public Key> \
+CPRO_VERSION=1.0.0 scripts/build.sh -platform windows/amd64
+```
+
+The key comes from the Platform:
+`bench --site <site> execute saas_control_platform.licensing.signing.generate_keys`.
+A build without a key (e.g. `wails dev`) runs with licensing **off** and logs a
+warning. `scripts/build.sh` refuses to build a release without one.
 
 Under `wails dev`, Vite must answer 404 for `/api` so Wails hands the request to the Go handler.
 `vite.config.js` does this unless `CPRO_API` is set.

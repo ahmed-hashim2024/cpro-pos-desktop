@@ -522,6 +522,66 @@ func (s *server) routes(mux *http.ServeMux) {
 		return a.ConsumptionReport(r.Context(), actor, from, to)
 	}))
 
+	// ---- platform link (activation, license, domain) ----
+	mux.HandleFunc("GET /api/v1/platform", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		return a.PlatformInfo(r.Context(), actor)
+	}))
+	mux.HandleFunc("POST /api/v1/platform/activate", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		var in struct {
+			Code       string `json:"code"`
+			DeviceName string `json:"device_name"`
+		}
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return a.ActivateDevice(r.Context(), actor, in.Code, in.DeviceName)
+	}))
+	mux.HandleFunc("POST /api/v1/platform/sync", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		return a.SyncPlatform(r.Context(), actor)
+	}))
+	mux.HandleFunc("POST /api/v1/platform/unlink", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		var in struct {
+			Force bool `json:"force"`
+		}
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return nil, a.UnlinkDevice(r.Context(), actor, in.Force)
+	}))
+	mux.HandleFunc("PUT /api/v1/platform/url", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		var in struct {
+			URL string `json:"url"`
+		}
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return nil, a.SetPlatformURL(r.Context(), actor, in.URL)
+	}))
+
+	// ---- e-menu: online orders and waiter calls ----
+	mux.HandleFunc("GET /api/v1/inbox", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		return a.Inbox(r.Context(), actor)
+	}))
+	mux.HandleFunc("POST /api/v1/online-orders/{id}/accept", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		return a.AcceptOnlineOrder(r.Context(), actor, r.PathValue("id"))
+	}))
+	mux.HandleFunc("POST /api/v1/online-orders/{id}/reject", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		var in struct {
+			Reason string `json:"reason"`
+		}
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return nil, a.RejectOnlineOrder(r.Context(), actor, r.PathValue("id"), in.Reason)
+	}))
+	mux.HandleFunc("POST /api/v1/service-requests/{id}/done", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		return nil, a.DoneServiceRequest(r.Context(), actor, r.PathValue("id"))
+	}))
+	mux.HandleFunc("POST /api/v1/tables/{id}/qr", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		token, err := a.RegenerateTableToken(r.Context(), actor, r.PathValue("id"))
+		return map[string]string{"qr_token": token}, err
+	}))
+
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "غير موجود"})
 	})

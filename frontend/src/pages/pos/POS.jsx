@@ -12,9 +12,13 @@ import { Button, Badge, Modal, Select, Spinner, Empty, IconButton, SearchInput, 
 import { withApproval } from '@/components/Approval';
 import { ModifierDialog, LineDialog, VoidDialog, DiscountDialog, CustomerDialog, OpenShiftDialog, PayDialog } from './dialogs';
 import { T } from '@/lib/i18n';
+import { ActivationGate } from '@/components/License';
+import { useInbox, InboxButton, InboxPanel } from '@/components/Inbox';
 
 export default function POS() {
-  const { settings, shift, can } = useApp();
+  const { settings, shift, can, canSell } = useApp();
+  const inbox = useInbox();
+  const [inboxOpen, setInboxOpen] = useState(false);
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const menu = useLoad(async () => {
@@ -148,6 +152,7 @@ export default function POS() {
     return menu.data.items.filter((i) => (s ? i.name.toLowerCase().includes(s) || i.code.toLowerCase().includes(s) : !cat || i.category_id === cat));
   }, [menu.data, cat, search]);
 
+  if (!canSell()) return <ActivationGate onBack={() => navigate('/')} />;
   if (menu.loading && !menu.data) return <Spinner />;
   // Anyone who takes cash must open a shift before selling.
   if (can('shift.cash') && !shift) return <ShiftGate onBack={() => navigate('/')} />;
@@ -173,6 +178,7 @@ export default function POS() {
             <ShiftPill shift={shift} canCash={can('shift.cash')} onOpen={() => setDialog({ kind: 'shift' })} onGo={() => navigate('/shift')} />
             <span className="flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-2 text-sm font-semibold text-muted"><Store className="size-4" aria-hidden />{settings.restaurant_name}</span>
             <div className="ms-auto flex items-center gap-2">
+              <InboxButton inbox={inbox} onClick={() => setInboxOpen(true)} />
               <Button variant="secondary" icon={ClipboardList} onClick={() => setDialog({ kind: 'open' })}>
                 {T('الطلبات المفتوحة')} <span className="num rounded-full bg-warning-soft px-2 text-warning">{openOrders.data?.length || 0}</span>
               </Button>
@@ -359,6 +365,8 @@ export default function POS() {
           </div>
         </Modal>
       )}
+      <InboxPanel open={inboxOpen} onClose={() => setInboxOpen(false)} inbox={inbox}
+        onAccepted={(o) => { setInboxOpen(false); setOrder(o); setParams({ order: o.id }, { replace: true }); openOrders.reload(true); }} />
     </div>
   );
 }

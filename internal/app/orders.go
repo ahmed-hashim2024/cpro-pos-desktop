@@ -292,55 +292,66 @@ func (a *App) CreateOrder(ctx context.Context, actor Actor, in OrderInput, idemK
 	}
 	var id string
 	err := a.tx(ctx, func(tx *sql.Tx) error {
-		if err := cashierShift(ctx, tx, actor); err != nil {
-			return err
-		}
-		if idemKey != "" {
-			if err := tx.QueryRowContext(ctx, `SELECT id FROM orders WHERE idempotency_key = ?`, idemKey).Scan(&id); err == nil {
-				return nil
-			}
-		}
-		if in.TableID != "" {
-			// Opening an occupied table returns the order already on it.
-			err := tx.QueryRowContext(ctx, `SELECT id FROM orders WHERE table_id = ? AND status IN ('open','held')`, in.TableID).Scan(&id)
-			if err == nil {
-				return nil
-			}
-			if !errors.Is(err, sql.ErrNoRows) {
-				return err
-			}
-			var ok int
-			if tx.QueryRowContext(ctx, `SELECT count(*) FROM dining_tables WHERE id = ? AND active = 1`, in.TableID).Scan(&ok); ok == 0 {
-				return notFound("الطاولة")
-			}
-		}
-		s, err := loadSettings(ctx, tx)
-		if err != nil {
-			return err
-		}
-		bd := businessDate(a.now(), s.DayStartHour)
-		var number int
-		if err := tx.QueryRowContext(ctx, `SELECT coalesce(max(number),0) + 1 FROM orders WHERE business_date = ?`, bd).Scan(&number); err != nil {
-			return err
-		}
-		shift, err := openShift(ctx, tx, actor)
-		if err != nil {
-			return err
-		}
-		id = sqlite.NewID()
-		_, err = tx.ExecContext(ctx, `INSERT INTO orders(id, number, business_date, type, status, table_id, customer_id, shift_id, user_id,
-			guests, notes, idempotency_key, created_at, updated_at) VALUES (?,?,?,?,'open',?,?,?,?,?,?,?,?,?)`,
-			id, number, bd, in.Type, sqlite.NullString(in.TableID), sqlite.NullString(in.CustomerID), sqlite.NullString(shift), actor.UserID,
-			in.Guests, strings.TrimSpace(in.Notes), sqlite.NullString(idemKey), a.stamp(), a.stamp())
-		if err != nil {
-			return err
-		}
-		return recalc(ctx, tx, id, a.stamp())
+		var err error
+		id, err = a.createOrderTx(ctx, tx, actor, in, idemKey)
+		return err
 	})
 	if err != nil {
 		return Order{}, err
 	}
 	return loadOrder(ctx, a.db.Write, id)
+}
+
+// createOrderTx opens an order (or returns the one already on the table).
+func (a *App) createOrderTx(ctx context.Context, tx *sql.Tx, actor Actor, in OrderInput, idemKey string) (string, error) {
+	if err := a.requireLicensed(); err != nil {
+		return "", err
+	}
+	var id string
+	if err := cashierShift(ctx, tx, actor); err != nil {
+		return "", err
+	}
+	if idemKey != "" {
+		if err := tx.QueryRowContext(ctx, `SELECT id FROM orders WHERE idempotency_key = ?`, idemKey).Scan(&id); err == nil {
+			return id, nil
+		}
+	}
+	if in.TableID != "" {
+		// Opening an occupied table returns the order already on it.
+		err := tx.QueryRowContext(ctx, `SELECT id FROM orders WHERE table_id = ? AND status IN ('open','held')`, in.TableID).Scan(&id)
+		if err == nil {
+			return id, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return "", err
+		}
+		var ok int
+		if tx.QueryRowContext(ctx, `SELECT count(*) FROM dining_tables WHERE id = ? AND active = 1`, in.TableID).Scan(&ok); ok == 0 {
+			return "", notFound("الطاولة")
+		}
+	}
+	s, err := loadSettings(ctx, tx)
+	if err != nil {
+		return "", err
+	}
+	bd := businessDate(a.now(), s.DayStartHour)
+	var number int
+	if err := tx.QueryRowContext(ctx, `SELECT coalesce(max(number),0) + 1 FROM orders WHERE business_date = ?`, bd).Scan(&number); err != nil {
+		return "", err
+	}
+	shift, err := openShift(ctx, tx, actor)
+	if err != nil {
+		return "", err
+	}
+	id = sqlite.NewID()
+	_, err = tx.ExecContext(ctx, `INSERT INTO orders(id, number, business_date, type, status, table_id, customer_id, shift_id, user_id,
+		guests, notes, idempotency_key, created_at, updated_at) VALUES (?,?,?,?,'open',?,?,?,?,?,?,?,?,?)`,
+		id, number, bd, in.Type, sqlite.NullString(in.TableID), sqlite.NullString(in.CustomerID), sqlite.NullString(shift), actor.UserID,
+		in.Guests, strings.TrimSpace(in.Notes), sqlite.NullString(idemKey), a.stamp(), a.stamp())
+	if err != nil {
+		return "", err
+	}
+	return id, recalc(ctx, tx, id, a.stamp())
 }
 
 // UpdateOrder changes type, table (transfer), customer, guests or notes.
@@ -409,34 +420,17 @@ func (a *App) AddLine(ctx context.Context, actor Actor, orderID string, in LineI
 		in.Course = 1
 	}
 	err := a.tx(ctx, func(tx *sql.Tx) error {
+		if err := a.requireLicensed(); err != nil {
+			return err
+		}
 		if err := cashierShift(ctx, tx, actor); err != nil {
 			return err
 		}
 		if _, err := editable(ctx, tx, orderID); err != nil {
 			return err
 		}
-		var name string
-		var price money.Minor
-		err := tx.QueryRowContext(ctx, `SELECT name, price_minor FROM items WHERE id = ? AND active = 1`, in.ItemID).Scan(&name, &price)
-		if err != nil {
-			return noRows(err, "الصنف")
-		}
-		mods, err := resolveModifiers(ctx, tx, in.ItemID, in.ModifierIDs)
-		if err != nil {
+		if err := addLineTx(ctx, tx, orderID, in); err != nil {
 			return err
-		}
-		var sort int
-		tx.QueryRowContext(ctx, `SELECT coalesce(max(sort),0) + 1 FROM order_lines WHERE order_id = ?`, orderID).Scan(&sort)
-		lineID := sqlite.NewID()
-		if _, err := tx.ExecContext(ctx, `INSERT INTO order_lines(id, order_id, item_id, name, unit_price_minor, qty_milli, gross_minor, net_minor, notes, course, sort)
-			VALUES (?,?,?,?,?,?,0,0,?,?,?)`, lineID, orderID, in.ItemID, name, price, in.Qty, strings.TrimSpace(in.Notes), in.Course, sort); err != nil {
-			return err
-		}
-		for _, m := range mods {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO order_line_modifiers(id, line_id, modifier_id, name, price_minor) VALUES (?,?,?,?,?)`,
-				sqlite.NewID(), lineID, m.ModifierID, m.Name, m.Price); err != nil {
-				return err
-			}
 		}
 		return recalc(ctx, tx, orderID, a.stamp())
 	})
@@ -444,6 +438,34 @@ func (a *App) AddLine(ctx context.Context, actor Actor, orderID string, in LineI
 		return Order{}, err
 	}
 	return loadOrder(ctx, a.db.Write, orderID)
+}
+
+// addLineTx adds an item at its current menu price; the caller recalculates.
+func addLineTx(ctx context.Context, tx *sql.Tx, orderID string, in LineInput) error {
+	var name string
+	var price money.Minor
+	err := tx.QueryRowContext(ctx, `SELECT name, price_minor FROM items WHERE id = ? AND active = 1`, in.ItemID).Scan(&name, &price)
+	if err != nil {
+		return noRows(err, "الصنف")
+	}
+	mods, err := resolveModifiers(ctx, tx, in.ItemID, in.ModifierIDs)
+	if err != nil {
+		return err
+	}
+	var sort int
+	tx.QueryRowContext(ctx, `SELECT coalesce(max(sort),0) + 1 FROM order_lines WHERE order_id = ?`, orderID).Scan(&sort)
+	lineID := sqlite.NewID()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO order_lines(id, order_id, item_id, name, unit_price_minor, qty_milli, gross_minor, net_minor, notes, course, sort)
+		VALUES (?,?,?,?,?,?,0,0,?,?,?)`, lineID, orderID, in.ItemID, name, price, in.Qty, strings.TrimSpace(in.Notes), in.Course, sort); err != nil {
+		return err
+	}
+	for _, m := range mods {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO order_line_modifiers(id, line_id, modifier_id, name, price_minor) VALUES (?,?,?,?,?)`,
+			sqlite.NewID(), lineID, m.ModifierID, m.Name, m.Price); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // resolveModifiers checks that the chosen modifiers belong to the item's
@@ -821,6 +843,9 @@ func (a *App) Pay(ctx context.Context, actor Actor, orderID string, tenders []Te
 			if tx.QueryRowContext(ctx, `SELECT order_id FROM payments WHERE idempotency_key = ?`, idemKey).Scan(&done); done == orderID {
 				return nil // retry of a payment that already went through
 			}
+		}
+		if err := a.requireLicensed(); err != nil {
+			return err
 		}
 		shift, err := requireShift(ctx, tx, actor)
 		if err != nil {

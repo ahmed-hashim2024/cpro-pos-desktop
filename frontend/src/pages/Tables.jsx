@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeftRight, Combine, Users, LayoutGrid } from 'lucide-react';
+import { ArrowLeftRight, Combine, Users, LayoutGrid, BellRing, Receipt } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast, toastError } from '@/lib/store';
 import { money, minutesSince } from '@/lib/format';
 import { Button, PageHeader, Spinner, Badge, cx, useLoad } from '@/components/ui';
 import { T } from '@/lib/i18n';
+import { useInbox, InboxButton, InboxPanel } from '@/components/Inbox';
 
 export default function Tables() {
   const navigate = useNavigate();
@@ -14,6 +15,13 @@ export default function Tables() {
     return { tables: tables.filter((t) => t.active), open };
   }, [], { poll: 10000 });
   const [action, setAction] = useState(null); // {kind: 'move'|'merge', order}
+  const inbox = useInbox();
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const calls = useMemo(() => {
+    const m = {};
+    inbox.data.requests.forEach((r) => { (m[r.table_id] ||= []).push(r); });
+    return m;
+  }, [inbox.data]);
 
   const byTable = useMemo(() => Object.fromEntries((data.data?.open || []).filter((o) => o.table_id).map((o) => [o.table_id, o])), [data.data]);
   const areas = useMemo(() => {
@@ -51,7 +59,10 @@ export default function Tables() {
       <PageHeader title={T('الطاولات')} icon={LayoutGrid} subtitle={T('حالة الصالة لحظياً — اضغط على طاولة لفتح طلبها')} crumb={T('المبيعات')}>
         <Badge tone="green">{Object.keys(byTable).length} {T('مشغولة')}</Badge>
         <Badge>{data.data.tables.length - Object.keys(byTable).length} {T('متاحة')}</Badge>
+        <InboxButton inbox={inbox} onClick={() => setInboxOpen(true)} />
       </PageHeader>
+      <InboxPanel open={inboxOpen} onClose={() => setInboxOpen(false)} inbox={inbox}
+        onAccepted={(o) => { setInboxOpen(false); data.reload(true); navigate(`/pos?order=${o.id}`); }} />
       {action && (
         <div className="mb-4 flex items-center justify-between rounded-xl bg-warning-soft p-3 text-warning">
           <span>{action.kind === 'move' ? T('اختر الطاولة الجديدة للطلب #{0}', [action.order.number]) : T('اختر الطاولة التي سيُدمج فيها الطلب #{0}', [action.order.number])}</span>
@@ -68,7 +79,14 @@ export default function Tables() {
               const mins = o ? minutesSince(o.created_at) : 0;
               return (
                 <div key={t.id} className={cx('relative rounded-2xl border-2 p-3 transition',
-                  o ? 'border-primary bg-primary-soft' : 'border-line bg-surface', action && 'ring-2 ring-warning/40')}>
+                  o ? 'border-primary bg-primary-soft' : 'border-line bg-surface', action && 'ring-2 ring-warning/40', calls[t.id] && 'ring-4 ring-warning/60')}>
+                  {calls[t.id] && (
+                    <button type="button" onClick={() => setInboxOpen(true)} title={T('نداء من الطاولة')}
+                      className="absolute -top-3 end-3 flex items-center gap-1 rounded-full bg-warning px-2 py-0.5 text-xs font-bold text-white shadow-pop">
+                      {calls[t.id].some((r) => r.kind === 'bill') ? <Receipt className="size-3.5" aria-hidden /> : <BellRing className="size-3.5" aria-hidden />}
+                      {calls[t.id].some((r) => r.kind === 'bill') ? T('الحساب') : T('نداء')}
+                    </button>
+                  )}
                   <button onClick={() => pick(t)} className="block w-full text-start">
                     <div className="flex items-center justify-between">
                       <span className="text-xl font-black">{t.name}</span>
