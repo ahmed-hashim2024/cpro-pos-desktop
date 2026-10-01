@@ -14,12 +14,11 @@ const stored = (k, d) => { try { return localStorage.getItem(k) || d; } catch { 
 
 export default function Login() {
   const [status, setStatus] = useState(null);
-  const [skipLink, setSkipLink] = useState(false);
   const load = () => api.get('/status').then(setStatus).catch(toastError);
   useEffect(() => { load(); }, []);
   if (!status) return <Spinner />;
   // First run of a licensed build: link to the owner's account first.
-  const linkFirst = status.needs_setup && status.platform?.enabled && !status.platform.linked && !skipLink;
+  const linkFirst = status.needs_setup && status.platform?.enabled && !status.platform.linked;
   return (
     <div className="flex min-h-full bg-bg">
       <aside className="bg-brand relative hidden w-[42%] flex-col justify-between overflow-hidden p-12 text-white lg:flex">
@@ -49,7 +48,7 @@ export default function Login() {
               {linkFirst ? T('اربط البرنامج بحسابك للبدء') : status.needs_setup ? T('أنشئ حساب المالك لبدء استخدام النظام') : T('اختر حسابك وأدخل الرقم السري')}
             </p>
           </div>
-          {linkFirst ? <LinkFirst onLinked={load} onSkip={() => setSkipLink(true)} />
+          {linkFirst ? <LinkFirst onLinked={load} />
             : status.needs_setup ? <Setup restaurant={status.platform?.tenant_name} /> : <SignIn channel={status.channel} />}
         </div>
       </main>
@@ -57,13 +56,13 @@ export default function Login() {
   );
 }
 
-function LinkFirst({ onLinked, onSkip }) {
+function LinkFirst({ onLinked }) {
   return (
     <div className="grid max-w-md gap-4 rounded-card border border-line bg-surface p-6 shadow-card">
       <h3 className="flex items-center gap-2 text-lg font-bold"><Globe className="size-5 text-primary" aria-hidden />{T('ربط البرنامج بحسابك')}</h3>
       <p className="text-sm text-muted">{T('سجّل حساب جديد أو ادخل بحسابك في المتصفح، والبرنامج هيتفعّل لوحده.')}</p>
       <BrowserLink setup auto onDone={onLinked} />
-      <button type="button" onClick={onSkip} className="text-sm text-muted underline underline-offset-2 hover:text-fg">{T('تخطي الآن والتفعيل لاحقاً')}</button>
+      <p className="text-center text-xs text-muted">{T('التفعيل يحتاج اتصال بالإنترنت مرة واحدة. بعدها البرنامج يشتغل بدون إنترنت.')}</p>
     </div>
   );
 }

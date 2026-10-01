@@ -345,6 +345,10 @@ func TestFirstRunLinkBeforeSetup(t *testing.T) {
 	}
 	a.platform.st.URL = fake.URL
 
+	setup := SetupInput{RestaurantName: "R", OwnerName: "O", Username: "owner", Password: "owner1234", PIN: "1111"}
+	if _, err := a.Setup(ctx, setup, ChannelApp); code(err) != CodeForbidden {
+		t.Fatalf("set up without linking: %v", err)
+	}
 	if _, err := a.StartSetupLink(ctx, ChannelLAN, ""); code(err) != CodeForbidden {
 		t.Fatalf("setup link from the LAN: %v", err)
 	}
@@ -358,6 +362,9 @@ func TestFirstRunLinkBeforeSetup(t *testing.T) {
 	}
 	if info := a.SetupPlatformInfo(); !info.Linked || info.TenantName != "مطعم التجربة" {
 		t.Fatalf("setup info: %+v", info)
+	}
+	if _, err := a.Setup(ctx, setup, ChannelApp); err != nil {
+		t.Fatalf("setup after linking: %v", err)
 	}
 }
 

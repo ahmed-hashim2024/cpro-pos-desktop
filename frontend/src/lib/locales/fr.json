@@ -979,7 +979,8 @@
  "اربط البرنامج بحسابك للبدء": "Liez l'application à votre compte pour commencer",
  "ربط البرنامج بحسابك": "Lier l'application à votre compte",
  "سجّل حساب جديد أو ادخل بحسابك في المتصفح، والبرنامج هيتفعّل لوحده.": "Créez un compte ou connectez-vous dans le navigateur, l'application s'active toute seule.",
- "تخطي الآن والتفعيل لاحقاً": "Passer et activer plus tard",
  "متاح فقط أثناء الإعداد الأول": "Disponible uniquement lors de la première configuration",
- "رد غير متوقع من المنصة": "Réponse inattendue de la plateforme"
+ "رد غير متوقع من المنصة": "Réponse inattendue de la plateforme",
+ "التفعيل يحتاج اتصال بالإنترنت مرة واحدة. بعدها البرنامج يشتغل بدون إنترنت.": "L'activation nécessite internet une seule fois. Ensuite l'application fonctionne hors ligne.",
+ "سجّل على المنصة واربط البرنامج بحسابك أولاً": "Inscrivez-vous sur la plateforme et liez d'abord l'application à votre compte"
 }

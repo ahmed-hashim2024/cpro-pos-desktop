@@ -979,7 +979,8 @@
  "اربط البرنامج بحسابك للبدء": "Link the app to your account to start",
  "ربط البرنامج بحسابك": "Link the app to your account",
  "سجّل حساب جديد أو ادخل بحسابك في المتصفح، والبرنامج هيتفعّل لوحده.": "Sign up or sign in in the browser and the app activates itself.",
- "تخطي الآن والتفعيل لاحقاً": "Skip for now and activate later",
  "متاح فقط أثناء الإعداد الأول": "Only available during first-time setup",
- "رد غير متوقع من المنصة": "Unexpected reply from the Platform"
+ "رد غير متوقع من المنصة": "Unexpected reply from the Platform",
+ "التفعيل يحتاج اتصال بالإنترنت مرة واحدة. بعدها البرنامج يشتغل بدون إنترنت.": "Activation needs an internet connection once. After that the app works offline.",
+ "سجّل على المنصة واربط البرنامج بحسابك أولاً": "Sign up on the Platform and link the app to your account first"
 }

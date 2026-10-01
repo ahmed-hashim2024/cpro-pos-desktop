@@ -583,6 +583,8 @@ func (a *App) PollLink(ctx context.Context, actor Actor) (LinkStatus, error) {
 // First run: linking happens before any local user exists, so these are
 // open only while the app still needs setup, and only inside the desktop
 // window.
+var errNotLinked = &Error{CodeForbidden, "سجّل على المنصة واربط البرنامج بحسابك أولاً"}
+
 var errNotFirstRun = &Error{CodeForbidden, "متاح فقط أثناء الإعداد الأول"}
 
 func (a *App) setupOnly(ctx context.Context, ch Channel) error {

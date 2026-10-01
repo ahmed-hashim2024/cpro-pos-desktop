@@ -60,6 +60,11 @@ func (a *App) Setup(ctx context.Context, in SetupInput, ch Channel) (Session, er
 	if ch != ChannelApp {
 		return Session{}, errForbidden
 	}
+	// A licensed build can't be set up offline or without an account: the
+	// owner signs up on the Platform and links this computer first.
+	if a.platform != nil && !a.SetupPlatformInfo().Linked {
+		return Session{}, errNotLinked
+	}
 	if strings.TrimSpace(in.RestaurantName) == "" {
 		return Session{}, invalid("اسم المطعم مطلوب")
 	}
