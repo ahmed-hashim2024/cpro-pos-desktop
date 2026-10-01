@@ -36,27 +36,27 @@ export default function Kitchen() {
   const next = { sent: 'preparing', preparing: 'ready', ready: 'sent' };
 
   return (
-    <div className="flex h-full flex-col bg-[#0b1020] text-white">
-      <div className="flex items-center gap-3 border-b border-white/10 px-5 py-3">
-        <button onClick={() => navigate('/')} aria-label={T('الرجوع')} className="flex size-10 items-center justify-center rounded-xl bg-white/10 hover:bg-white/20"><LayoutDashboard className="size-5" /></button>
-        <span className="bg-brand flex size-10 items-center justify-center rounded-xl"><ChefHat className="size-5" aria-hidden /></span>
+    <div className="flex h-full flex-col bg-bg text-fg">
+      <div className="flex items-center gap-3 border-b border-line bg-surface px-5 py-3">
+        <button onClick={() => navigate('/')} aria-label={T('الرجوع')} className="flex size-10 items-center justify-center rounded-xl border border-line text-muted hover:bg-surface-2 hover:text-fg"><LayoutDashboard className="size-5" /></button>
+        <span className="bg-brand flex size-10 items-center justify-center rounded-xl text-white"><ChefHat className="size-5" aria-hidden /></span>
         <h1 className="text-xl font-bold">{T('شاشة المطبخ')}</h1>
-        <Select className="w-56 text-fg" value={station} onChange={(e) => { setStation(e.target.value); try { localStorage.setItem(STATION_KEY, e.target.value); } catch { /* ignore */ } }}>
+        <Select className="w-56" value={station} onChange={(e) => { setStation(e.target.value); try { localStorage.setItem(STATION_KEY, e.target.value); } catch { /* ignore */ } }}>
           <option value="">{T('كل المحطات')}</option>
           {(stations.data || []).filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </Select>
-        <div className="ms-auto rounded-full bg-white/10 px-3 py-1 text-sm">{board.data?.length || 0} {T('طلب')}</div>
+        <div className="ms-auto rounded-full bg-primary-soft px-3 py-1 text-sm font-semibold text-primary-ink">{board.data?.length || 0} {T('طلب')}</div>
       </div>
       {!board.data ? <Spinner /> : !board.data.length ? <Empty icon={Flame}>{T('لا توجد طلبات حالياً')}</Empty> : (
         <div className="grid flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3 overflow-y-auto p-3">
           {board.data.map((t) => {
             const mins = minutesSince(t.sent_at);
             const active = t.lines.filter((l) => !l.voided);
-            const allReady = active.every((l) => l.status === 'ready');
+            const allReady = active.length > 0 && active.every((l) => l.status === 'ready');
             return (
-              <div key={t.order_id} className={cx('flex flex-col overflow-hidden rounded-xl bg-surface text-fg',
-                mins >= 20 ? 'ring-4 ring-red-500' : mins >= 10 ? 'ring-4 ring-amber-400' : '')}>
-                <div className={cx('flex items-center justify-between px-3 py-2 text-white', allReady ? 'bg-primary' : mins >= 20 ? 'bg-danger' : 'bg-stone-700')}>
+              <div key={t.order_id} className={cx('flex flex-col overflow-hidden rounded-card border border-line bg-surface shadow-card',
+                mins >= 20 ? 'ring-4 ring-danger/60' : mins >= 10 ? 'ring-4 ring-warning/50' : '')}>
+                <div className={cx('flex items-center justify-between px-3 py-2', allReady ? 'bg-success text-white dark:text-bg' : mins >= 20 ? 'bg-danger text-white dark:text-bg' : 'bg-brand text-white')}>
                   <div className="text-2xl font-black">#{t.number}</div>
                   <div className="text-end text-sm">
                     <div>{orderTypes[t.type]}{t.table_name ? ` — ${t.table_name}` : ''}</div>

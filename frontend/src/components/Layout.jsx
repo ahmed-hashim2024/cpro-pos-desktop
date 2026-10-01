@@ -2,12 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   ShoppingCart, LayoutGrid, ChefHat, Receipt, Wallet, BarChart3, LayoutDashboard, UtensilsCrossed,
-  Boxes, Users, UserCog, ScrollText, Settings, LogOut, ChevronDown, Moon, Sun, Search,
+  Boxes, Users, UserCog, ScrollText, Settings, LogOut, ChevronDown, Search,
   Wheat, Truck, Trash2, ClipboardCheck, ArrowUpDown, Layers, ListPlus, Armchair, Flame, PanelRightClose, PanelRightOpen,
   TrendingUp, PieChart, FlaskConical, Ban, Store, FileSpreadsheet, Languages,
 } from 'lucide-react';
 import { useApp } from '@/lib/store';
-import { useTheme } from '@/lib/theme';
 import { roles } from '@/lib/format';
 import { cx } from './ui';
 import { T, lang, languages, setLang } from '@/lib/i18n';
@@ -174,7 +173,6 @@ function NavItem({ item, collapsed, active, sub }) {
 
 function Header({ collapsed, onToggle }) {
   const { me, shift, can } = useApp();
-  const { dark, toggle } = useTheme();
   const navigate = useNavigate();
   const initials = (me?.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('');
 
@@ -192,9 +190,6 @@ function Header({ collapsed, onToggle }) {
             {shift ? T('الوردية مفتوحة') : T('لا توجد وردية')}
           </button>
         )}
-        <button onClick={toggle} aria-label={dark ? T('الوضع الفاتح') : T('الوضع الداكن')} className="rounded-xl p-2.5 text-muted hover:bg-surface-2 hover:text-fg">
-          {dark ? <Sun className="size-5" /> : <Moon className="size-5" />}
-        </button>
         <div className="mx-1 h-8 w-px bg-line" />
         <div className="flex items-center gap-3">
           <div className="text-end leading-tight">
