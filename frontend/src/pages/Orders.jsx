@@ -94,7 +94,7 @@ export function OrderDetail({ id, onClose }) {
           </tr>
         ))}
       </Table>
-      <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
+      <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
         <div>
           {o.payments.map((p) => (
             <div key={p.id} className="flex justify-between"><span>{methods[p.method] || p.method} · {p.user_name}</span><span className="num">{money(p.amount_minor)}</span></div>

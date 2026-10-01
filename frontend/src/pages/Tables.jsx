@@ -60,7 +60,7 @@ export default function Tables() {
       )}
       {!data.data.tables.length && <div className="rounded-xl bg-surface p-10 text-center text-muted/70">{T('لا توجد طاولات — أضفها من المنيو ← الطاولات')}</div>}
       {areas.map(([area, tables]) => (
-        <div key={area} className="mb-6">
+        <div key={area} className="mb-4">
           <h2 className="mb-2 font-bold text-muted">{area}</h2>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
             {tables.map((t) => {

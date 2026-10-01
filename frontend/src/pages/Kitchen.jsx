@@ -37,7 +37,7 @@ export default function Kitchen() {
 
   return (
     <div className="flex h-full flex-col bg-bg text-fg">
-      <div className="flex items-center gap-3 border-b border-line bg-surface px-5 py-3">
+      <div className="flex items-center gap-3 border-b border-line bg-surface px-4 py-3">
         <button onClick={() => navigate('/')} aria-label={T('الرجوع')} className="flex size-10 items-center justify-center rounded-xl border border-line text-muted hover:bg-surface-2 hover:text-fg"><LayoutDashboard className="size-5" /></button>
         <span className="bg-brand flex size-10 items-center justify-center rounded-xl text-white"><ChefHat className="size-5" aria-hidden /></span>
         <h1 className="text-xl font-bold">{T('شاشة المطبخ')}</h1>

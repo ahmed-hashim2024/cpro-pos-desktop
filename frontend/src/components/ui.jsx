@@ -16,7 +16,7 @@ const variants = {
   ghost: 'text-muted hover:bg-surface-2 hover:text-fg disabled:opacity-50',
   success: 'bg-success text-white hover:brightness-110 disabled:opacity-50',
 };
-const sizes = { sm: 'h-8 px-3 text-sm rounded-lg', md: 'h-10 px-4 rounded-xl', lg: 'h-12 px-6 text-base rounded-xl', xl: 'h-14 px-6 text-lg rounded-2xl' };
+const sizes = { sm: 'h-8 px-2.5 text-sm rounded-lg', md: 'h-9 px-3.5 rounded-xl', lg: 'h-11 px-5 text-base rounded-xl', xl: 'h-12 px-5 text-lg rounded-2xl' };
 
 export function Button({ variant = 'primary', size = 'md', busy, icon: Icon, className, children, ...p }) {
   return (
@@ -31,7 +31,7 @@ export function Button({ variant = 'primary', size = 'md', busy, icon: Icon, cla
 export function IconButton({ icon: Icon, label, className, active, ...p }) {
   return (
     <button {...p} aria-label={label} title={label}
-      className={cx('inline-flex size-10 items-center justify-center rounded-xl border transition',
+      className={cx('inline-flex size-9 items-center justify-center rounded-xl border transition',
         active ? 'border-primary bg-primary-soft text-primary-ink' : 'border-line bg-surface text-muted hover:bg-surface-2 hover:text-fg', className)}>
       <Icon className="size-[18px]" aria-hidden />
     </button>
@@ -43,14 +43,14 @@ export function IconButton({ icon: Icon, label, className, active, ...p }) {
 export function Field({ label, hint, children, className }) {
   return (
     <label className={cx('block', className)}>
-      {label && <span className="mb-1.5 block text-sm font-semibold text-fg">{label}</span>}
+      {label && <span className="mb-1 block text-sm font-semibold text-fg">{label}</span>}
       {children}
       {hint && <span className="mt-1 block text-xs text-muted">{hint}</span>}
     </label>
   );
 }
 
-const inputCls = 'h-10 min-w-0 rounded-xl border border-line bg-surface px-3 text-fg placeholder:text-muted/70 outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15 disabled:bg-surface-2 disabled:text-muted';
+const inputCls = 'h-9 min-w-0 rounded-xl border border-line bg-surface px-3 text-fg placeholder:text-muted/70 outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15 disabled:bg-surface-2 disabled:text-muted';
 // Full width unless the caller sizes the field itself (w-*, flex-1).
 const sized = (className) => cx(inputCls, /(^|\s)(w-|flex-1)/.test(className || '') ? '' : 'w-full', className);
 export const Input = ({ className, ...p }) => <input {...p} className={sized(className)} />;
@@ -63,7 +63,7 @@ export function SearchInput({ className, ...p }) {
       <svg className="pointer-events-none absolute start-3 top-1/2 size-[18px] -translate-y-1/2 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
         <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
       </svg>
-      <input {...p} className={cx(inputCls, 'h-11 w-full bg-surface-2 ps-10 focus:bg-surface')} />
+      <input {...p} className={cx(inputCls, 'h-10 w-full bg-surface-2 ps-10 focus:bg-surface')} />
     </div>
   );
 }
@@ -92,11 +92,11 @@ export function Segmented({ options, value, onChange, className }) {
 
 // ---- surfaces ----------------------------------------------------------------
 
-export function Card({ title, icon: Icon, actions, children, className, bodyClass = 'p-5' }) {
+export function Card({ title, icon: Icon, actions, children, className, bodyClass = 'p-4' }) {
   return (
     <section className={cx('rounded-card border border-line bg-surface shadow-card', className)}>
       {(title || actions) && (
-        <header className="flex items-center justify-between gap-2 border-b border-line px-5 py-3.5">
+        <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-2.5">
           <h3 className="flex items-center gap-2 font-bold">
             {Icon && <Icon className="size-[18px] text-primary" aria-hidden />}{title}
           </h3>
@@ -115,12 +115,12 @@ const tones = {
 
 export function Stat({ label, value, sub, icon: Icon, tone = 'primary' }) {
   return (
-    <div className="rounded-card border border-line bg-surface p-5 shadow-card">
+    <div className="rounded-card border border-line bg-surface p-4 shadow-card">
       <div className="flex items-start justify-between gap-3">
         <div className="text-sm font-semibold text-muted">{label}</div>
-        {Icon && <span className={cx('flex size-10 shrink-0 items-center justify-center rounded-xl', tones[tone] || tones.primary)}><Icon className="size-5" aria-hidden /></span>}
+        {Icon && <span className={cx('flex size-9 shrink-0 items-center justify-center rounded-xl', tones[tone] || tones.primary)}><Icon className="size-5" aria-hidden /></span>}
       </div>
-      <div className="num mt-2 text-[1.75rem] font-bold leading-tight" style={{ direction: 'inherit' }}>{value}</div>
+      <div className="num mt-1 text-2xl font-bold leading-tight" style={{ direction: 'inherit' }}>{value}</div>
       {sub && <div className="mt-1 text-xs text-muted">{sub}</div>}
     </div>
   );
@@ -148,16 +148,16 @@ export function Modal({ open, onClose, title, subtitle, icon: Icon, children, fo
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-[3px]" onMouseDown={onClose}>
       <div role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined}
         className={cx('flex max-h-full w-full flex-col overflow-hidden rounded-3xl border border-line bg-surface shadow-pop', widths[size])} onMouseDown={(e) => e.stopPropagation()}>
-        <header className="bg-brand flex items-center gap-3 px-6 py-4 text-white">
-          {Icon && <span className="flex size-11 items-center justify-center rounded-xl bg-white/20"><Icon className="size-5" aria-hidden /></span>}
+        <header className="bg-brand flex items-center gap-3 px-5 py-3 text-white">
+          {Icon && <span className="flex size-9 items-center justify-center rounded-xl bg-white/20"><Icon className="size-5" aria-hidden /></span>}
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-lg font-bold">{title}</h2>
             {subtitle && <p className="text-sm text-white/80">{subtitle}</p>}
           </div>
-          <button aria-label={T('إغلاق')} className="flex size-10 items-center justify-center rounded-xl bg-white/15 hover:bg-white/25" onClick={onClose}><X className="size-5" /></button>
+          <button aria-label={T('إغلاق')} className="flex size-9 items-center justify-center rounded-xl bg-white/15 hover:bg-white/25" onClick={onClose}><X className="size-5" /></button>
         </header>
-        <div className="overflow-y-auto bg-bg/40 p-6">{children}</div>
-        {footer && <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface px-6 py-4">{footer}</footer>}
+        <div className="overflow-y-auto bg-bg/40 p-5">{children}</div>
+        {footer && <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface px-5 py-3">{footer}</footer>}
       </div>
     </div>
   );
@@ -165,10 +165,10 @@ export function Modal({ open, onClose, title, subtitle, icon: Icon, children, fo
 
 export function Tabs({ tabs, value, onChange }) {
   return (
-    <div role="tablist" className="mb-5 flex flex-wrap gap-1 rounded-2xl border border-line bg-surface p-1 shadow-card">
+    <div role="tablist" className="mb-4 flex flex-wrap gap-1 rounded-2xl border border-line bg-surface p-1 shadow-card">
       {tabs.map(([key, label, Icon]) => (
         <button key={key} role="tab" aria-selected={value === key} onClick={() => onChange(key)}
-          className={cx('flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition',
+          className={cx('flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-sm font-semibold transition',
             value === key ? 'bg-primary-soft text-primary-ink' : 'text-muted hover:bg-surface-2 hover:text-fg')}>
           {Icon && <Icon className="size-4" aria-hidden />}{label}
         </button>
@@ -184,33 +184,33 @@ export function Table({ head, children, empty = T('لا توجد بيانات'),
     <div className={cx('overflow-auto rounded-card border border-line bg-surface shadow-card', className)}>
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-[1] bg-surface-2 text-muted">
-          <tr>{head.map((h, i) => <th key={i} className="whitespace-nowrap px-4 py-3 text-start text-xs font-bold">{h}</th>)}</tr>
+          <tr>{head.map((h, i) => <th key={i} className="whitespace-nowrap px-3 py-2 text-start text-xs font-bold">{h}</th>)}</tr>
         </thead>
         <tbody className="divide-y divide-line">
-          {isEmpty ? <tr><td colSpan={head.length} className="px-4 py-14 text-center text-muted">{empty}</td></tr> : rows}
+          {isEmpty ? <tr><td colSpan={head.length} className="px-3 py-10 text-center text-muted">{empty}</td></tr> : rows}
         </tbody>
       </table>
     </div>
   );
 }
-export const Td = ({ className, ...p }) => <td {...p} className={cx('px-4 py-3', className)} />;
+export const Td = ({ className, ...p }) => <td {...p} className={cx('px-3 py-2', className)} />;
 
 export const Spinner = () => <div className="flex justify-center p-12"><Loader2 className="size-7 animate-spin text-primary" aria-label={T('جارٍ التحميل')} /></div>;
 
 // Page title block: icon tile, title, subtitle, breadcrumb chip, actions.
 export function PageHeader({ title, subtitle, icon: Icon, crumb, children }) {
   return (
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-line pb-5">
-      <div className="flex items-center gap-4">
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
+      <div className="flex items-center gap-3">
         {Icon && (
-          <span className="flex size-16 items-center justify-center rounded-2xl border border-line bg-surface text-primary shadow-card">
-            <Icon className="size-8" aria-hidden />
+          <span className="flex size-12 items-center justify-center rounded-2xl border border-line bg-surface text-primary shadow-card">
+            <Icon className="size-6" aria-hidden />
           </span>
         )}
         <div>
-          <h1 className="text-2xl font-bold">{title}</h1>
-          {subtitle && <p className="mt-0.5 text-muted">{subtitle}</p>}
-          {crumb && <span className="mt-1.5 inline-block rounded-full bg-primary-soft px-3 py-0.5 text-xs font-semibold text-primary-ink">{crumb}</span>}
+          <h1 className="text-xl font-bold">{title}</h1>
+          {subtitle && <p className="text-sm text-muted">{subtitle}</p>}
+          {crumb && <span className="mt-1 inline-block rounded-full bg-primary-soft px-3 py-0.5 text-xs font-semibold text-primary-ink">{crumb}</span>}
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">{children}</div>
@@ -286,8 +286,8 @@ export function useAction() {
 
 export function Empty({ icon: Icon, title, children }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
-      {Icon && <span className="flex size-20 items-center justify-center rounded-full bg-primary-soft text-primary"><Icon className="size-9" aria-hidden /></span>}
+    <div className="flex flex-col items-center justify-center gap-2 p-8 text-center">
+      {Icon && <span className="flex size-14 items-center justify-center rounded-full bg-primary-soft text-primary"><Icon className="size-7" aria-hidden /></span>}
       {title && <div className="text-lg font-bold">{title}</div>}
       <div className="text-muted">{children}</div>
     </div>

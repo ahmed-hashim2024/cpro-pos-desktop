@@ -92,7 +92,7 @@ function ItemDialog({ item, data, onClose, onSaved }) {
   return (
     <Modal open onClose={onClose} title={item.id ? item.name : T('صنف جديد')} size="xl"
       footer={<><Button variant="secondary" onClick={onClose}>{T('إلغاء')}</Button><Button busy={busy} onClick={save}>{T('حفظ')}</Button></>}>
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="grid content-start gap-3">
           <div className="grid grid-cols-2 gap-3">
             <Field label={T('اسم الصنف')} className="col-span-2"><Input autoFocus value={f.name} onChange={set('name')} /></Field>

@@ -84,7 +84,7 @@ export default function Layout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <Header collapsed={collapsed} onToggle={toggleCollapsed} />
         <main className="min-w-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-[1600px] p-6"><Outlet /></div>
+          <div className="mx-auto max-w-[1600px] p-4"><Outlet /></div>
         </main>
       </div>
     </div>
@@ -114,8 +114,8 @@ function Sidebar({ tree, collapsed, loc }) {
   const toggle = (g) => setOpen((s) => { const n = new Set(s); n.has(g) ? n.delete(g) : n.add(g); return n; });
 
   return (
-    <aside className={cx('flex shrink-0 flex-col border-e border-line bg-surface transition-[width] duration-200', collapsed ? 'w-[76px]' : 'w-[264px]')}>
-      <div className={cx('flex h-14 shrink-0 items-center border-b border-line', collapsed ? 'justify-center' : 'justify-between px-5')}>
+    <aside className={cx('flex shrink-0 flex-col border-e border-line bg-surface transition-[width] duration-200', collapsed ? 'w-[68px]' : 'w-[236px]')}>
+      <div className={cx('flex h-14 shrink-0 items-center border-b border-line', collapsed ? 'justify-center' : 'justify-between px-4')}>
         <Logo compact={collapsed} />
         {!collapsed && can('pos.sell') && (
           <button onClick={() => navigate('/pos')} className="bg-brand flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-bold text-white shadow-md shadow-primary/30 hover:brightness-110">
@@ -123,7 +123,7 @@ function Sidebar({ tree, collapsed, loc }) {
           </button>
         )}
       </div>
-      <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label={T('القائمة الرئيسية')}>
+      <nav className="flex-1 overflow-y-auto px-2.5 py-3" aria-label={T('القائمة الرئيسية')}>
         {tree.map((n) => {
           if (!n.children) return <NavItem key={n.to} item={n} collapsed={collapsed} active={isActive(loc, n.to)} />;
           const isOpen = open.has(n.label) || collapsed;
@@ -132,14 +132,14 @@ function Sidebar({ tree, collapsed, loc }) {
             <div key={n.label} className={cx(!collapsed && 'border-b border-line/70 py-1 last:border-0')}>
               {!collapsed && (
                 <button onClick={() => toggle(n.label)} aria-expanded={isOpen}
-                  className={cx('flex w-full items-center gap-3 rounded-xl px-3 py-2.5 font-bold transition hover:bg-surface-2', hasActive ? 'text-fg' : 'text-fg/85')}>
+                  className={cx('flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 font-bold transition hover:bg-surface-2', hasActive ? 'text-fg' : 'text-fg/85')}>
                   <n.icon className={cx('size-5', hasActive ? 'text-primary' : 'text-muted')} aria-hidden />
                   <span className="flex-1 text-start">{n.label}</span>
                   <ChevronDown className={cx('size-4 text-muted transition', isOpen && 'rotate-180')} aria-hidden />
                 </button>
               )}
               {isOpen && (
-                <div className={cx(!collapsed && 'mb-1 ms-4 border-s border-line ps-2')}>
+                <div className={cx(!collapsed && 'mb-1 ms-3.5 border-s border-line ps-1.5')}>
                   {n.children.map((c) => <NavItem key={c.to} item={c} collapsed={collapsed} sub active={isActive(loc, c.to)} />)}
                 </div>
               )}
@@ -147,9 +147,9 @@ function Sidebar({ tree, collapsed, loc }) {
           );
         })}
       </nav>
-      <div className="border-t border-line p-3">
+      <div className="border-t border-line p-2.5">
         <button onClick={async () => { await logout(); navigate('/login'); }} title={T('تبديل المستخدم / خروج')}
-          className={cx('flex w-full items-center justify-center gap-2 rounded-xl bg-danger-soft py-2.5 font-bold text-danger transition hover:brightness-95')}>
+          className={cx('flex w-full items-center justify-center gap-2 rounded-xl bg-danger-soft py-2 font-bold text-danger transition hover:brightness-95')}>
           <LogOut className="size-5" aria-hidden />{!collapsed && T('تبديل / خروج')}
         </button>
       </div>
@@ -161,8 +161,8 @@ function NavItem({ item, collapsed, active, sub }) {
   const Icon = item.icon;
   return (
     <NavLink to={item.to} title={collapsed ? item.label : undefined}
-      className={cx('group relative my-0.5 flex items-center gap-3 rounded-xl transition',
-        collapsed ? 'justify-center py-2.5' : sub ? 'px-3 py-2 text-sm' : 'px-3 py-2.5 font-bold',
+      className={cx('group relative my-px flex items-center gap-2.5 rounded-xl transition',
+        collapsed ? 'justify-center py-2' : sub ? 'px-2.5 py-1.5 text-sm' : 'px-2.5 py-2 font-bold',
         active ? 'bg-primary-soft text-primary-ink' : 'text-muted hover:bg-surface-2 hover:text-fg')}>
       <Icon className={cx(sub ? 'size-[18px]' : 'size-5', active && 'text-primary')} aria-hidden />
       {!collapsed && <span>{item.label}</span>}

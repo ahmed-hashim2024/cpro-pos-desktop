@@ -63,7 +63,7 @@ export default function Import() {
       {targets.loading && !targets.data ? <Spinner /> : !list.length ? (
         <Empty icon={FileSpreadsheet} title={T('لا توجد صلاحية')}>{T('ليس لديك صلاحية لاستيراد أي نوع من البيانات')}</Empty>
       ) : (
-        <div className="grid gap-5">
+        <div className="grid gap-4">
           <Step n={1} title={T('اختر نوع البيانات')}>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
               {list.map((t) => {
@@ -85,7 +85,7 @@ export default function Import() {
           {target && (
             <>
               <Step n={2} title={T('نزّل القالب واملأه')}>
-                <div className="flex flex-wrap items-start gap-6">
+                <div className="flex flex-wrap items-start gap-4">
                   <div className="min-w-0 flex-1">
                     <p className="mb-3 text-sm text-muted">
                       {mode === 'insert'
@@ -111,7 +111,7 @@ export default function Import() {
                 <div
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) { setFile(f); setResult(null); } }}
-                  className="flex flex-wrap items-center gap-4 rounded-2xl border-2 border-dashed border-line bg-surface-2/50 p-5">
+                  className="flex flex-wrap items-center gap-3 rounded-2xl border-2 border-dashed border-line bg-surface-2/50 p-4">
                   <span className="flex size-12 items-center justify-center rounded-xl bg-primary-soft text-primary"><Paperclip className="size-6" aria-hidden /></span>
                   <div className="min-w-0 flex-1">
                     {file ? (
@@ -155,7 +155,7 @@ function Step({ n, title, children }) {
 function Result({ result, mode, entity }) {
   if (!result.issues.length) {
     return (
-      <div className="flex items-center gap-3 rounded-card border border-success/30 bg-success-soft p-5 text-success">
+      <div className="flex items-center gap-3 rounded-card border border-success/30 bg-success-soft p-4 text-success">
         <CheckCircle2 className="size-7" aria-hidden />
         <div>
           <div className="text-lg font-bold">{mode === 'insert' ? T('تمت إضافة {0} سجل بنجاح', [result.inserted]) : T('تم تحديث {0} سجل بنجاح', [result.updated])}</div>

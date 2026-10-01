@@ -89,6 +89,11 @@
   --radius-card: 1rem;
 }
 
+/* Borders default to the theme line colour (Tailwind's default is currentColor). */
+@layer base {
+  *, ::before, ::after { border-color: var(--line); }
+}
+
 html, body, #root { height: 100%; }
 body {
   margin: 0;

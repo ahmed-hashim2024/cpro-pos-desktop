@@ -22,27 +22,27 @@ export default function Dashboard() {
     <div>
       <PageHeader title={T('الرئيسية')} icon={LayoutDashboard} subtitle={T('نظرة شاملة على أداء المطعم — يوم العمل {0}', [d.data.business_date])} crumb={T('الرئيسية')} />
 
-      <div className="mb-5 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-wrap gap-2">
         <Chip icon={Flame} tone="info">{T('ذروة اليوم:')} {d.data.by_hour.length ? `${[...d.data.by_hour].sort((a, b) => b.amount_minor - a.amount_minor)[0].label}` : '—'}</Chip>
         <Chip icon={TrendingUp} tone="success">{T('الأعلى مبيعاً:')} {d.data.top_items[0]?.name || '—'}</Chip>
         {d.data.low_stock.length > 0 && <Chip icon={AlertTriangle} tone="danger">{d.data.low_stock.length} {T('خامة تحت الحد الأدنى')}</Chip>}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KPI label={T('صافي مبيعات اليوم')} value={money(t.net_sales_minor)} sub={T('{0} طلب · متوسط {1}', [t.orders, money(t.avg_ticket_minor)])} icon={TrendingUp} tone="success" spark={hours} />
         <KPI label={T('مجمل الربح')} value={money(t.gross_profit_minor)} sub={T('هامش {0} · تكلفة {1}', [pct(t.margin_bp), money(t.cost_minor)])} icon={Coins} tone="primary" spark={week} />
         <KPI label={T('طلبات مفتوحة الآن')} value={d.data.open_orders} sub={T('بقيمة {0}', [money(d.data.open_value_minor)])} icon={Receipt} tone="info" />
         <KPI label={T('الطاولات المشغولة')} value={`${d.data.open_tables} / ${d.data.tables}`} sub={T('{0} وردية مفتوحة', [d.data.open_shifts])} icon={Armchair} tone="warning" />
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {can('pos.sell') && <Quick icon={ShoppingCart} label={T('نقطة البيع')} onClick={() => navigate('/pos')} primary />}
         {can('kitchen.view') && <Quick icon={ChefHat} label={T('شاشة المطبخ')} onClick={() => navigate('/kitchen')} />}
         {can('inventory.view') && <Quick icon={Boxes} label={T('المخزون')} onClick={() => navigate('/inventory')} />}
         <Quick icon={BarChart3} label={T('التقارير')} onClick={() => navigate('/reports')} />
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-5">
+      <div className="mt-3 grid gap-3 lg:grid-cols-5">
         <Card title={T('مبيعات آخر 7 أيام')} icon={BarChart3} className="lg:col-span-3">
           <Bars data={d.data.last_7_days.map((b) => ({ label: b.key.slice(5), value: b.amount_minor }))} />
         </Card>
@@ -53,7 +53,7 @@ export default function Dashboard() {
               [T('الخدمة'), t.service_minor], [T('الضريبة'), t.tax_minor],
               [T('الإلغاءات'), t.void_value_minor, 'danger'], [T('الهالك'), t.waste_cost_minor, 'danger'],
             ].map(([k, v, tone]) => (
-              <div key={k} className="flex items-center justify-between px-5 py-3">
+              <div key={k} className="flex items-center justify-between px-4 py-3">
                 <dt className="text-muted">{k}</dt>
                 <dd className={cx('num font-bold', v && tone === 'danger' && 'text-danger', v && tone === 'warning' && 'text-warning')}>{money(v)}</dd>
               </div>
@@ -88,7 +88,7 @@ const toneCls = { primary: 'bg-primary-soft text-primary-ink', success: 'bg-succ
 function KPI({ label, value, sub, icon: Icon, tone, spark }) {
   return (
     <div className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
-      <div className="p-5 pb-2">
+      <div className="p-4 pb-2">
         <div className="flex items-start justify-between gap-3">
           <div className="font-semibold text-muted">{label}</div>
           <span className={cx('flex size-11 items-center justify-center rounded-xl', toneCls[tone])}><Icon className="size-5" aria-hidden /></span>

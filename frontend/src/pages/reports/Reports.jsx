@@ -47,7 +47,7 @@ function Sales({ range, tab }) {
 
   if (tab === 'sales') {
     return (
-      <div className="grid gap-4">
+      <div className="grid gap-3">
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={() => printReport(T('ملخص المبيعات'), period, [
             { rows: [
@@ -69,7 +69,7 @@ function Sales({ range, tab }) {
           <Stat label={T('الضريبة / الخدمة')} icon={Landmark} value={money(s.tax_minor)} sub={T('خدمة {0}', [money(s.service_minor)])} />
           <Stat label={T('الإلغاءات والهالك')} icon={Ban} value={money(s.void_value_minor + s.waste_cost_minor)} sub={T('{0} طلب · {1} صنف', [s.void_orders, s.void_lines])} tone="danger" />
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-2">
           <Card title={T('المبيعات حسب اليوم')}><Bars data={d.by_day.map((b) => ({ label: b.key.slice(5), value: b.amount_minor }))} /></Card>
           <Card title={T('المبيعات حسب الساعة')}><Bars data={d.by_hour.map((b) => ({ label: b.key, value: b.amount_minor }))} /></Card>
         </div>
@@ -106,7 +106,7 @@ function Sales({ range, tab }) {
       </Card>
     );
     return (
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-2">
         {block(T('طرق الدفع'), d.by_method)}
         {block(T('نوع الطلب'), d.by_type, (b) => orderTypes[b.key])}
         {block(T('حسب الكاشير'), d.by_cashier)}
@@ -120,7 +120,7 @@ function Sales({ range, tab }) {
   // voids & waste
   const wasteRows = waste.data || [];
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
       <Card title={T('الأصناف والطلبات الملغاة')} actions={<Button size="sm" variant="secondary" onClick={() => exportCSV('voids', [T('الطلب'), T('الصنف'), T('المبلغ'), T('السبب'), T('بواسطة'), T('الوقت')], d.voids.map((v) => [v.number, v.what, money(v.amount_minor), v.reason, v.user_name, dateTime(v.at)]))}><Download className="size-4" />Excel</Button>}>
         <Table head={[T('الطلب'), T('الصنف'), T('المبلغ'), T('السبب'), T('وافق عليه'), T('الوقت')]}>
           {d.voids.map((v, i) => <tr key={i}><Td>#{v.number}</Td><Td>{v.what}</Td><Td className="num">{money(v.amount_minor)}</Td><Td>{v.reason}</Td><Td>{v.user_name}</Td><Td>{dateTime(v.at)}</Td></tr>)}
@@ -153,7 +153,7 @@ function Consumption({ range }) {
   const csv = rows.map((c) => [c.name, units[c.unit], milliInput(c.opening_milli), milliInput(c.purchased_milli), milliInput(c.sales_use_milli), milliInput(c.waste_milli),
     milliInput(c.returned_milli), milliInput(c.adjustments_milli), milliInput(c.count_variance_milli), milliInput(c.closing_milli), milliInput(c.actual_use_milli), money(c.sales_use_value_minor)]);
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label={T('قيمة المشتريات')} icon={Truck} value={money(total.purchase_value_minor)} />
         <Stat label={T('قيمة استهلاك المبيعات (نظري)')} icon={FlaskConical} value={money(total.sales_use_value_minor)} tone="warning" />

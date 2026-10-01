@@ -51,7 +51,7 @@ function General() {
   });
   const toggleService = (t, on) => set({ service_order_types: on ? [...s.service_order_types, t] : s.service_order_types.filter((x) => x !== t) });
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid gap-3 lg:grid-cols-2">
       <Card title={T('بيانات المطعم')}>
         <div className="grid grid-cols-2 gap-3">
           <Field label={T('اسم المطعم')} className="col-span-2"><Input value={s.restaurant_name} onChange={(e) => set({ restaurant_name: e.target.value })} /></Field>
@@ -74,7 +74,7 @@ function General() {
           <Field label={T('نسبة الخدمة %')}><Input className="num" value={s.service} onChange={(e) => set({ service: e.target.value })} /></Field>
           <Checkbox label={T('الأسعار شاملة الضريبة')} checked={s.tax_inclusive} onChange={(v) => set({ tax_inclusive: v })} />
           <Checkbox label={T('الضريبة تُحسب على الخدمة')} checked={s.service_taxable} onChange={(v) => set({ service_taxable: v })} />
-          <div className="col-span-2 flex gap-4">
+          <div className="col-span-2 flex gap-3">
             <span className="text-sm text-muted">{T('الخدمة على:')}</span>
             <Checkbox label={T('صالة')} checked={s.service_order_types.includes('dine_in')} onChange={(v) => toggleService('dine_in', v)} />
             <Checkbox label={T('تيك أواي')} checked={s.service_order_types.includes('takeaway')} onChange={(v) => toggleService('takeaway', v)} />
@@ -134,7 +134,7 @@ function Devices() {
   const s = data.data;
   const kinds = { terminal: T('كاشير'), waiter: T('ويتر'), kds: T('شاشة مطبخ'), display: T('شاشة عميل'), remote: T('دخول عن بعد') };
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
       <Card title={T('الشبكة المحلية (تابلت الويتر وشاشات المطبخ)')}>
         <div className="grid gap-3">
           <Checkbox label={T('السماح للأجهزة على نفس الشبكة بالاتصال')} checked={s.lan_enabled} onChange={(v) => save({ ...s, lan_enabled: v })} />
@@ -170,7 +170,7 @@ function Backups() {
   if (!data.data) return <Spinner />;
   const s = data.data;
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
       <Card title={T('النسخ التلقائي')}>
         <div className="flex flex-wrap items-end gap-3">
           <Field label={T('كل (ساعة)')} hint={T('0 = إيقاف')}><Input type="number" className="w-28" defaultValue={s.auto_backup_hours} id="bh" /></Field>
@@ -211,7 +211,7 @@ function Account() {
 export function Display() {
   const { scale, setScale, dark, toggle } = useTheme();
   return (
-    <div className="grid max-w-3xl gap-4">
+    <div className="grid max-w-3xl gap-3">
       <Card title={T('اللغة')}>
         <p className="mb-4 text-sm text-muted">{T('لغة الواجهة على هذا الجهاز. سيُعاد تحميل البرنامج لتطبيقها.')}</p>
         <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label={T('اللغة')}>

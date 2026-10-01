@@ -162,7 +162,7 @@ export default function POS() {
     <div className="flex h-full bg-bg">
       {/* menu side */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="space-y-3 border-b border-line bg-surface px-5 py-4">
+        <div className="space-y-3 border-b border-line bg-surface px-4 py-3">
           <div className="flex items-center gap-2">
             <SearchInput className="flex-1" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={T('ابحث عن صنف بالاسم أو الكود…')} aria-label={T('بحث في الأصناف')} />
             <IconButton icon={LayoutDashboard} label={T('الرجوع للوحة التحكم')} onClick={() => navigate('/')} />
@@ -179,25 +179,25 @@ export default function POS() {
             </div>
           </div>
         </div>
-        <div className="flex gap-2 overflow-x-auto px-5 py-3" role="tablist" aria-label={T('الأقسام')}>
+        <div className="flex gap-2 overflow-x-auto px-4 py-3" role="tablist" aria-label={T('الأقسام')}>
           <CatPill active={!cat && !search} onClick={() => { setCat(''); setSearch(''); }} count={menu.data.items.length}>{T('الكل')}</CatPill>
           {menu.data.categories.map((c) => (
             <CatPill key={c.id} active={cat === c.id && !search} count={countBy(c.id)} onClick={() => { setCat(c.id); setSearch(''); }}>{c.name}</CatPill>
           ))}
         </div>
-        <div className="grid flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4 overflow-y-auto px-5 pb-5">
+        <div className="grid flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3 overflow-y-auto px-4 pb-4">
           {items.map((i) => (
             <button key={i.id} onClick={() => pickItem(i)} disabled={busy}
               className={cx('group relative flex flex-col overflow-hidden rounded-card border bg-surface text-start shadow-card transition duration-150 hover:-translate-y-0.5 hover:shadow-pop active:scale-[.98]',
                 inCart[i.id] ? 'border-primary ring-2 ring-primary/20' : 'border-line')}>
-              {i.image ? <img src={i.image} alt="" className="aspect-[4/3] w-full object-cover" loading="lazy" /> : (
-                <div className="flex aspect-[4/3] items-center justify-center bg-gradient-to-br from-primary-soft to-surface-2 text-primary">
+              {i.image ? <img src={i.image} alt="" className="aspect-[16/11] w-full object-cover" loading="lazy" /> : (
+                <div className="flex aspect-[16/11] items-center justify-center bg-gradient-to-br from-primary-soft to-surface-2 text-primary">
                   <Utensils className="size-10 opacity-70" aria-hidden />
                 </div>
               )}
               {inCart[i.id] > 0 && <span className="bg-brand num absolute end-2 top-2 flex size-7 items-center justify-center rounded-full text-sm font-bold text-white shadow">{inCart[i.id]}</span>}
               {i.modifier_group_ids.length > 0 && <span className="absolute start-2 top-2 rounded-full bg-surface/90 px-2 py-0.5 text-xs font-semibold text-muted shadow-sm">{T('+ إضافات')}</span>}
-              <div className="flex flex-1 flex-col justify-between gap-2 p-3">
+              <div className="flex flex-1 flex-col justify-between gap-1.5 p-2.5">
                 <div className="line-clamp-2 font-semibold leading-snug">{i.name}</div>
                 <div className="num text-lg font-bold text-primary">{money(i.price_minor)} <span className="text-xs font-semibold text-muted">{currencyLabel()}</span></div>
               </div>
@@ -208,8 +208,8 @@ export default function POS() {
       </div>
 
       {/* order panel */}
-      <aside className="flex w-[440px] shrink-0 flex-col border-s border-line bg-surface">
-        <div className="flex items-center gap-3 border-b border-line px-5 py-4">
+      <aside className="flex w-[400px] shrink-0 flex-col border-s border-line bg-surface">
+        <div className="flex items-center gap-3 border-b border-line px-4 py-3">
           <span className="bg-brand flex size-11 items-center justify-center rounded-xl text-white shadow-md shadow-primary/30"><ShoppingBag className="size-5" aria-hidden /></span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 text-lg font-bold">{order ? T('طلب #{0}', [order.number]) : T('طلب جديد')}
@@ -221,7 +221,7 @@ export default function POS() {
           {order && <Button variant="danger-soft" size="sm" icon={X} onClick={() => setDialog({ kind: 'voidOrder' })}>{T('إلغاء')}</Button>}
         </div>
 
-        <div className="space-y-2 border-b border-line px-5 py-3">
+        <div className="space-y-2 border-b border-line px-4 py-3">
           <Segmented options={Object.entries(orderTypes)} value={type} onChange={(k) => updateHeader({ type: k })} />
           <div className="flex gap-2">
             {type === 'dine_in' && (
@@ -241,7 +241,7 @@ export default function POS() {
         <div className="flex-1 overflow-y-auto px-3 py-2">
           {live.length === 0 && <Empty icon={ShoppingBag} title={T('الطلب فارغ')}>{T('اختر صنفاً لبدء البيع')}</Empty>}
           {order?.lines.map((l) => (
-            <div key={l.id} className={cx('mb-2 rounded-2xl border p-3 transition', l.voided ? 'border-danger/20 bg-danger-soft/50 opacity-70' : 'border-line bg-surface hover:border-primary/40')}>
+            <div key={l.id} className={cx('mb-1.5 rounded-2xl border p-2.5 transition', l.voided ? 'border-danger/20 bg-danger-soft/50 opacity-70' : 'border-line bg-surface hover:border-primary/40')}>
               <div className="flex items-start gap-2">
                 <button className="min-w-0 flex-1 text-start" disabled={l.voided} onClick={() => setDialog({ kind: 'line', line: l })}>
                   <div className={cx('font-bold', l.voided && 'line-through')}>{l.name}</div>
@@ -272,33 +272,32 @@ export default function POS() {
           ))}
         </div>
 
-        <div className="border-t border-line bg-surface-2/50 px-5 py-3 text-sm">
-          <Row label={T('المجموع الفرعي')} v={order?.subtotal_minor || 0} always />
+        <div className="border-t border-line bg-surface-2/50 px-4 py-2 text-sm">
           <Row label={T('الخصم')} v={-((order?.line_discounts_minor || 0) + (order?.order_discount_minor || 0))} />
           <Row label={T('الخدمة')} v={order?.service_minor} />
           <Row label={settings.tax_inclusive ? T('الضريبة (شاملة)') : T('الضريبة')} v={order?.tax_minor} />
           <Row label={T('التوصيل')} v={order?.delivery_fee_minor} />
-          <div className="mt-2 flex items-center justify-between rounded-xl bg-primary-soft px-4 py-3">
+          <div className="mt-1 flex items-center justify-between rounded-xl bg-primary-soft px-3 py-2">
             <span className="text-lg font-bold">{T('الإجمالي')}</span>
-            <span className="num text-2xl font-black text-primary-ink">{moneyC(order?.total_minor || 0)}</span>
+            <span className="num text-xl font-black text-primary-ink">{moneyC(order?.total_minor || 0)}</span>
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-2 border-t border-line px-5 py-3">
+        <div className="grid grid-cols-4 gap-1.5 border-t border-line px-4 py-2">
           <ActionBtn icon={Send} label={pending ? T('إرسال ({0})', [pending]) : T('إرسال')} disabled={!order || !pending || busy} onClick={send} />
           <ActionBtn icon={PauseCircle} label={T('تعليق')} disabled={!order || !live.length || busy} onClick={hold} />
           <ActionBtn icon={Percent} label={T('خصم')} disabled={!order || !live.length} onClick={() => setDialog({ kind: 'discount' })} />
           <ActionBtn icon={Printer} label={T('فاتورة مبدئية')} disabled={!order || !live.length} onClick={() => printReceipt(order, settings)} />
         </div>
-        <div className="flex gap-2 px-5 pb-4">
-          <IconButton icon={ChefHat} label={T('طباعة للمطبخ')} className="size-14 shrink-0 rounded-2xl" disabled={!order || !live.some((l) => l.sent_at)}
+        <div className="flex gap-2 px-4 pb-3">
+          <IconButton icon={ChefHat} label={T('طباعة للمطبخ')} className="size-11 shrink-0 rounded-xl" disabled={!order || !live.some((l) => l.sent_at)}
             onClick={() => printKitchenTicket(order, live.filter((l) => l.sent_at))} />
           {can('pos.pay') ? (
-            <Button size="xl" icon={CreditCard} className="flex-1" disabled={!order || !live.length || busy} onClick={startPay}>
+            <Button size="lg" icon={CreditCard} className="flex-1" disabled={!order || !live.length || busy} onClick={startPay}>
               {T('الدفع')} <span className="num">{order ? money(order.total_minor) : ''}</span>
             </Button>
           ) : (
-            <Button size="xl" icon={Send} className="flex-1" disabled={!order || !pending || busy} onClick={send}>{T('إرسال للمطبخ')}</Button>
+            <Button size="lg" icon={Send} className="flex-1" disabled={!order || !pending || busy} onClick={send}>{T('إرسال للمطبخ')}</Button>
           )}
         </div>
       </aside>
@@ -354,7 +353,7 @@ export default function POS() {
                 {o.pending_lines > 0 && <Badge tone="red">{o.pending_lines} {T('لم تُرسل')}</Badge>}
               </button>
             ))}
-            {!openOrders.data?.length && <div className="col-span-2 p-6 text-center text-muted/70">{T('لا توجد طلبات مفتوحة')}</div>}
+            {!openOrders.data?.length && <div className="col-span-2 p-4 text-center text-muted/70">{T('لا توجد طلبات مفتوحة')}</div>}
           </div>
         </Modal>
       )}
@@ -366,8 +365,8 @@ const lineBody = (l) => ({
   qty_milli: l.qty_milli, notes: l.notes, discount_kind: l.discount_kind, discount_rate_bp: l.discount_rate_bp, discount_amount_minor: l.discount_amount_minor,
 });
 
-function Row({ label, v, always }) {
-  if (!v && !always) return null;
+function Row({ label, v }) {
+  if (!v) return null;
   return <div className="flex justify-between py-0.5 text-muted"><span>{label}</span><span className="num font-semibold text-fg">{money(v)}</span></div>;
 }
 
@@ -381,8 +380,8 @@ const CatPill = ({ active, count, children, ...p }) => (
 );
 const QtyBtn = ({ label, ...p }) => <button {...p} aria-label={label} className="flex size-8 items-center justify-center rounded-lg bg-surface text-fg shadow-sm hover:text-primary" />;
 const ActionBtn = ({ icon: Icon, label, ...p }) => (
-  <button {...p} className="flex flex-col items-center gap-1 rounded-xl border border-line bg-surface py-2.5 text-xs font-semibold text-fg transition hover:border-primary/40 hover:bg-primary-soft hover:text-primary-ink disabled:pointer-events-none disabled:opacity-40">
-    <Icon className="size-5" aria-hidden />{label}
+  <button {...p} className="flex items-center justify-center gap-1.5 rounded-xl border border-line bg-surface px-1 py-1.5 text-xs font-semibold text-fg transition hover:border-primary/40 hover:bg-primary-soft hover:text-primary-ink disabled:pointer-events-none disabled:opacity-40">
+    <Icon className="size-4 shrink-0" aria-hidden /><span className="truncate">{label}</span>
   </button>
 );
 

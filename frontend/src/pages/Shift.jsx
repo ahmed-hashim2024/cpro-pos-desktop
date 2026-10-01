@@ -30,7 +30,7 @@ export default function Shift() {
       </PageHeader>
 
       {shift && (report.data ? <ShiftSummary r={report.data} /> : <Spinner />)}
-      {!shift && <div className="mb-6 rounded-xl bg-surface p-8 text-center text-muted">{T('لا توجد وردية مفتوحة لك على هذا الجهاز')}</div>}
+      {!shift && <div className="mb-4 rounded-xl bg-surface p-8 text-center text-muted">{T('لا توجد وردية مفتوحة لك على هذا الجهاز')}</div>}
 
       <Card title={T('سجل الورديات')} className="mt-6" actions={<DateRange from={range.from} to={range.to} onChange={(from, to) => setRange({ from, to })} />}>
         <Table head={[T('المستخدم'), T('الجهاز'), T('فُتحت'), T('أُغلقت'), T('الافتتاح'), T('المتوقع'), T('المعدود'), T('الفرق'), '']}>
@@ -66,14 +66,14 @@ function ShiftSummary({ r }) {
   const s = useApp((st) => st.settings);
   const name = Object.fromEntries(s.payment_methods.map((m) => [m.code, m.name]));
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label={T('المبيعات')} icon={TrendingUp} value={money(r.sales_minor)} sub={T('{0} طلب', [r.orders])} tone="success" />
         <Stat label={T('النقدية المتوقعة في الدرج')} icon={Wallet} value={money(r.expected_cash_minor)} tone="warning" />
         <Stat label={T('المرتجعات')} icon={Undo2} value={money(r.refunds_minor)} tone={r.refunds_minor ? 'bad' : 'default'} />
         <Stat label={T('الخصومات')} icon={Percent} value={money(r.discounts_minor)} sub={T('{0} طلب ملغي', [r.voided_orders])} />
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-2">
         <Card title={T('حسب طريقة الدفع')}>
           {r.by_method.map((m) => <div key={m.method} className="flex justify-between py-1"><span>{name[m.method] || m.name} ({m.count})</span><span className="num font-semibold">{money(m.amount_minor)}</span></div>)}
           {!r.by_method.length && <div className="text-muted/70">{T('لا توجد مدفوعات')}</div>}

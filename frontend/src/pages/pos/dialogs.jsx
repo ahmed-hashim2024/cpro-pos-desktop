@@ -36,7 +36,7 @@ export function ModifierDialog({ item, groups, onClose, onAdd }) {
           {T('إضافة —')} {moneyC((item.price_minor + extra) * count)}
         </Button>
       </>}>
-      <div className="grid gap-5">
+      <div className="grid gap-4">
         {itemGroups.map((g) => (
           <div key={g.id}>
             <div className="mb-2 flex items-center gap-2 font-bold">
@@ -82,7 +82,7 @@ export function LineDialog({ line, onClose, onSave }) {
   return (
     <Modal open onClose={onClose} title={line.name}
       footer={<><Button variant="secondary" onClick={onClose}>{T('إلغاء')}</Button><Button onClick={save}>{T('حفظ')}</Button></>}>
-      <div className="grid gap-4">
+      <div className="grid gap-3">
         <Field label={T('الكمية')} hint={sent ? T('أُرسل للمطبخ — لا يمكن تغيير الكمية') : ''}>
           <div className="flex items-center gap-2">
             <Button variant="secondary" disabled={sent} onClick={() => setCount(Math.max(1, count - 1))}>−</Button>
@@ -199,7 +199,7 @@ export function CustomerDialog({ onClose, onPick }) {
                 <div className="num text-muted">{c.phone}</div>
               </button>
             ))}
-            {!list.length && <div className="p-6 text-center text-muted/70">{T('لا يوجد عملاء')}</div>}
+            {!list.length && <div className="p-4 text-center text-muted/70">{T('لا يوجد عملاء')}</div>}
           </div>
         </div>
       )}
@@ -289,9 +289,9 @@ export function PayDialog({ order, onClose, onPaid }) {
 
   return (
     <Modal open onClose={onClose} title={T('دفع الطلب #{0}', [order.number])} size="lg">
-      <div className="grid gap-5 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="grid content-start gap-3">
-          <div className="bg-brand rounded-2xl p-5 text-white shadow-md shadow-primary/30">
+          <div className="bg-brand rounded-2xl p-4 text-white shadow-md shadow-primary/30">
             <div className="text-sm opacity-80">{T('الإجمالي')}</div>
             <div className="num text-4xl font-black" style={{ direction: 'inherit' }}>{moneyC(order.total_minor)}</div>
             {paid > 0 && <div className="mt-2 font-semibold text-white/90">{T('المتبقي:')} <span className="num">{money(remaining)}</span></div>}
