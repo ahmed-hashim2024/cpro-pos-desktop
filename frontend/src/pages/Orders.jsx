@@ -7,6 +7,7 @@ import { printReceipt } from '@/lib/print';
 import { exportCSV } from '@/lib/csv';
 import { Button, Badge, DateRange, Field, Input, Modal, PageHeader, Select, Table, Td, Checkbox, useLoad, useAction } from '@/components/ui';
 import { withApproval } from '@/components/Approval';
+import { T } from '@/lib/i18n';
 
 const statusTone = { paid: 'green', void: 'red', open: 'blue', held: 'amber' };
 
@@ -20,24 +21,24 @@ export default function Orders() {
 
   return (
     <div>
-      <PageHeader title="الطلبات والفواتير" icon={Receipt} subtitle="البحث في الطلبات، إعادة الطباعة والمرتجعات" crumb="المبيعات">
+      <PageHeader title={T('الطلبات والفواتير')} icon={Receipt} subtitle={T('البحث في الطلبات، إعادة الطباعة والمرتجعات')} crumb={T('المبيعات')}>
         <DateRange from={f.from} to={f.to} onChange={(from, to) => setF({ ...f, from, to })} />
         <Select className="w-32" value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
-          <option value="">كل الحالات</option><option value="paid">مدفوع</option><option value="void">ملغي</option>
+          <option value="">{T('كل الحالات')}</option><option value="paid">{T('مدفوع')}</option><option value="void">{T('ملغي')}</option>
         </Select>
         <Select className="w-32" value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })}>
-          <option value="">كل الأنواع</option>
+          <option value="">{T('كل الأنواع')}</option>
           {Object.entries(orderTypes).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </Select>
-        <Input className="w-56" placeholder="رقم الطلب / الفاتورة / العميل" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} />
+        <Input className="w-56" placeholder={T('رقم الطلب / الفاتورة / العميل')} value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} />
         <Button variant="secondary" onClick={() => exportCSV(`orders-${f.from}-${f.to}`,
-          ['رقم', 'فاتورة', 'التاريخ', 'النوع', 'الحالة', 'الطاولة', 'العميل', 'المستخدم', 'الإجمالي', 'مرتجع'],
+          [T('رقم'), T('فاتورة'), T('التاريخ'), T('النوع'), T('الحالة'), T('الطاولة'), T('العميل'), T('المستخدم'), T('الإجمالي'), T('مرتجع')],
           rows.map((o) => [o.number, o.invoice_number, dateTime(o.closed_at || o.created_at), orderTypes[o.type], orderStatus[o.status], o.table_name, o.customer_name, o.user_name, money(o.total_minor), money(o.refunded_minor)]))}>
-          تصدير Excel
+          {T('تصدير Excel')}
         </Button>
       </PageHeader>
-      <div className="mb-3 text-muted">{rows.length} طلب — صافي المدفوع: <b className="num">{money(total)}</b></div>
-      <Table head={['#', 'الفاتورة', 'الوقت', 'النوع', 'الطاولة / العميل', 'المستخدم', 'الإجمالي', 'الحالة']}>
+      <div className="mb-3 text-muted">{rows.length} {T('طلب — صافي المدفوع:')} <b className="num">{money(total)}</b></div>
+      <Table head={['#', T('الفاتورة'), T('الوقت'), T('النوع'), T('الطاولة / العميل'), T('المستخدم'), T('الإجمالي'), T('الحالة')]}>
         {rows.map((o) => (
           <tr key={o.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setOpenId(o.id)}>
             <Td className="font-bold">{o.number}</Td>
@@ -66,30 +67,30 @@ export function OrderDetail({ id, onClose }) {
   const refundable = o.status === 'paid' && o.lines.some((l) => !l.voided && l.qty_milli > l.refunded_qty_milli);
 
   return (
-    <Modal open onClose={onClose} title={`طلب #${o.number} ${o.invoice_number ? `— ${o.invoice_number}` : ''}`} size="lg"
+    <Modal open onClose={onClose} title={T('طلب #{0} {1}', [o.number, o.invoice_number ? `— ${o.invoice_number}` : ''])} size="lg"
       footer={<>
-        {refundable && <Button variant="secondary" onClick={() => setRefund(true)}><Undo2 className="size-4" />مرتجع</Button>}
-        {o.status === 'paid' && <Button variant="secondary" onClick={() => printReceipt(o, settings, { copy: true })}><Printer className="size-4" />إعادة طباعة</Button>}
-        <Button onClick={onClose}>إغلاق</Button>
+        {refundable && <Button variant="secondary" onClick={() => setRefund(true)}><Undo2 className="size-4" />{T('مرتجع')}</Button>}
+        {o.status === 'paid' && <Button variant="secondary" onClick={() => printReceipt(o, settings, { copy: true })}><Printer className="size-4" />{T('إعادة طباعة')}</Button>}
+        <Button onClick={onClose}>{T('إغلاق')}</Button>
       </>}>
       <div className="mb-3 grid grid-cols-3 gap-2 text-sm">
-        <Info k="النوع" v={`${orderTypes[o.type]}${o.table_name ? ` — ${o.table_name}` : ''}`} />
-        <Info k="الحالة" v={orderStatus[o.status]} />
-        <Info k="المستخدم" v={o.user_name} />
-        <Info k="فُتح" v={dateTime(o.created_at)} />
-        <Info k="أُغلق" v={dateTime(o.closed_at)} />
-        <Info k="العميل" v={[o.customer_name, o.customer_phone].filter(Boolean).join(' ')} />
-        {o.void_reason && <Info k="سبب الإلغاء" v={o.void_reason} />}
-        {o.discount_reason && <Info k="سبب الخصم" v={o.discount_reason} />}
+        <Info k={T('النوع')} v={`${orderTypes[o.type]}${o.table_name ? ` — ${o.table_name}` : ''}`} />
+        <Info k={T('الحالة')} v={orderStatus[o.status]} />
+        <Info k={T('المستخدم')} v={o.user_name} />
+        <Info k={T('فُتح')} v={dateTime(o.created_at)} />
+        <Info k={T('أُغلق')} v={dateTime(o.closed_at)} />
+        <Info k={T('العميل')} v={[o.customer_name, o.customer_phone].filter(Boolean).join(' ')} />
+        {o.void_reason && <Info k={T('سبب الإلغاء')} v={o.void_reason} />}
+        {o.discount_reason && <Info k={T('سبب الخصم')} v={o.discount_reason} />}
       </div>
-      <Table head={['الصنف', 'الكمية', 'السعر', 'الصافي', 'الحالة']}>
+      <Table head={[T('الصنف'), T('الكمية'), T('السعر'), T('الصافي'), T('الحالة')]}>
         {o.lines.map((l) => (
           <tr key={l.id} className={l.voided ? 'text-danger line-through' : ''}>
             <Td>{l.name}{l.modifiers.map((m) => <div key={m.name} className="text-xs text-muted">+ {m.name}</div>)}</Td>
-            <Td className="num">{qty(l.qty_milli)}{l.refunded_qty_milli > 0 && <span className="text-danger"> (مرتجع {qty(l.refunded_qty_milli)})</span>}</Td>
+            <Td className="num">{qty(l.qty_milli)}{l.refunded_qty_milli > 0 && <span className="text-danger"> ({T('مرتجع')} {qty(l.refunded_qty_milli)})</span>}</Td>
             <Td className="num">{money(l.unit_price_minor)}</Td>
             <Td className="num">{money(l.net_minor)}</Td>
-            <Td>{l.voided ? `ملغي: ${l.void_reason}` : kitchenStatus[l.kitchen_status]}</Td>
+            <Td>{l.voided ? T('ملغي: {0}', [l.void_reason]) : kitchenStatus[l.kitchen_status]}</Td>
           </tr>
         ))}
       </Table>
@@ -100,10 +101,10 @@ export function OrderDetail({ id, onClose }) {
           ))}
         </div>
         <div className="grid gap-0.5">
-          <Line k="الإجمالي" v={o.subtotal_minor} /><Line k="الخصم" v={o.line_discounts_minor + o.order_discount_minor} />
-          <Line k="الخدمة" v={o.service_minor} /><Line k="الضريبة" v={o.tax_minor} /><Line k="التوصيل" v={o.delivery_fee_minor} />
-          <div className="flex justify-between text-lg font-bold"><span>المطلوب</span><span className="num">{money(o.total_minor)}</span></div>
-          {o.refunded_minor > 0 && <div className="flex justify-between text-danger"><span>مرتجع</span><span className="num">{money(o.refunded_minor)}</span></div>}
+          <Line k={T('الإجمالي')} v={o.subtotal_minor} /><Line k={T('الخصم')} v={o.line_discounts_minor + o.order_discount_minor} />
+          <Line k={T('الخدمة')} v={o.service_minor} /><Line k={T('الضريبة')} v={o.tax_minor} /><Line k={T('التوصيل')} v={o.delivery_fee_minor} />
+          <div className="flex justify-between text-lg font-bold"><span>{T('المطلوب')}</span><span className="num">{money(o.total_minor)}</span></div>
+          {o.refunded_minor > 0 && <div className="flex justify-between text-danger"><span>{T('مرتجع')}</span><span className="num">{money(o.refunded_minor)}</span></div>}
         </div>
       </div>
       {refund && <RefundDialog order={o} onClose={() => setRefund(false)} onDone={() => { setRefund(false); order.reload(); }} />}
@@ -123,15 +124,15 @@ function RefundDialog({ order, onClose, onDone }) {
 
   const submit = () => run(async () => {
     const res = await withApproval((pin) => api.post(`/orders/${order.id}/refund`, { lines: picked, reason, method, restock, approver_pin: pin }, { idempotent: true }));
-    if (res) { toast('تم تسجيل المرتجع'); onDone(); }
+    if (res) { toast(T('تم تسجيل المرتجع')); onDone(); }
   });
 
   return (
-    <Modal open onClose={onClose} title="مرتجع" size="lg"
-      footer={<><Button variant="secondary" onClick={onClose}>إلغاء</Button>
-        <Button variant="danger" busy={busy} disabled={!picked.length || !reason.trim() || !shift} onClick={submit}>تأكيد المرتجع</Button></>}>
-      {!shift && <div className="mb-3 rounded-lg bg-danger-soft p-3 text-danger">يجب فتح وردية لصرف المرتجع من الدرج</div>}
-      <Table head={['الصنف', 'المتاح', 'الكمية المرتجعة']}>
+    <Modal open onClose={onClose} title={T('مرتجع')} size="lg"
+      footer={<><Button variant="secondary" onClick={onClose}>{T('إلغاء')}</Button>
+        <Button variant="danger" busy={busy} disabled={!picked.length || !reason.trim() || !shift} onClick={submit}>{T('تأكيد المرتجع')}</Button></>}>
+      {!shift && <div className="mb-3 rounded-lg bg-danger-soft p-3 text-danger">{T('يجب فتح وردية لصرف المرتجع من الدرج')}</div>}
+      <Table head={[T('الصنف'), T('المتاح'), T('الكمية المرتجعة')]}>
         {avail.map((l) => {
           const max = (l.qty_milli - l.refunded_qty_milli) / 1000;
           return (
@@ -145,13 +146,13 @@ function RefundDialog({ order, onClose, onDone }) {
         })}
       </Table>
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <Field label="السبب"><Input value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
-        <Field label="طريقة الرد">
+        <Field label={T('السبب')}><Input value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
+        <Field label={T('طريقة الرد')}>
           <Select value={method} onChange={(e) => setMethod(e.target.value)}>
             {settings.payment_methods.filter((m) => m.active).map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}
           </Select>
         </Field>
-        <Checkbox label="إرجاع الخامات للمخزون (أصناف مغلقة لم تُستهلك)" checked={restock} onChange={setRestock} />
+        <Checkbox label={T('إرجاع الخامات للمخزون (أصناف مغلقة لم تُستهلك)')} checked={restock} onChange={setRestock} />
       </div>
     </Modal>
   );

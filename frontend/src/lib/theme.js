@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { T } from '@/lib/i18n';
 
 const THEME_KEY = 'cpro.theme';
 const SCALE_KEY = 'cpro.fontScale';
@@ -9,11 +10,11 @@ const write = (k, v) => { try { localStorage.setItem(k, v); } catch { /* storage
 // font size scales the whole UI. Per device: a 13" laptop and a 21" touch
 // screen at the counter need different sizes.
 export const fontScales = [
-  ['xs', 'صغير جداً', 12],
-  ['sm', 'صغير', 13],
-  ['md', 'متوسط', 14],
-  ['lg', 'كبير', 15],
-  ['xl', 'كبير جداً', 16],
+  ['xs', T('صغير جداً'), 12],
+  ['sm', T('صغير'), 13],
+  ['md', T('متوسط'), 14],
+  ['lg', T('كبير'), 15],
+  ['xl', T('كبير جداً'), 16],
 ];
 const DEFAULT_SCALE = 'sm';
 const px = (key) => (fontScales.find(([k]) => k === key) || fontScales.find(([k]) => k === DEFAULT_SCALE))[2];

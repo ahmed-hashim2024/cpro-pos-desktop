@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { toast, toastError } from '@/lib/store';
 import { money, minutesSince } from '@/lib/format';
 import { Button, PageHeader, Spinner, Badge, cx, useLoad } from '@/components/ui';
+import { T } from '@/lib/i18n';
 
 export default function Tables() {
   const navigate = useNavigate();
@@ -17,7 +18,7 @@ export default function Tables() {
   const byTable = useMemo(() => Object.fromEntries((data.data?.open || []).filter((o) => o.table_id).map((o) => [o.table_id, o])), [data.data]);
   const areas = useMemo(() => {
     const m = {};
-    (data.data?.tables || []).forEach((t) => { (m[t.area || 'الصالة'] ||= []).push(t); });
+    (data.data?.tables || []).forEach((t) => { (m[t.area || T('الصالة')] ||= []).push(t); });
     return Object.entries(m);
   }, [data.data]);
   const others = (data.data?.open || []).filter((o) => !o.table_id);
@@ -29,14 +30,14 @@ export default function Tables() {
     if (!action) return navigate(o ? `/pos?order=${o.id}` : `/pos?table=${t.id}`);
     try {
       if (action.kind === 'move') {
-        if (o) return toastError(new Error('الطاولة مشغولة، استخدم الدمج'));
+        if (o) return toastError(new Error(T('الطاولة مشغولة، استخدم الدمج')));
         const full = await api.get(`/orders/${action.order.id}`);
         await api.put(`/orders/${full.id}`, { type: 'dine_in', table_id: t.id, customer_id: full.customer_id, guests: full.guests, notes: full.notes });
-        toast(`تم نقل الطلب إلى ${t.name}`);
+        toast(T('تم نقل الطلب إلى {0}', [t.name]));
       } else {
-        if (!o || o.id === action.order.id) return toastError(new Error('اختر طاولة عليها طلب آخر'));
+        if (!o || o.id === action.order.id) return toastError(new Error(T('اختر طاولة عليها طلب آخر')));
         await api.post(`/orders/${o.id}/merge`, { source_id: action.order.id });
-        toast(`تم دمج الطلب في ${t.name}`);
+        toast(T('تم دمج الطلب في {0}', [t.name]));
       }
       setAction(null);
       data.reload(true);
@@ -47,17 +48,17 @@ export default function Tables() {
 
   return (
     <div>
-      <PageHeader title="الطاولات" icon={LayoutGrid} subtitle="حالة الصالة لحظياً — اضغط على طاولة لفتح طلبها" crumb="المبيعات">
-        <Badge tone="green">{Object.keys(byTable).length} مشغولة</Badge>
-        <Badge>{data.data.tables.length - Object.keys(byTable).length} متاحة</Badge>
+      <PageHeader title={T('الطاولات')} icon={LayoutGrid} subtitle={T('حالة الصالة لحظياً — اضغط على طاولة لفتح طلبها')} crumb={T('المبيعات')}>
+        <Badge tone="green">{Object.keys(byTable).length} {T('مشغولة')}</Badge>
+        <Badge>{data.data.tables.length - Object.keys(byTable).length} {T('متاحة')}</Badge>
       </PageHeader>
       {action && (
         <div className="mb-4 flex items-center justify-between rounded-xl bg-warning-soft p-3 text-warning">
-          <span>{action.kind === 'move' ? `اختر الطاولة الجديدة للطلب #${action.order.number}` : `اختر الطاولة التي سيُدمج فيها الطلب #${action.order.number}`}</span>
-          <Button variant="secondary" size="sm" onClick={() => setAction(null)}>إلغاء</Button>
+          <span>{action.kind === 'move' ? T('اختر الطاولة الجديدة للطلب #{0}', [action.order.number]) : T('اختر الطاولة التي سيُدمج فيها الطلب #{0}', [action.order.number])}</span>
+          <Button variant="secondary" size="sm" onClick={() => setAction(null)}>{T('إلغاء')}</Button>
         </div>
       )}
-      {!data.data.tables.length && <div className="rounded-xl bg-surface p-10 text-center text-muted/70">لا توجد طاولات — أضفها من المنيو ← الطاولات</div>}
+      {!data.data.tables.length && <div className="rounded-xl bg-surface p-10 text-center text-muted/70">{T('لا توجد طاولات — أضفها من المنيو ← الطاولات')}</div>}
       {areas.map(([area, tables]) => (
         <div key={area} className="mb-6">
           <h2 className="mb-2 font-bold text-muted">{area}</h2>
@@ -68,7 +69,7 @@ export default function Tables() {
               return (
                 <div key={t.id} className={cx('relative rounded-2xl border-2 p-3 transition',
                   o ? 'border-primary bg-primary-soft' : 'border-line bg-surface', action && 'ring-2 ring-warning/40')}>
-                  <button onClick={() => pick(t)} className="block w-full text-right">
+                  <button onClick={() => pick(t)} className="block w-full text-start">
                     <div className="flex items-center justify-between">
                       <span className="text-xl font-black">{t.name}</span>
                       <span className="flex items-center gap-1 text-sm text-muted"><Users className="size-4" />{o?.guests || t.seats}</span>
@@ -77,15 +78,15 @@ export default function Tables() {
                       <div className="mt-2 text-sm">
                         <div className="num text-lg font-bold text-primary">{money(o.total_minor)}</div>
                         <div className="text-muted">#{o.number} · {o.user_name}</div>
-                        <div className={cx('text-xs', mins > 60 ? 'text-danger' : 'text-muted')}>منذ {mins} دقيقة</div>
-                        {o.pending_lines > 0 && <Badge tone="red">{o.pending_lines} لم تُرسل</Badge>}
+                        <div className={cx('text-xs', mins > 60 ? 'text-danger' : 'text-muted')}>{T('منذ')} {mins} {T('دقيقة')}</div>
+                        {o.pending_lines > 0 && <Badge tone="red">{o.pending_lines} {T('لم تُرسل')}</Badge>}
                       </div>
-                    ) : <div className="mt-6 text-sm text-muted/70">متاحة</div>}
+                    ) : <div className="mt-6 text-sm text-muted/70">{T('متاحة')}</div>}
                   </button>
                   {o && !action && (
                     <div className="mt-2 flex gap-1">
-                      <Button size="sm" variant="secondary" className="flex-1" onClick={() => setAction({ kind: 'move', order: o })}><ArrowLeftRight className="size-3" />نقل</Button>
-                      <Button size="sm" variant="secondary" className="flex-1" onClick={() => setAction({ kind: 'merge', order: o })}><Combine className="size-3" />دمج</Button>
+                      <Button size="sm" variant="secondary" className="flex-1" onClick={() => setAction({ kind: 'move', order: o })}><ArrowLeftRight className="size-3" />{T('نقل')}</Button>
+                      <Button size="sm" variant="secondary" className="flex-1" onClick={() => setAction({ kind: 'merge', order: o })}><Combine className="size-3" />{T('دمج')}</Button>
                     </div>
                   )}
                 </div>
@@ -96,13 +97,13 @@ export default function Tables() {
       ))}
       {others.length > 0 && (
         <div>
-          <h2 className="mb-2 font-bold text-muted">طلبات بدون طاولة</h2>
+          <h2 className="mb-2 font-bold text-muted">{T('طلبات بدون طاولة')}</h2>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
             {others.map((o) => (
-              <button key={o.id} onClick={() => navigate(`/pos?order=${o.id}`)} className="rounded-xl border border-line bg-surface p-3 text-right hover:border-primary">
+              <button key={o.id} onClick={() => navigate(`/pos?order=${o.id}`)} className="rounded-xl border border-line bg-surface p-3 text-start hover:border-primary">
                 <div className="flex justify-between font-bold"><span>#{o.number}</span><span className="num">{money(o.total_minor)}</span></div>
                 <div className="text-sm text-muted">{o.customer_name || o.user_name}</div>
-                {o.status === 'held' && <Badge tone="amber">معلّق</Badge>}
+                {o.status === 'held' && <Badge tone="amber">{T('معلّق')}</Badge>}
               </button>
             ))}
           </div>

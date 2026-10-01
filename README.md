@@ -28,6 +28,13 @@ owner's own domain.
 - **Users:** roles (owner, manager, cashier, waiter, kitchen) checked on the
   server. Quick PIN switching, manager-PIN approval for voids, discounts and
   refunds, login throttling, revocable sessions, and an append-only audit log.
+- **Data import:** Excel templates for items, categories, raw materials,
+  customers, suppliers and tables, with required columns marked by a red `*`,
+  dropdowns and an instructions sheet. Insert and update modes are separate;
+  the update template comes prefilled with current data. Every row is
+  validated, and errors are shown by row and column. Nothing is saved unless
+  the whole file is valid.
+- **Languages:** Arabic (RTL), English and French (LTR), chosen per device.
 - **Operations:**
   - Automatic and on-exit backups with an integrity check.
   - An automatic backup before every schema migration.
@@ -80,6 +87,12 @@ cd frontend && CPRO_API=http://127.0.0.1:8787 npm run dev   # hot reload in the 
 
 Under `wails dev`, Vite must answer 404 for `/api` so Wails hands the request to the Go handler.
 `vite.config.js` does this unless `CPRO_API` is set.
+
+UI strings are written in Arabic and wrapped in `T('…')` (`src/lib/i18n.js`).
+Add the English and French text to `src/lib/locales/{en,fr}.json`;
+`npm run check:i18n` (run in CI) fails on any missing translation. Layout
+classes use logical sides (`ms-`, `ps-`, `start-`, `text-start`, `border-s`)
+so the same markup works in both directions.
 
 Schema changes go in a new numbered file in
 `internal/store/sqlite/migrations/`. Never edit an applied migration.

@@ -22,6 +22,7 @@ const pages = {
   '/users': lazy(() => import('@/pages/Users')),
   '/audit': lazy(() => import('@/pages/Audit')),
   '/settings': lazy(() => import('@/pages/Settings')),
+  '/import': lazy(() => import('@/pages/Import')),
 };
 // Work screens run full-screen, without the sidebar.
 const fullScreen = new Set(['/pos', '/kitchen']);

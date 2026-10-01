@@ -15,6 +15,7 @@ import (
 	"cpro/internal/platform/paths"
 	"cpro/internal/store/sqlite"
 	"cpro/internal/transport/httpapi"
+	"cpro/internal/transport/native"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -80,6 +81,7 @@ func run() error {
 	if settings.RestaurantName != "" {
 		title = settings.RestaurantName + " — CPro POS"
 	}
+	nat := native.New()
 	return wails.Run(&options.App{
 		Title:     title,
 		Width:     1366,
@@ -90,7 +92,9 @@ func run() error {
 			Assets:  assets,
 			Handler: httpapi.New(a, app.ChannelApp, log, nil),
 		},
-		BackgroundColour: &options.RGBA{R: 250, G: 245, B: 234, A: 1},
+		BackgroundColour: &options.RGBA{R: 245, G: 246, B: 251, A: 1},
+		OnStartup:        native.OnStartup(nat),
+		Bind:             []any{nat},
 		OnShutdown: func(context.Context) {
 			cancel()
 			if _, err := a.BackupNow(context.Background(), app.Actor{}, "exit"); err != nil {

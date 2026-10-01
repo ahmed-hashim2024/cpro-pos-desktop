@@ -449,6 +449,30 @@ func (s *server) routes(mux *http.ServeMux) {
 		return a.Movements(r.Context(), actor, q(r, "ingredient"), q(r, "kind"), from, to)
 	}))
 
+	// ---- bulk import ----
+	mux.HandleFunc("GET /api/v1/import/targets", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		return a.ImportTargets(r.Context(), actor, q(r, "lang")), nil
+	}))
+	mux.HandleFunc("GET /api/v1/import/{entity}/template", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		b, name, err := a.ImportTemplate(r.Context(), actor, r.PathValue("entity"), app.ImportMode(q(r, "mode")), q(r, "lang"))
+		if err != nil {
+			return nil, err
+		}
+		w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+		w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+		w.Write(b)
+		return written{}, nil
+	}))
+	mux.HandleFunc("POST /api/v1/import/{entity}", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		r.Body = http.MaxBytesReader(w, r.Body, 20<<20)
+		file, _, err := r.FormFile("file")
+		if err != nil {
+			return nil, &app.Error{Code: app.CodeInvalid, Msg: "أرفق ملف Excel"}
+		}
+		defer file.Close()
+		return a.Import(r.Context(), actor, r.PathValue("entity"), app.ImportMode(q(r, "mode")), file, q(r, "lang"))
+	}))
+
 	// ---- reports ----
 	mux.HandleFunc("GET /api/v1/reports/dashboard", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
 		return a.Dashboard(r.Context(), actor)

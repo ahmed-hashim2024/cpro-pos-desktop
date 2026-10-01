@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useToast, toastError } from '@/lib/store';
+import { T, dir } from '@/lib/i18n';
 
 export const cx = (...c) => c.filter(Boolean).join(' ');
 
@@ -59,10 +60,10 @@ export const Select = ({ className, children, ...p }) => <select {...p} classNam
 export function SearchInput({ className, ...p }) {
   return (
     <div className={cx('relative', className)}>
-      <svg className="pointer-events-none absolute right-3 top-1/2 size-[18px] -translate-y-1/2 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <svg className="pointer-events-none absolute start-3 top-1/2 size-[18px] -translate-y-1/2 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
         <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
       </svg>
-      <input {...p} className={cx(inputCls, 'h-11 w-full bg-surface-2 pr-10 focus:bg-surface')} />
+      <input {...p} className={cx(inputCls, 'h-11 w-full bg-surface-2 ps-10 focus:bg-surface')} />
     </div>
   );
 }
@@ -119,7 +120,7 @@ export function Stat({ label, value, sub, icon: Icon, tone = 'primary' }) {
         <div className="text-sm font-semibold text-muted">{label}</div>
         {Icon && <span className={cx('flex size-10 shrink-0 items-center justify-center rounded-xl', tones[tone] || tones.primary)}><Icon className="size-5" aria-hidden /></span>}
       </div>
-      <div className="num mt-2 text-[1.75rem] font-bold leading-tight" style={{ direction: 'rtl' }}>{value}</div>
+      <div className="num mt-2 text-[1.75rem] font-bold leading-tight" style={{ direction: 'inherit' }}>{value}</div>
       {sub && <div className="mt-1 text-xs text-muted">{sub}</div>}
     </div>
   );
@@ -153,7 +154,7 @@ export function Modal({ open, onClose, title, subtitle, icon: Icon, children, fo
             <h2 className="truncate text-lg font-bold">{title}</h2>
             {subtitle && <p className="text-sm text-white/80">{subtitle}</p>}
           </div>
-          <button aria-label="إغلاق" className="flex size-10 items-center justify-center rounded-xl bg-white/15 hover:bg-white/25" onClick={onClose}><X className="size-5" /></button>
+          <button aria-label={T('إغلاق')} className="flex size-10 items-center justify-center rounded-xl bg-white/15 hover:bg-white/25" onClick={onClose}><X className="size-5" /></button>
         </header>
         <div className="overflow-y-auto bg-bg/40 p-6">{children}</div>
         {footer && <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface px-6 py-4">{footer}</footer>}
@@ -176,14 +177,14 @@ export function Tabs({ tabs, value, onChange }) {
   );
 }
 
-export function Table({ head, children, empty = 'لا توجد بيانات', className }) {
+export function Table({ head, children, empty = T('لا توجد بيانات'), className }) {
   const rows = Array.isArray(children) ? children.filter(Boolean) : children;
   const isEmpty = Array.isArray(rows) && rows.length === 0;
   return (
     <div className={cx('overflow-auto rounded-card border border-line bg-surface shadow-card', className)}>
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-[1] bg-surface-2 text-muted">
-          <tr>{head.map((h, i) => <th key={i} className="whitespace-nowrap px-4 py-3 text-right text-xs font-bold">{h}</th>)}</tr>
+          <tr>{head.map((h, i) => <th key={i} className="whitespace-nowrap px-4 py-3 text-start text-xs font-bold">{h}</th>)}</tr>
         </thead>
         <tbody className="divide-y divide-line">
           {isEmpty ? <tr><td colSpan={head.length} className="px-4 py-14 text-center text-muted">{empty}</td></tr> : rows}
@@ -194,7 +195,7 @@ export function Table({ head, children, empty = 'لا توجد بيانات', cl
 }
 export const Td = ({ className, ...p }) => <td {...p} className={cx('px-4 py-3', className)} />;
 
-export const Spinner = () => <div className="flex justify-center p-12"><Loader2 className="size-7 animate-spin text-primary" aria-label="جارٍ التحميل" /></div>;
+export const Spinner = () => <div className="flex justify-center p-12"><Loader2 className="size-7 animate-spin text-primary" aria-label={T('جارٍ التحميل')} /></div>;
 
 // Page title block: icon tile, title, subtitle, breadcrumb chip, actions.
 export function PageHeader({ title, subtitle, icon: Icon, crumb, children }) {
@@ -220,9 +221,9 @@ export function PageHeader({ title, subtitle, icon: Icon, crumb, children }) {
 export function DateRange({ from, to, onChange }) {
   return (
     <div className="flex items-center gap-2 rounded-xl border border-line bg-surface p-1 shadow-card">
-      <input type="date" aria-label="من" value={from} onChange={(e) => onChange(e.target.value, to)} className="h-8 rounded-lg bg-transparent px-2 text-sm outline-none focus:bg-surface-2" />
-      <span className="text-muted">←</span>
-      <input type="date" aria-label="إلى" value={to} onChange={(e) => onChange(from, e.target.value)} className="h-8 rounded-lg bg-transparent px-2 text-sm outline-none focus:bg-surface-2" />
+      <input type="date" aria-label={T('من')} value={from} onChange={(e) => onChange(e.target.value, to)} className="h-8 rounded-lg bg-transparent px-2 text-sm outline-none focus:bg-surface-2" />
+      <span className="text-muted">{dir === 'rtl' ? '←' : '→'}</span>
+      <input type="date" aria-label={T('إلى')} value={to} onChange={(e) => onChange(from, e.target.value)} className="h-8 rounded-lg bg-transparent px-2 text-sm outline-none focus:bg-surface-2" />
     </div>
   );
 }
@@ -230,7 +231,7 @@ export function DateRange({ from, to, onChange }) {
 export function Toasts() {
   const items = useToast((s) => s.items);
   return (
-    <div className="pointer-events-none fixed bottom-5 left-5 z-50 flex flex-col gap-2" aria-live="polite">
+    <div className="pointer-events-none fixed bottom-5 end-5 z-50 flex flex-col gap-2" aria-live="polite">
       {items.map((t) => (
         <div key={t.id} className={cx('flex items-center gap-2 rounded-xl border px-4 py-3 font-semibold shadow-pop',
           t.kind === 'error' ? 'border-danger/30 bg-danger-soft text-danger' : 'border-success/30 bg-success-soft text-success')}>

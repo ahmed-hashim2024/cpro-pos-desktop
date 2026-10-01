@@ -1,6 +1,9 @@
 // Thin client for the Go API. The same build runs inside the desktop window
 // (same origin via the Wails asset server) and on LAN devices.
 
+import { saveBlob } from './save';
+import { T } from '@/lib/i18n';
+
 const TOKEN_KEY = 'cpro.token';
 const DEVICE_KEY = 'cpro.device';
 
@@ -38,10 +41,12 @@ export function ulid() {
   return time + r;
 }
 
+// message is translated for display; raw is the server's original text.
 export class ApiError extends Error {
-  constructor(status, message) {
-    super(message);
+  constructor(status, raw) {
+    super(T(raw));
     this.status = status;
+    this.raw = raw;
   }
 }
 
@@ -78,12 +83,28 @@ export const api = {
   post: (path, body, opts) => request('POST', path, body ?? {}, opts),
   put: (path, body) => request('PUT', path, body ?? {}),
 
-  async download(path, filename) {
-    const res = await fetch(`/api/v1${path}`, { headers: { Authorization: `Bearer ${session.token}` } });
-    if (!res.ok) throw new ApiError(res.status, 'تعذر التحميل');
-    const url = URL.createObjectURL(await res.blob());
-    const a = Object.assign(document.createElement('a'), { href: url, download: filename });
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  async download(path, filename, params) {
+    const res = await fetch(`/api/v1${path}${qs(params)}`, { headers: { Authorization: `Bearer ${session.token}` } });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, data.error || 'تعذر التحميل');
+    }
+    const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '')?.[1] || filename;
+    return saveBlob(await res.blob(), name);
+  },
+
+  // Multipart upload of one file under the field name "file".
+  async upload(path, file, params) {
+    const body = new FormData();
+    body.append('file', file);
+    let res;
+    try {
+      res = await fetch(`/api/v1${path}${qs(params)}`, { method: 'POST', headers: { Authorization: `Bearer ${session.token}` }, body });
+    } catch {
+      throw new ApiError(0, 'تعذر الاتصال بالنظام');
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new ApiError(res.status, data.error || 'حدث خطأ');
+    return data;
   },
 };

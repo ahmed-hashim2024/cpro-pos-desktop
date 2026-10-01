@@ -6,6 +6,7 @@ import { money, toMinor, dateTime, daysAgo, today } from '@/lib/format';
 import { printReport } from '@/lib/print';
 import { Button, Card, DateRange, Field, Input, Modal, PageHeader, Stat, Table, Td, Badge, Spinner, useLoad, useAction } from '@/components/ui';
 import { OpenShiftDialog } from './pos/dialogs';
+import { T } from '@/lib/i18n';
 
 export default function Shift() {
   const { shift, can, loadShift } = useApp();
@@ -17,33 +18,33 @@ export default function Shift() {
 
   return (
     <div>
-      <PageHeader title="الوردية" icon={Wallet} subtitle="الدرج والنقدية وتقارير X و Z" crumb="المبيعات">
+      <PageHeader title={T('الوردية')} icon={Wallet} subtitle={T('الدرج والنقدية وتقارير X و Z')} crumb={T('المبيعات')}>
         {shift ? (
           <>
-            <Button variant="secondary" onClick={() => setDialog('in')}><ArrowDownCircle className="size-4" />إيداع نقدي</Button>
-            <Button variant="secondary" onClick={() => setDialog('out')}><ArrowUpCircle className="size-4" />صرف نقدي</Button>
-            <Button variant="secondary" onClick={() => report.data && printShift(report.data, 'X')}><Printer className="size-4" />تقرير X</Button>
-            <Button variant="danger" onClick={() => setDialog('close')}><Lock className="size-4" />إغلاق الوردية</Button>
+            <Button variant="secondary" onClick={() => setDialog('in')}><ArrowDownCircle className="size-4" />{T('إيداع نقدي')}</Button>
+            <Button variant="secondary" onClick={() => setDialog('out')}><ArrowUpCircle className="size-4" />{T('صرف نقدي')}</Button>
+            <Button variant="secondary" onClick={() => report.data && printShift(report.data, 'X')}><Printer className="size-4" />{T('تقرير X')}</Button>
+            <Button variant="danger" onClick={() => setDialog('close')}><Lock className="size-4" />{T('إغلاق الوردية')}</Button>
           </>
-        ) : <Button onClick={() => setDialog('open')}>فتح وردية</Button>}
+        ) : <Button onClick={() => setDialog('open')}>{T('فتح وردية')}</Button>}
       </PageHeader>
 
       {shift && (report.data ? <ShiftSummary r={report.data} /> : <Spinner />)}
-      {!shift && <div className="mb-6 rounded-xl bg-surface p-8 text-center text-muted">لا توجد وردية مفتوحة لك على هذا الجهاز</div>}
+      {!shift && <div className="mb-6 rounded-xl bg-surface p-8 text-center text-muted">{T('لا توجد وردية مفتوحة لك على هذا الجهاز')}</div>}
 
-      <Card title="سجل الورديات" className="mt-6" actions={<DateRange from={range.from} to={range.to} onChange={(from, to) => setRange({ from, to })} />}>
-        <Table head={['المستخدم', 'الجهاز', 'فُتحت', 'أُغلقت', 'الافتتاح', 'المتوقع', 'المعدود', 'الفرق', '']}>
+      <Card title={T('سجل الورديات')} className="mt-6" actions={<DateRange from={range.from} to={range.to} onChange={(from, to) => setRange({ from, to })} />}>
+        <Table head={[T('المستخدم'), T('الجهاز'), T('فُتحت'), T('أُغلقت'), T('الافتتاح'), T('المتوقع'), T('المعدود'), T('الفرق'), '']}>
           {(history.data || []).map((s) => {
             const diff = s.counted_cash_minor != null ? s.counted_cash_minor - s.expected_cash_minor : null;
             return (
               <tr key={s.id}>
                 <Td>{s.user_name}</Td><Td>{s.device_name}</Td>
-                <Td>{dateTime(s.opened_at)}</Td><Td>{s.closed_at ? dateTime(s.closed_at) : <Badge tone="green">مفتوحة</Badge>}</Td>
+                <Td>{dateTime(s.opened_at)}</Td><Td>{s.closed_at ? dateTime(s.closed_at) : <Badge tone="green">{T('مفتوحة')}</Badge>}</Td>
                 <Td className="num">{money(s.opening_float_minor)}</Td>
                 <Td className="num">{s.expected_cash_minor != null ? money(s.expected_cash_minor) : '—'}</Td>
                 <Td className="num">{s.counted_cash_minor != null ? money(s.counted_cash_minor) : '—'}</Td>
                 <Td className={`num font-bold ${diff < 0 ? 'text-danger' : diff > 0 ? 'text-warning' : ''}`}>{diff != null ? money(diff) : '—'}</Td>
-                <Td><Button size="sm" variant="ghost" onClick={() => setView(s.id)}>التفاصيل</Button></Td>
+                <Td><Button size="sm" variant="ghost" onClick={() => setView(s.id)}>{T('التفاصيل')}</Button></Td>
               </tr>
             );
           })}
@@ -67,24 +68,24 @@ function ShiftSummary({ r }) {
   return (
     <div className="grid gap-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="المبيعات" icon={TrendingUp} value={money(r.sales_minor)} sub={`${r.orders} طلب`} tone="success" />
-        <Stat label="النقدية المتوقعة في الدرج" icon={Wallet} value={money(r.expected_cash_minor)} tone="warning" />
-        <Stat label="المرتجعات" icon={Undo2} value={money(r.refunds_minor)} tone={r.refunds_minor ? 'bad' : 'default'} />
-        <Stat label="الخصومات" icon={Percent} value={money(r.discounts_minor)} sub={`${r.voided_orders} طلب ملغي`} />
+        <Stat label={T('المبيعات')} icon={TrendingUp} value={money(r.sales_minor)} sub={T('{0} طلب', [r.orders])} tone="success" />
+        <Stat label={T('النقدية المتوقعة في الدرج')} icon={Wallet} value={money(r.expected_cash_minor)} tone="warning" />
+        <Stat label={T('المرتجعات')} icon={Undo2} value={money(r.refunds_minor)} tone={r.refunds_minor ? 'bad' : 'default'} />
+        <Stat label={T('الخصومات')} icon={Percent} value={money(r.discounts_minor)} sub={T('{0} طلب ملغي', [r.voided_orders])} />
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        <Card title="حسب طريقة الدفع">
+        <Card title={T('حسب طريقة الدفع')}>
           {r.by_method.map((m) => <div key={m.method} className="flex justify-between py-1"><span>{name[m.method] || m.name} ({m.count})</span><span className="num font-semibold">{money(m.amount_minor)}</span></div>)}
-          {!r.by_method.length && <div className="text-muted/70">لا توجد مدفوعات</div>}
+          {!r.by_method.length && <div className="text-muted/70">{T('لا توجد مدفوعات')}</div>}
         </Card>
-        <Card title="الدرج">
-          <Row k="رصيد الافتتاح" v={r.shift.opening_float_minor} />
-          <Row k="مبيعات نقدية (بعد المرتجع)" v={r.cash_sales_minor} />
-          <Row k="إيداعات" v={r.cash_in_minor} />
-          <Row k="مصروفات" v={-r.cash_out_minor} />
-          <div className="mt-1 flex justify-between border-t pt-1 font-bold"><span>المتوقع</span><span className="num">{money(r.expected_cash_minor)}</span></div>
+        <Card title={T('الدرج')}>
+          <Row k={T('رصيد الافتتاح')} v={r.shift.opening_float_minor} />
+          <Row k={T('مبيعات نقدية (بعد المرتجع)')} v={r.cash_sales_minor} />
+          <Row k={T('إيداعات')} v={r.cash_in_minor} />
+          <Row k={T('مصروفات')} v={-r.cash_out_minor} />
+          <div className="mt-1 flex justify-between border-t pt-1 font-bold"><span>{T('المتوقع')}</span><span className="num">{money(r.expected_cash_minor)}</span></div>
           {r.cash_movements.map((m) => (
-            <div key={m.id} className="flex justify-between text-sm text-muted"><span>{m.kind === 'in' ? 'إيداع' : 'صرف'}: {m.reason}</span><span className="num">{money(m.amount_minor)}</span></div>
+            <div key={m.id} className="flex justify-between text-sm text-muted"><span>{m.kind === 'in' ? T('إيداع') : T('صرف')}: {m.reason}</span><span className="num">{money(m.amount_minor)}</span></div>
           ))}
         </Card>
       </div>
@@ -100,15 +101,15 @@ function CashDialog({ kind, onClose, onDone }) {
   const [busy, run] = useAction();
   const save = () => run(async () => {
     await api.post('/shifts/cash', { kind, amount_minor: toMinor(amount), reason });
-    toast('تم التسجيل');
+    toast(T('تم التسجيل'));
     onDone();
   });
   return (
-    <Modal open onClose={onClose} title={kind === 'in' ? 'إيداع نقدي في الدرج' : 'صرف نقدي من الدرج'} size="sm"
-      footer={<Button busy={busy} disabled={!toMinor(amount) || !reason.trim()} onClick={save}>تسجيل</Button>}>
+    <Modal open onClose={onClose} title={kind === 'in' ? T('إيداع نقدي في الدرج') : T('صرف نقدي من الدرج')} size="sm"
+      footer={<Button busy={busy} disabled={!toMinor(amount) || !reason.trim()} onClick={save}>{T('تسجيل')}</Button>}>
       <div className="grid gap-3">
-        <Field label="المبلغ"><Input autoFocus className="num" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
-        <Field label="السبب"><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={kind === 'out' ? 'شراء خضار، مواصلات…' : 'فكة…'} /></Field>
+        <Field label={T('المبلغ')}><Input autoFocus className="num" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
+        <Field label={T('السبب')}><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={kind === 'out' ? T('شراء خضار، مواصلات…') : T('فكة…')} /></Field>
       </div>
     </Modal>
   );
@@ -121,17 +122,17 @@ function CloseDialog({ report, onClose, onDone }) {
   const diff = c != null ? c - report.expected_cash_minor : null;
   const close = () => run(async () => {
     const z = await api.post(`/shifts/${report.shift.id}/close`, { counted_cash_minor: c });
-    toast('تم إغلاق الوردية');
+    toast(T('تم إغلاق الوردية'));
     onDone(z);
   });
   return (
-    <Modal open onClose={onClose} title="إغلاق الوردية" size="sm"
-      footer={<Button variant="danger" busy={busy} disabled={c == null} onClick={close}>إغلاق وطباعة تقرير Z</Button>}>
+    <Modal open onClose={onClose} title={T('إغلاق الوردية')} size="sm"
+      footer={<Button variant="danger" busy={busy} disabled={c == null} onClick={close}>{T('إغلاق وطباعة تقرير Z')}</Button>}>
       <div className="grid gap-3">
-        <Field label="عُدّ النقدية في الدرج وأدخل المبلغ"><Input autoFocus className="num text-xl" value={counted} onChange={(e) => setCounted(e.target.value)} /></Field>
+        <Field label={T('عُدّ النقدية في الدرج وأدخل المبلغ')}><Input autoFocus className="num text-xl" value={counted} onChange={(e) => setCounted(e.target.value)} /></Field>
         {diff != null && (
           <div className={`rounded-lg p-3 font-bold ${diff === 0 ? 'bg-primary-soft text-primary' : diff < 0 ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'}`}>
-            {diff === 0 ? 'الدرج مطابق' : diff < 0 ? `عجز ${money(-diff)}` : `زيادة ${money(diff)}`}
+            {diff === 0 ? T('الدرج مطابق') : diff < 0 ? T('عجز {0}', [money(-diff)]) : T('زيادة {0}', [money(diff)])}
           </div>
         )}
       </div>
@@ -144,15 +145,15 @@ function ShiftView({ id, onClose, canManage, onChanged }) {
   const [counted, setCounted] = useState('');
   const [busy, run] = useAction();
   return (
-    <Modal open onClose={onClose} title="تفاصيل الوردية" size="xl"
+    <Modal open onClose={onClose} title={T('تفاصيل الوردية')} size="xl"
       footer={<>
-        {r.data && <Button variant="secondary" onClick={() => printShift(r.data, r.data.shift.status === 'closed' ? 'Z' : 'X')}><Printer className="size-4" />طباعة</Button>}
+        {r.data && <Button variant="secondary" onClick={() => printShift(r.data, r.data.shift.status === 'closed' ? 'Z' : 'X')}><Printer className="size-4" />{T('طباعة')}</Button>}
         {canManage && r.data?.shift.status === 'open' && (
           <>
-            <Input className="num w-32" placeholder="المعدود" value={counted} onChange={(e) => setCounted(e.target.value)} />
+            <Input className="num w-32" placeholder={T('المعدود')} value={counted} onChange={(e) => setCounted(e.target.value)} />
             <Button variant="danger" busy={busy} disabled={toMinor(counted) == null}
-              onClick={() => run(async () => { await api.post(`/shifts/${id}/close`, { counted_cash_minor: toMinor(counted) }); toast('تم الإغلاق'); r.reload(); onChanged(); })}>
-              إغلاق الوردية
+              onClick={() => run(async () => { await api.post(`/shifts/${id}/close`, { counted_cash_minor: toMinor(counted) }); toast(T('تم الإغلاق')); r.reload(); onChanged(); })}>
+              {T('إغلاق الوردية')}
             </Button>
           </>
         )}
@@ -164,16 +165,16 @@ function ShiftView({ id, onClose, canManage, onChanged }) {
 
 export function printShift(r, kind) {
   const diff = r.difference_minor;
-  printReport(`تقرير ${kind} — ${r.shift.user_name}`, `${dateTime(r.shift.opened_at)} ← ${r.shift.closed_at ? dateTime(r.shift.closed_at) : 'مفتوحة'}`, [
+  printReport(T('تقرير {0} — {1}', [kind, r.shift.user_name]), `${dateTime(r.shift.opened_at)} — ${r.shift.closed_at ? dateTime(r.shift.closed_at) : T('مفتوحة')}`, [
     { rows: [
-      ['عدد الطلبات', String(r.orders)], ['المبيعات', money(r.sales_minor)], ['الخصومات', money(r.discounts_minor)],
-      ['الخدمة', money(r.service_minor)], ['الضريبة', money(r.tax_minor)], ['المرتجعات', money(r.refunds_minor)], ['طلبات ملغاة', String(r.voided_orders)],
+      [T('عدد الطلبات'), String(r.orders)], [T('المبيعات'), money(r.sales_minor)], [T('الخصومات'), money(r.discounts_minor)],
+      [T('الخدمة'), money(r.service_minor)], [T('الضريبة'), money(r.tax_minor)], [T('المرتجعات'), money(r.refunds_minor)], [T('طلبات ملغاة'), String(r.voided_orders)],
     ] },
-    { heading: 'طرق الدفع', rows: r.by_method.map((m) => [m.name, money(m.amount_minor)]) },
-    { heading: 'الدرج', rows: [
-      ['رصيد الافتتاح', money(r.shift.opening_float_minor)], ['مبيعات نقدية', money(r.cash_sales_minor)],
-      ['إيداعات', money(r.cash_in_minor)], ['مصروفات', money(r.cash_out_minor)], ['المتوقع', money(r.expected_cash_minor)],
-      ...(r.shift.counted_cash_minor != null ? [['المعدود', money(r.shift.counted_cash_minor)], ['الفرق', money(diff)]] : []),
+    { heading: T('طرق الدفع'), rows: r.by_method.map((m) => [m.name, money(m.amount_minor)]) },
+    { heading: T('الدرج'), rows: [
+      [T('رصيد الافتتاح'), money(r.shift.opening_float_minor)], [T('مبيعات نقدية'), money(r.cash_sales_minor)],
+      [T('إيداعات'), money(r.cash_in_minor)], [T('مصروفات'), money(r.cash_out_minor)], [T('المتوقع'), money(r.expected_cash_minor)],
+      ...(r.shift.counted_cash_minor != null ? [[T('المعدود'), money(r.shift.counted_cash_minor)], [T('الفرق'), money(diff)]] : []),
     ] },
   ]);
 }

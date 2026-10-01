@@ -6,18 +6,19 @@ import { useApp, toast } from '@/lib/store';
 import { money, toMinor, minorInput, toMilli, milliInput, qty, units, dateTime, daysAgo, today, movementKinds, monthStart } from '@/lib/format';
 import { exportCSV } from '@/lib/csv';
 import { Button, Badge, Checkbox, DateRange, Field, Input, Modal, PageHeader, Select, Stat, Table, Td, Tabs, useLoad, useAction } from '@/components/ui';
+import { T } from '@/lib/i18n';
 
 export default function Inventory() {
   const can = useApp((s) => s.can);
-  const tabs = [['stock', 'الخامات والأرصدة']];
-  if (can('inventory.manage')) tabs.push(['purchases', 'المشتريات'], ['suppliers', 'الموردون']);
-  tabs.push(['waste', 'الهالك']);
-  if (can('inventory.count')) tabs.push(['counts', 'الجرد']);
-  tabs.push(['movements', 'حركة المخزون']);
+  const tabs = [['stock', T('الخامات والأرصدة')]];
+  if (can('inventory.manage')) tabs.push(['purchases', T('المشتريات')], ['suppliers', T('الموردون')]);
+  tabs.push(['waste', T('الهالك')]);
+  if (can('inventory.count')) tabs.push(['counts', T('الجرد')]);
+  tabs.push(['movements', T('حركة المخزون')]);
   const [tab, setTab] = useTab('stock');
   return (
     <div>
-      <PageHeader title="المخزون" icon={Boxes} subtitle="المواد الخام والمشتريات والهالك والجرد" crumb="المخزون" />
+      <PageHeader title={T('المخزون')} icon={Boxes} subtitle={T('المواد الخام والمشتريات والهالك والجرد')} crumb={T('المخزون')} />
       <Tabs value={tab} onChange={setTab} tabs={tabs} />
       {tab === 'stock' && <Stock />}
       {tab === 'purchases' && <Purchases />}
@@ -45,29 +46,29 @@ function Stock() {
   return (
     <>
       <div className="mb-4 grid grid-cols-3 gap-3">
-        <Stat label="عدد الخامات" value={data.data?.length || 0} icon={Wheat} />
-        <Stat label="قيمة المخزون" value={money(value)} icon={Coins} tone="success" />
-        <Stat label="خامات تحت الحد الأدنى" value={low} tone={low ? 'bad' : 'good'} />
+        <Stat label={T('عدد الخامات')} value={data.data?.length || 0} icon={Wheat} />
+        <Stat label={T('قيمة المخزون')} value={money(value)} icon={Coins} tone="success" />
+        <Stat label={T('خامات تحت الحد الأدنى')} value={low} tone={low ? 'bad' : 'good'} />
       </div>
       <div className="mb-3 flex items-center gap-3">
-        {can('inventory.manage') && <Button onClick={() => setEdit({ name: '', unit: 'kg', min_stock_milli: 0, cost_minor: 0, active: true })}><Plus className="size-4" />خامة جديدة</Button>}
-        <Checkbox label="الناقص فقط" checked={onlyLow} onChange={setOnlyLow} />
-        <Button variant="secondary" className="mr-auto" onClick={() => exportCSV('stock', ['الخامة', 'الوحدة', 'الرصيد', 'الحد الأدنى', 'متوسط التكلفة', 'القيمة'],
-          rows.map((g) => [g.name, units[g.unit], milliInput(g.stock_milli), milliInput(g.min_stock_milli), money(g.cost_minor), money(g.value_minor)]))}>تصدير Excel</Button>
+        {can('inventory.manage') && <Button onClick={() => setEdit({ name: '', unit: 'kg', min_stock_milli: 0, cost_minor: 0, active: true })}><Plus className="size-4" />{T('خامة جديدة')}</Button>}
+        <Checkbox label={T('الناقص فقط')} checked={onlyLow} onChange={setOnlyLow} />
+        <Button variant="secondary" className="ms-auto" onClick={() => exportCSV('stock', [T('الخامة'), T('الوحدة'), T('الرصيد'), T('الحد الأدنى'), T('متوسط التكلفة'), T('القيمة')],
+          rows.map((g) => [g.name, units[g.unit], milliInput(g.stock_milli), milliInput(g.min_stock_milli), money(g.cost_minor), money(g.value_minor)]))}>{T('تصدير Excel')}</Button>
       </div>
-      <Table head={['الخامة', 'الرصيد', 'الحد الأدنى', 'متوسط التكلفة', 'القيمة', 'تُستخدم في', '']}>
+      <Table head={[T('الخامة'), T('الرصيد'), T('الحد الأدنى'), T('متوسط التكلفة'), T('القيمة'), T('تُستخدم في'), '']}>
         {rows.map((g) => (
           <tr key={g.id} className={g.low ? 'bg-danger-soft' : ''}>
-            <Td className="font-semibold">{g.name} {!g.active && <Badge>موقوفة</Badge>}</Td>
+            <Td className="font-semibold">{g.name} {!g.active && <Badge>{T('موقوفة')}</Badge>}</Td>
             <Td className={`num font-bold ${g.stock_milli < 0 ? 'text-danger' : ''}`}>{qty(g.stock_milli, g.unit)} {g.low && <AlertTriangle className="inline size-4 text-danger" />}</Td>
             <Td className="num">{qty(g.min_stock_milli, g.unit)}</Td>
             <Td className="num">{money(g.cost_minor)} / {units[g.unit]}</Td>
             <Td className="num">{money(g.value_minor)}</Td>
-            <Td>{g.used_in} صنف</Td>
+            <Td>{g.used_in} {T('صنف')}</Td>
             <Td className="whitespace-nowrap">
               {can('inventory.manage') && <>
-                <Button size="sm" variant="ghost" onClick={() => setEdit(g)}>تعديل</Button>
-                <Button size="sm" variant="ghost" onClick={() => setAdjust(g)}>تسوية</Button>
+                <Button size="sm" variant="ghost" onClick={() => setEdit(g)}>{T('تعديل')}</Button>
+                <Button size="sm" variant="ghost" onClick={() => setAdjust(g)}>{T('تسوية')}</Button>
               </>}
             </Td>
           </tr>
@@ -86,24 +87,24 @@ function IngredientDialog({ g, onClose, onSaved }) {
     await api.post('/ingredients', {
       ...f, min_stock_milli: toMilli(f.min) ?? 0, cost_minor: toMinor(f.cost) ?? 0, opening_stock_milli: toMilli(f.opening) ?? 0,
     });
-    toast('تم الحفظ');
+    toast(T('تم الحفظ'));
     onSaved();
   });
   return (
-    <Modal open onClose={onClose} title={g.id ? g.name : 'خامة جديدة'} footer={<Button busy={busy} onClick={save}>حفظ</Button>}>
+    <Modal open onClose={onClose} title={g.id ? g.name : T('خامة جديدة')} footer={<Button busy={busy} onClick={save}>{T('حفظ')}</Button>}>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="الاسم" className="col-span-2"><Input autoFocus value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-        <Field label="وحدة القياس" hint={g.id ? 'لا يمكن تغيير الوحدة بعد الإنشاء' : 'الوصفات تستخدم نفس الوحدة (مثلاً 0.150 كجم)'}>
+        <Field label={T('الاسم')} className="col-span-2"><Input autoFocus value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+        <Field label={T('وحدة القياس')} hint={g.id ? T('لا يمكن تغيير الوحدة بعد الإنشاء') : T('الوصفات تستخدم نفس الوحدة (مثلاً 0.150 كجم)')}>
           <Select disabled={!!g.id} value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value })}>
             {Object.entries(units).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </Select>
         </Field>
-        <Field label="الحد الأدنى للتنبيه"><Input className="num" value={f.min} onChange={(e) => setF({ ...f, min: e.target.value })} /></Field>
+        <Field label={T('الحد الأدنى للتنبيه')}><Input className="num" value={f.min} onChange={(e) => setF({ ...f, min: e.target.value })} /></Field>
         {!g.id && <>
-          <Field label="الرصيد الافتتاحي"><Input className="num" value={f.opening} onChange={(e) => setF({ ...f, opening: e.target.value })} /></Field>
-          <Field label={`التكلفة لكل ${units[f.unit]}`} hint="تتحدث تلقائياً بمتوسط سعر المشتريات"><Input className="num" value={f.cost} onChange={(e) => setF({ ...f, cost: e.target.value })} /></Field>
+          <Field label={T('الرصيد الافتتاحي')}><Input className="num" value={f.opening} onChange={(e) => setF({ ...f, opening: e.target.value })} /></Field>
+          <Field label={T('التكلفة لكل {0}', [units[f.unit]])} hint={T('تتحدث تلقائياً بمتوسط سعر المشتريات')}><Input className="num" value={f.cost} onChange={(e) => setF({ ...f, cost: e.target.value })} /></Field>
         </>}
-        <Checkbox label="مفعّلة" checked={f.active} onChange={(v) => setF({ ...f, active: v })} />
+        <Checkbox label={T('مفعّلة')} checked={f.active} onChange={(v) => setF({ ...f, active: v })} />
       </div>
     </Modal>
   );
@@ -115,16 +116,16 @@ function AdjustDialog({ g, onClose, onSaved }) {
   const [busy, run] = useAction();
   const save = () => run(async () => {
     await api.post(`/ingredients/${g.id}/adjust`, { qty_milli: toMilli(v), reason });
-    toast('تمت التسوية');
+    toast(T('تمت التسوية'));
     onSaved();
   });
   return (
-    <Modal open onClose={onClose} title={`تسوية رصيد ${g.name}`} size="sm"
-      footer={<Button busy={busy} disabled={toMilli(v) == null || !reason.trim()} onClick={save}>حفظ</Button>}>
+    <Modal open onClose={onClose} title={T('تسوية رصيد {0}', [g.name])} size="sm"
+      footer={<Button busy={busy} disabled={toMilli(v) == null || !reason.trim()} onClick={save}>{T('حفظ')}</Button>}>
       <div className="grid gap-3">
-        <div className="text-muted">الرصيد الحالي: <b className="num">{qty(g.stock_milli, g.unit)}</b></div>
-        <Field label={`الرصيد الصحيح (${units[g.unit]})`}><Input autoFocus className="num" value={v} onChange={(e) => setV(e.target.value)} /></Field>
-        <Field label="السبب"><Input value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
+        <div className="text-muted">{T('الرصيد الحالي:')} <b className="num">{qty(g.stock_milli, g.unit)}</b></div>
+        <Field label={T('الرصيد الصحيح ({0})', [units[g.unit]])}><Input autoFocus className="num" value={v} onChange={(e) => setV(e.target.value)} /></Field>
+        <Field label={T('السبب')}><Input value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
       </div>
     </Modal>
   );
@@ -140,11 +141,11 @@ function Purchases() {
   return (
     <>
       <div className="mb-3 flex gap-2">
-        <Button onClick={() => setOpen(true)}><Plus className="size-4" />استلام مشتريات</Button>
+        <Button onClick={() => setOpen(true)}><Plus className="size-4" />{T('استلام مشتريات')}</Button>
         <DateRange from={range.from} to={range.to} onChange={(from, to) => setRange({ from, to })} />
-        <div className="mr-auto self-center">الإجمالي: <b className="num">{money((list.data || []).reduce((s, p) => s + p.total_minor, 0))}</b></div>
+        <div className="ms-auto self-center">{T('الإجمالي:')} <b className="num">{money((list.data || []).reduce((s, p) => s + p.total_minor, 0))}</b></div>
       </div>
-      <Table head={['التاريخ', 'المورد', 'رقم الفاتورة', 'الأصناف', 'الإجمالي', 'المستخدم']}>
+      <Table head={[T('التاريخ'), T('المورد'), T('رقم الفاتورة'), T('الأصناف'), T('الإجمالي'), T('المستخدم')]}>
         {(list.data || []).map((p) => (
           <tr key={p.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setView(p)}>
             <Td>{dateTime(p.received_at)}</Td><Td>{p.supplier_name || '—'}</Td><Td className="num">{p.reference}</Td>
@@ -154,8 +155,8 @@ function Purchases() {
       </Table>
       {open && <PurchaseDialog onClose={() => setOpen(false)} onSaved={() => { setOpen(false); list.reload(true); }} />}
       {view && (
-        <Modal open onClose={() => setView(null)} title={`فاتورة مشتريات ${view.reference}`} size="lg">
-          <Table head={['الخامة', 'الكمية', 'سعر الوحدة', 'الإجمالي']}>
+        <Modal open onClose={() => setView(null)} title={T('فاتورة مشتريات {0}', [view.reference])} size="lg">
+          <Table head={[T('الخامة'), T('الكمية'), T('سعر الوحدة'), T('الإجمالي')]}>
             {view.lines.map((l, i) => <tr key={i}><Td>{l.name}</Td><Td className="num">{qty(l.qty_milli, l.unit)}</Td><Td className="num">{money(l.unit_cost_minor)}</Td><Td className="num">{money(l.total_minor)}</Td></tr>)}
           </Table>
           {view.notes && <p className="mt-2 text-muted">{view.notes}</p>}
@@ -175,37 +176,37 @@ function PurchaseDialog({ onClose, onSaved }) {
   const set = (i, patch) => setLines(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   const save = () => run(async () => {
     const body = lines.filter((l) => l.ingredient_id).map((l) => ({ ingredient_id: l.ingredient_id, qty_milli: toMilli(l.qty), unit_cost_minor: toMinor(l.cost) }));
-    if (body.some((l) => !l.qty_milli || l.unit_cost_minor == null)) throw new Error('راجع الكميات والأسعار');
+    if (body.some((l) => !l.qty_milli || l.unit_cost_minor == null)) throw new Error(T('راجع الكميات والأسعار'));
     await api.post('/purchases', { ...f, lines: body });
-    toast('تم استلام المشتريات وتحديث الأرصدة والتكلفة');
+    toast(T('تم استلام المشتريات وتحديث الأرصدة والتكلفة'));
     onSaved();
   });
   return (
-    <Modal open onClose={onClose} title="استلام مشتريات" size="xl"
-      footer={<><span className="ml-auto text-lg">الإجمالي: <b className="num">{money(total)}</b></span><Button busy={busy} onClick={save}>حفظ واستلام</Button></>}>
+    <Modal open onClose={onClose} title={T('استلام مشتريات')} size="xl"
+      footer={<><span className="me-auto text-lg">{T('الإجمالي:')} <b className="num">{money(total)}</b></span><Button busy={busy} onClick={save}>{T('حفظ واستلام')}</Button></>}>
       <div className="mb-4 grid grid-cols-3 gap-3">
-        <Field label="المورد">
+        <Field label={T('المورد')}>
           <Select value={f.supplier_id} onChange={(e) => setF({ ...f, supplier_id: e.target.value })}>
-            <option value="">— بدون —</option>{data.data?.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            <option value="">{T('— بدون —')}</option>{data.data?.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </Select>
         </Field>
-        <Field label="رقم فاتورة المورد"><Input value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} /></Field>
-        <Field label="ملاحظات"><Input value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></Field>
+        <Field label={T('رقم فاتورة المورد')}><Input value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} /></Field>
+        <Field label={T('ملاحظات')}><Input value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></Field>
       </div>
       <div className="grid gap-2">
         {lines.map((l, i) => (
           <div key={i} className="flex items-center gap-2">
             <Select className="flex-1" value={l.ingredient_id} onChange={(e) => set(i, { ingredient_id: e.target.value, cost: minorInput(ing[e.target.value]?.cost_minor) })}>
-              <option value="">— الخامة —</option>{data.data?.ingredients.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+              <option value="">{T('— الخامة —')}</option>{data.data?.ingredients.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </Select>
-            <Input className="num w-28" placeholder="الكمية" value={l.qty} onChange={(e) => set(i, { qty: e.target.value })} />
+            <Input className="num w-28" placeholder={T('الكمية')} value={l.qty} onChange={(e) => set(i, { qty: e.target.value })} />
             <span className="w-12 text-sm text-muted">{units[ing[l.ingredient_id]?.unit] || ''}</span>
-            <Input className="num w-32" placeholder="سعر الوحدة" value={l.cost} onChange={(e) => set(i, { cost: e.target.value })} />
-            <span className="num w-28 text-left">{money(Math.round(((toMinor(l.cost) || 0) * (toMilli(l.qty) || 0)) / 1000))}</span>
+            <Input className="num w-32" placeholder={T('سعر الوحدة')} value={l.cost} onChange={(e) => set(i, { cost: e.target.value })} />
+            <span className="num w-28 text-end">{money(Math.round(((toMinor(l.cost) || 0) * (toMilli(l.qty) || 0)) / 1000))}</span>
             <button onClick={() => setLines(lines.filter((_, j) => j !== i))}><Trash2 className="size-4 text-danger" /></button>
           </div>
         ))}
-        <Button variant="secondary" onClick={() => setLines([...lines, { ingredient_id: '', qty: '', cost: '' }])}><Plus className="size-4" />سطر</Button>
+        <Button variant="secondary" onClick={() => setLines([...lines, { ingredient_id: '', qty: '', cost: '' }])}><Plus className="size-4" />{T('سطر')}</Button>
       </div>
     </Modal>
   );
@@ -218,8 +219,8 @@ function Suppliers() {
   const save = () => run(async () => { await api.post('/suppliers', edit); setEdit(null); data.reload(true); });
   return (
     <>
-      <Button className="mb-3" onClick={() => setEdit({ name: '', phone: '', notes: '' })}><Plus className="size-4" />مورد</Button>
-      <Table head={['المورد', 'الهاتف', 'إجمالي المشتريات', 'ملاحظات']}>
+      <Button className="mb-3" onClick={() => setEdit({ name: '', phone: '', notes: '' })}><Plus className="size-4" />{T('مورد')}</Button>
+      <Table head={[T('المورد'), T('الهاتف'), T('إجمالي المشتريات'), T('ملاحظات')]}>
         {(data.data || []).map((s) => (
           <tr key={s.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setEdit(s)}>
             <Td className="font-semibold">{s.name}</Td><Td className="num">{s.phone}</Td><Td className="num">{money(s.purchases_minor)}</Td><Td>{s.notes}</Td>
@@ -227,11 +228,11 @@ function Suppliers() {
         ))}
       </Table>
       {edit && (
-        <Modal open onClose={() => setEdit(null)} title="مورد" size="sm" footer={<Button busy={busy} onClick={save}>حفظ</Button>}>
+        <Modal open onClose={() => setEdit(null)} title={T('مورد')} size="sm" footer={<Button busy={busy} onClick={save}>{T('حفظ')}</Button>}>
           <div className="grid gap-3">
-            <Field label="الاسم"><Input autoFocus value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
-            <Field label="الهاتف"><Input value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} /></Field>
-            <Field label="ملاحظات"><Input value={edit.notes} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} /></Field>
+            <Field label={T('الاسم')}><Input autoFocus value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
+            <Field label={T('الهاتف')}><Input value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} /></Field>
+            <Field label={T('ملاحظات')}><Input value={edit.notes} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} /></Field>
           </div>
         </Modal>
       )}
@@ -249,15 +250,15 @@ function Waste() {
   return (
     <>
       <div className="mb-3 flex gap-2">
-        <Button onClick={() => setOpen(true)}><Plus className="size-4" />تسجيل هالك</Button>
+        <Button onClick={() => setOpen(true)}><Plus className="size-4" />{T('تسجيل هالك')}</Button>
         <DateRange from={range.from} to={range.to} onChange={(from, to) => setRange({ from, to })} />
-        <div className="mr-auto self-center">تكلفة الهالك: <b className="num text-danger">{money(total)}</b></div>
+        <div className="ms-auto self-center">{T('تكلفة الهالك:')} <b className="num text-danger">{money(total)}</b></div>
       </div>
-      <Table head={['الوقت', 'الصنف / الخامة', 'النوع', 'الكمية', 'السبب', 'التكلفة', 'المستخدم']}>
+      <Table head={[T('الوقت'), T('الصنف / الخامة'), T('النوع'), T('الكمية'), T('السبب'), T('التكلفة'), T('المستخدم')]}>
         {(list.data || []).map((w) => (
           <tr key={w.id}>
             <Td>{dateTime(w.created_at)}</Td><Td className="font-semibold">{w.name}</Td>
-            <Td>{w.kind === 'item' ? <Badge tone="amber">صنف جاهز</Badge> : <Badge>خامة</Badge>}</Td>
+            <Td>{w.kind === 'item' ? <Badge tone="amber">{T('صنف جاهز')}</Badge> : <Badge>{T('خامة')}</Badge>}</Td>
             <Td className="num">{w.kind === 'item' ? qty(w.qty_milli) : qty(w.qty_milli, w.unit)}</Td><Td>{w.reason}</Td>
             <Td className="num text-danger">{money(w.cost_minor)}</Td><Td>{w.user_name}</Td>
           </tr>
@@ -276,26 +277,26 @@ function WasteDialog({ onClose, onSaved }) {
   const [reason, setReason] = useState('');
   const [busy, run] = useAction();
   const list = kind === 'item' ? data.data?.items : data.data?.ingredients;
-  const unit = kind === 'ingredient' ? units[data.data?.ingredients.find((g) => g.id === id)?.unit] : 'وحدة';
+  const unit = kind === 'ingredient' ? units[data.data?.ingredients.find((g) => g.id === id)?.unit] : T('وحدة');
   const save = () => run(async () => {
     await api.post('/waste', { [kind === 'item' ? 'item_id' : 'ingredient_id']: id, qty_milli: toMilli(q), reason });
-    toast('تم تسجيل الهالك');
+    toast(T('تم تسجيل الهالك'));
     onSaved();
   });
   return (
-    <Modal open onClose={onClose} title="تسجيل هالك" footer={<Button busy={busy} disabled={!id || !toMilli(q) || !reason.trim()} onClick={save}>تسجيل</Button>}>
+    <Modal open onClose={onClose} title={T('تسجيل هالك')} footer={<Button busy={busy} disabled={!id || !toMilli(q) || !reason.trim()} onClick={save}>{T('تسجيل')}</Button>}>
       <div className="grid gap-3">
         <div className="flex gap-2">
-          <Button variant={kind === 'ingredient' ? 'primary' : 'secondary'} onClick={() => { setKind('ingredient'); setId(''); }}>خامة</Button>
-          <Button variant={kind === 'item' ? 'primary' : 'secondary'} onClick={() => { setKind('item'); setId(''); }}>صنف جاهز (حسب الوصفة)</Button>
+          <Button variant={kind === 'ingredient' ? 'primary' : 'secondary'} onClick={() => { setKind('ingredient'); setId(''); }}>{T('خامة')}</Button>
+          <Button variant={kind === 'item' ? 'primary' : 'secondary'} onClick={() => { setKind('item'); setId(''); }}>{T('صنف جاهز (حسب الوصفة)')}</Button>
         </div>
-        <Field label={kind === 'item' ? 'الصنف' : 'الخامة'}>
+        <Field label={kind === 'item' ? T('الصنف') : T('الخامة')}>
           <Select value={id} onChange={(e) => setId(e.target.value)}>
-            <option value="">— اختر —</option>{(list || []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            <option value="">{T('— اختر —')}</option>{(list || []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
           </Select>
         </Field>
-        <Field label={`الكمية (${unit || ''})`}><Input className="num" value={q} onChange={(e) => setQ(e.target.value)} /></Field>
-        <Field label="السبب"><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="منتهي الصلاحية، تالف، وقع…" /></Field>
+        <Field label={T('الكمية ({0})', [unit || ''])}><Input className="num" value={q} onChange={(e) => setQ(e.target.value)} /></Field>
+        <Field label={T('السبب')}><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={T('منتهي الصلاحية، تالف، وقع…')} /></Field>
       </div>
     </Modal>
   );
@@ -309,14 +310,14 @@ function Counts() {
   const [busy, run] = useAction();
   const draft = (list.data || []).find((c) => c.status === 'draft');
   const start = () => run(async () => { const { id } = await api.post('/counts', { notes: '' }); list.reload(true); setOpenId(id); });
-  const status = { draft: ['amber', 'جارٍ'], posted: ['green', 'مُرحّل'], cancelled: ['gray', 'ملغي'] };
+  const status = { draft: ['amber', T('جارٍ')], posted: ['green', T('مُرحّل')], cancelled: ['gray', T('ملغي')] };
   return (
     <>
       <div className="mb-3 flex gap-2">
-        {draft ? <Button onClick={() => setOpenId(draft.id)}><ClipboardCheck className="size-4" />متابعة الجرد المفتوح</Button>
-          : <Button busy={busy} onClick={start}><Plus className="size-4" />بدء جرد جديد</Button>}
+        {draft ? <Button onClick={() => setOpenId(draft.id)}><ClipboardCheck className="size-4" />{T('متابعة الجرد المفتوح')}</Button>
+          : <Button busy={busy} onClick={start}><Plus className="size-4" />{T('بدء جرد جديد')}</Button>}
       </div>
-      <Table head={['التاريخ', 'الحالة', 'بدأه', 'رحّله', 'خامات معدودة', 'قيمة الفروق']}>
+      <Table head={[T('التاريخ'), T('الحالة'), T('بدأه'), T('رحّله'), T('خامات معدودة'), T('قيمة الفروق')]}>
         {(list.data || []).map((c) => (
           <tr key={c.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setOpenId(c.id)}>
             <Td>{dateTime(c.created_at)}</Td><Td><Badge tone={status[c.status][0]}>{status[c.status][1]}</Badge></Td>
@@ -345,18 +346,18 @@ function CountSheet({ id, onClose }) {
       if (v.trim() === '') body[ing] = null;
       else {
         const m = toMilli(v);
-        if (m == null || m < 0) throw new Error('كمية غير صحيحة');
+        if (m == null || m < 0) throw new Error(T('كمية غير صحيحة'));
         body[ing] = m;
       }
     }
     await api.put(`/counts/${id}/lines`, body);
     setEdits({});
   };
-  const save = () => run(async () => { await saveLines(); toast('تم الحفظ'); count.reload(true); });
+  const save = () => run(async () => { await saveLines(); toast(T('تم الحفظ')); count.reload(true); });
   const post = () => run(async () => {
     if (dirty) await saveLines();
     await api.post(`/counts/${id}/post`);
-    toast('تم ترحيل الجرد وتسوية الأرصدة');
+    toast(T('تم ترحيل الجرد وتسوية الأرصدة'));
     count.reload(true);
   });
   const cancel = () => run(async () => { await api.post(`/counts/${id}/cancel`); onClose(); });
@@ -370,17 +371,17 @@ function CountSheet({ id, onClose }) {
   const totalVar = preview.reduce((s, l) => s + l.varianceCost, 0);
 
   return (
-    <Modal open onClose={onClose} title={`جرد ${c ? dateTime(c.created_at) : ''}`} size="xl"
+    <Modal open onClose={onClose} title={T('جرد {0}', [c ? dateTime(c.created_at) : ''])} size="xl"
       footer={c && <>
-        <span className={`ml-auto text-lg ${totalVar < 0 ? 'text-danger' : ''}`}>قيمة الفروق: <b className="num">{money(totalVar)}</b></span>
-        {draft && <Button variant="ghost" onClick={cancel}>إلغاء الجرد</Button>}
-        {draft && <Button variant="secondary" busy={busy} disabled={!dirty} onClick={save}>حفظ</Button>}
-        {draft && can('inventory.manage') && <Button busy={busy} onClick={post}>ترحيل وتسوية الأرصدة</Button>}
-        <Button variant="secondary" onClick={() => exportCSV('stock-count', ['الخامة', 'الوحدة', 'المتوقع', 'المعدود', 'الفرق', 'قيمة الفرق'],
-          preview.map((l) => [l.name, units[l.unit], milliInput(l.expected_milli), l.counted == null ? '' : milliInput(l.counted), l.variance == null ? '' : milliInput(l.variance), money(l.varianceCost)]))}>تصدير</Button>
+        <span className={`me-auto text-lg ${totalVar < 0 ? 'text-danger' : ''}`}>{T('قيمة الفروق:')} <b className="num">{money(totalVar)}</b></span>
+        {draft && <Button variant="ghost" onClick={cancel}>{T('إلغاء الجرد')}</Button>}
+        {draft && <Button variant="secondary" busy={busy} disabled={!dirty} onClick={save}>{T('حفظ')}</Button>}
+        {draft && can('inventory.manage') && <Button busy={busy} onClick={post}>{T('ترحيل وتسوية الأرصدة')}</Button>}
+        <Button variant="secondary" onClick={() => exportCSV('stock-count', [T('الخامة'), T('الوحدة'), T('المتوقع'), T('المعدود'), T('الفرق'), T('قيمة الفرق')],
+          preview.map((l) => [l.name, units[l.unit], milliInput(l.expected_milli), l.counted == null ? '' : milliInput(l.counted), l.variance == null ? '' : milliInput(l.variance), money(l.varianceCost)]))}>{T('تصدير')}</Button>
       </>}>
-      {draft && <p className="mb-3 text-sm text-muted">أدخل الكمية الفعلية لكل خامة. الخامات المتروكة فارغة لن تتأثر. عند الترحيل يصبح الرصيد = المعدود، ويُسجَّل الفرق في تقرير الاستهلاك.</p>}
-      <Table head={['الخامة', 'الرصيد في النظام', 'المعدود فعلياً', 'الفرق', 'قيمة الفرق']}>
+      {draft && <p className="mb-3 text-sm text-muted">{T('أدخل الكمية الفعلية لكل خامة. الخامات المتروكة فارغة لن تتأثر. عند الترحيل يصبح الرصيد = المعدود، ويُسجَّل الفرق في تقرير الاستهلاك.')}</p>}
+      <Table head={[T('الخامة'), T('الرصيد في النظام'), T('المعدود فعلياً'), T('الفرق'), T('قيمة الفرق')]}>
         {preview.map((l) => (
           <tr key={l.ingredient_id}>
             <Td className="font-semibold">{l.name}</Td>
@@ -412,15 +413,15 @@ function Movements() {
       <div className="mb-3 flex flex-wrap gap-2">
         <DateRange from={f.from} to={f.to} onChange={(from, to) => setF({ ...f, from, to })} />
         <Select className="w-48" value={f.ingredient} onChange={(e) => setF({ ...f, ingredient: e.target.value })}>
-          <option value="">كل الخامات</option>{(ingredients.data || []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+          <option value="">{T('كل الخامات')}</option>{(ingredients.data || []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </Select>
         <Select className="w-44" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}>
-          <option value="">كل الحركات</option>{Object.entries(movementKinds).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          <option value="">{T('كل الحركات')}</option>{Object.entries(movementKinds).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </Select>
-        <Button variant="secondary" onClick={() => exportCSV('movements', ['الوقت', 'الخامة', 'الحركة', 'الكمية', 'القيمة', 'السبب', 'المستخدم'],
-          (list.data || []).map((m) => [dateTime(m.created_at), m.ingredient, movementKinds[m.kind], milliInput(m.qty_milli), money(m.value_minor), m.reason, m.user_name]))}>تصدير Excel</Button>
+        <Button variant="secondary" onClick={() => exportCSV('movements', [T('الوقت'), T('الخامة'), T('الحركة'), T('الكمية'), T('القيمة'), T('السبب'), T('المستخدم')],
+          (list.data || []).map((m) => [dateTime(m.created_at), m.ingredient, movementKinds[m.kind], milliInput(m.qty_milli), money(m.value_minor), m.reason, m.user_name]))}>{T('تصدير Excel')}</Button>
       </div>
-      <Table head={['الوقت', 'الخامة', 'الحركة', 'الكمية', 'القيمة', 'السبب', 'المستخدم']}>
+      <Table head={[T('الوقت'), T('الخامة'), T('الحركة'), T('الكمية'), T('القيمة'), T('السبب'), T('المستخدم')]}>
         {(list.data || []).map((m) => (
           <tr key={m.id}>
             <Td>{dateTime(m.created_at)}</Td><Td className="font-semibold">{m.ingredient}</Td><Td>{movementKinds[m.kind]}</Td>

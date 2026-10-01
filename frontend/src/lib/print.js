@@ -1,14 +1,15 @@
 import { money, qty, orderTypes, dateTime } from './format';
+import { T, dir } from './i18n';
 
 // Printing goes through the OS print dialog / default printer via a hidden
 // iframe. Layout targets 80mm thermal paper (72mm printable).
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-const css = `
+const css = () => `
   @page { size: 80mm auto; margin: 0; }
   * { box-sizing: border-box; }
-  body { width: 72mm; margin: 0 auto; padding: 4mm 0; font-family: Tahoma, 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #000; direction: rtl; }
+  body { width: 72mm; margin: 0 auto; padding: 4mm 0; font-family: Tahoma, 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #000; direction: ${dir}; }
   h1 { font-size: 16px; margin: 0 0 2px; text-align: center; }
   .c { text-align: center; } .muted { font-size: 11px; }
   hr { border: 0; border-top: 1px dashed #000; margin: 6px 0; }
@@ -26,7 +27,7 @@ function printHTML(body) {
   document.body.appendChild(frame);
   const doc = frame.contentDocument;
   doc.open();
-  doc.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"><style>${css}</style></head><body>${body}</body></html>`);
+  doc.write(`<!doctype html><html dir="${dir}"><head><meta charset="utf-8"><style>${css()}</style></head><body>${body}</body></html>`);
   doc.close();
   setTimeout(() => {
     frame.contentWindow.focus();
@@ -49,30 +50,30 @@ export function printReceipt(order, settings, { change = 0, copy = false } = {})
     <h1>${esc(settings.restaurant_name)}</h1>
     ${settings.address ? `<div class="c muted">${esc(settings.address)}</div>` : ''}
     ${settings.phone ? `<div class="c muted">${esc(settings.phone)}</div>` : ''}
-    ${settings.tax_number ? `<div class="c muted">الرقم الضريبي: ${esc(settings.tax_number)}</div>` : ''}
+    ${settings.tax_number ? `<div class="c muted">${T('الرقم الضريبي')}: ${esc(settings.tax_number)}</div>` : ''}
     ${settings.receipt_header ? `<div class="c">${esc(settings.receipt_header)}</div>` : ''}
     <hr>
     <table>
-      <tr><td>فاتورة</td><td class="n">${esc(order.invoice_number || '—')}</td></tr>
-      <tr><td>طلب رقم</td><td class="n big">${order.number}</td></tr>
+      <tr><td>${T('فاتورة')}</td><td class="n">${esc(order.invoice_number || '—')}</td></tr>
+      <tr><td>${T('طلب رقم')}</td><td class="n big">${order.number}</td></tr>
       <tr><td>${orderTypes[order.type]}${order.table_name ? ' — ' + esc(order.table_name) : ''}</td><td class="n">${dateTime(order.closed_at || order.created_at)}</td></tr>
-      <tr><td>الكاشير</td><td class="n">${esc(order.payments[0]?.user_name || order.user_name)}</td></tr>
-      ${order.customer_name ? `<tr><td>العميل</td><td class="n">${esc(order.customer_name)} ${esc(order.customer_phone)}</td></tr>` : ''}
-      ${order.type === 'delivery' && order.customer_address ? `<tr><td colspan="2">العنوان: ${esc(order.customer_address)}</td></tr>` : ''}
+      <tr><td>${T('الكاشير')}</td><td class="n">${esc(order.payments[0]?.user_name || order.user_name)}</td></tr>
+      ${order.customer_name ? `<tr><td>${T('العميل')}</td><td class="n">${esc(order.customer_name)} ${esc(order.customer_phone)}</td></tr>` : ''}
+      ${order.type === 'delivery' && order.customer_address ? `<tr><td colspan="2">${T('العنوان')}: ${esc(order.customer_address)}</td></tr>` : ''}
     </table>
     <hr><table>${lines}</table><hr>
     <table>
-      ${row('الإجمالي قبل الخصم', order.subtotal_minor)}
-      ${row('خصم', order.line_discounts_minor + order.order_discount_minor)}
-      ${row('خدمة', order.service_minor)}
-      ${row(settings.tax_inclusive ? 'ضريبة (شاملة)' : 'ضريبة', order.tax_minor)}
-      ${row('توصيل', order.delivery_fee_minor)}
-      <tr class="xl"><td>الإجمالي</td><td class="n">${money(order.total_minor)}</td></tr>
+      ${row(T('الإجمالي قبل الخصم'), order.subtotal_minor)}
+      ${row(T('خصم'), order.line_discounts_minor + order.order_discount_minor)}
+      ${row(T('خدمة'), order.service_minor)}
+      ${row(settings.tax_inclusive ? T('ضريبة (شاملة)') : T('ضريبة'), order.tax_minor)}
+      ${row(T('توصيل'), order.delivery_fee_minor)}
+      <tr class="xl"><td>${T('الإجمالي')}</td><td class="n">${money(order.total_minor)}</td></tr>
     </table>
-    ${pays ? `<hr><table>${pays}${change ? `<tr><td>الباقي</td><td class="n">${money(change)}</td></tr>` : ''}</table>` : ''}
-    ${order.refunded_minor ? `<hr><table>${row('مرتجع', order.refunded_minor)}</table>` : ''}
+    ${pays ? `<hr><table>${pays}${change ? `<tr><td>${T('الباقي')}</td><td class="n">${money(change)}</td></tr>` : ''}</table>` : ''}
+    ${order.refunded_minor ? `<hr><table>${row(T('مرتجع'), order.refunded_minor)}</table>` : ''}
     <hr>
-    ${copy ? '<div class="c big">نسخة</div>' : ''}
+    ${copy ? `<div class="c big">${T('نسخة')}</div>` : ''}
     <div class="c">${esc(settings.receipt_footer)}</div>
   `);
 }
@@ -87,7 +88,7 @@ export function printKitchenTicket(order, lines) {
     <div class="c xl">#${order.number}</div>
     <div class="c big">${orderTypes[order.type]}${order.table_name ? ' — ' + esc(order.table_name) : ''}</div>
     <div class="c muted">${esc(order.user_name)} — ${dateTime(new Date().toISOString())}</div>
-    ${order.notes ? `<div class="c">ملاحظات: ${esc(order.notes)}</div>` : ''}
+    ${order.notes ? `<div class="c">${T('ملاحظات')}: ${esc(order.notes)}</div>` : ''}
     <hr><table>${body}</table><hr>
   `);
 }

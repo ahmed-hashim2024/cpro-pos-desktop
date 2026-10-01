@@ -1,14 +1,15 @@
 import { useId } from 'react';
 import { money } from '@/lib/format';
+import { T } from '@/lib/i18n';
 
 const toneVar = { primary: 'var(--primary)', success: 'var(--success)', warning: 'var(--warning)', danger: 'var(--danger)', info: 'var(--info)' };
 
 // Bar chart: one series, labels underneath, exact value on hover/focus.
 export function Bars({ data, height = 200, tone = 'primary' }) {
   const max = Math.max(1, ...data.map((d) => d.value));
-  if (!data.length) return <div className="flex items-center justify-center text-muted" style={{ height }}>لا توجد بيانات للفترة</div>;
+  if (!data.length) return <div className="flex items-center justify-center text-muted" style={{ height }}>{T('لا توجد بيانات للفترة')}</div>;
   return (
-    <div className="flex items-end gap-1.5" style={{ height }} dir="ltr" role="img" aria-label="رسم بياني">
+    <div className="flex items-end gap-1.5" style={{ height }} dir="ltr" role="img" aria-label={T('رسم بياني')}>
       {data.map((d) => (
         <div key={d.label} className="group flex flex-1 flex-col items-center justify-end gap-1.5" style={{ height: '100%' }}>
           <div tabIndex={0} className="relative w-full max-w-12 rounded-t-lg opacity-85 transition group-hover:opacity-100 focus:opacity-100"
