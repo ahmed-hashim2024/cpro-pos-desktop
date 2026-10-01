@@ -13,3 +13,4 @@ node_modules
 *.exe
 .DS_Store
 .env
+release/
