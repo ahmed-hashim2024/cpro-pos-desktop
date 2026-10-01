@@ -40,7 +40,7 @@ export function ModifierDialog({ item, groups, onClose, onAdd }) {
           <div key={g.id}>
             <div className="mb-2 flex items-center gap-2 font-bold">
               {g.name}
-              <span className="text-xs font-normal text-stone-500">
+              <span className="text-xs font-normal text-muted">
                 {g.min_select > 0 ? `إجباري (${g.min_select})` : 'اختياري'}{g.max_select > 0 ? ` — حتى ${g.max_select}` : ''}
               </span>
             </div>
@@ -49,9 +49,9 @@ export function ModifierDialog({ item, groups, onClose, onAdd }) {
                 const on = picked[g.id]?.includes(m.id);
                 return (
                   <button key={m.id} onClick={() => toggle(g, m)}
-                    className={cx('rounded-xl border-2 p-3 text-right', on ? 'border-brand-600 bg-brand-50' : 'border-stone-200 hover:border-brand-500')}>
+                    className={cx('rounded-xl border-2 p-3 text-right', on ? 'border-primary bg-primary-soft' : 'border-line hover:border-primary')}>
                     <div className="font-semibold">{m.name}</div>
-                    {m.price_minor > 0 && <div className="num text-sm text-stone-500">+{money(m.price_minor)}</div>}
+                    {m.price_minor > 0 && <div className="num text-sm text-muted">+{money(m.price_minor)}</div>}
                   </button>
                 );
               })}
@@ -115,7 +115,7 @@ export function VoidDialog({ title, sent, onClose, onConfirm }) {
         <Button variant="danger" disabled={sent && !reason.trim()} onClick={() => onConfirm({ reason, waste })}>تأكيد الإلغاء</Button></>}>
       {sent ? (
         <div className="grid gap-3">
-          <p className="text-stone-600">تم إرسال الأصناف للمطبخ. سيُسجَّل الإلغاء في سجل النشاط ويتطلب صلاحية المدير.</p>
+          <p className="text-muted">تم إرسال الأصناف للمطبخ. سيُسجَّل الإلغاء في سجل النشاط ويتطلب صلاحية المدير.</p>
           <div className="flex flex-wrap gap-2">
             {reasons.map((r) => <Button key={r} size="sm" variant={reason === r ? 'primary' : 'secondary'} onClick={() => setReason(r)}>{r}</Button>)}
           </div>
@@ -186,19 +186,19 @@ export function CustomerDialog({ onClose, onPick }) {
         <div className="grid gap-3">
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <Search className="absolute right-3 top-2.5 size-5 text-stone-400" />
+              <Search className="absolute right-3 top-2.5 size-5 text-muted/70" />
               <Input autoFocus className="pr-10" placeholder="ابحث بالاسم أو الهاتف" value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
             <Button onClick={() => setForm({ name: /\d/.test(q) ? '' : q, phone: /\d/.test(q) ? q : '', address: '', notes: '' })}><Plus className="size-4" />عميل جديد</Button>
           </div>
           <div className="max-h-96 divide-y overflow-y-auto rounded-xl border">
             {list.map((c) => (
-              <button key={c.id} onClick={() => onPick(c)} className="flex w-full justify-between px-4 py-3 text-right hover:bg-stone-50">
-                <div><div className="font-semibold">{c.name}</div><div className="text-sm text-stone-500">{c.address}</div></div>
-                <div className="num text-stone-500">{c.phone}</div>
+              <button key={c.id} onClick={() => onPick(c)} className="flex w-full justify-between px-4 py-3 text-right hover:bg-surface-2">
+                <div><div className="font-semibold">{c.name}</div><div className="text-sm text-muted">{c.address}</div></div>
+                <div className="num text-muted">{c.phone}</div>
               </button>
             ))}
-            {!list.length && <div className="p-6 text-center text-stone-400">لا يوجد عملاء</div>}
+            {!list.length && <div className="p-6 text-center text-muted/70">لا يوجد عملاء</div>}
           </div>
         </div>
       )}
@@ -290,15 +290,15 @@ export function PayDialog({ order, onClose, onPaid }) {
     <Modal open onClose={onClose} title={`دفع الطلب #${order.number}`} size="lg">
       <div className="grid gap-5 md:grid-cols-2">
         <div className="grid content-start gap-3">
-          <div className="rounded-2xl bg-brand-900 p-4 text-white">
+          <div className="bg-brand rounded-2xl p-5 text-white shadow-md shadow-primary/30">
             <div className="text-sm opacity-80">الإجمالي</div>
             <div className="num text-4xl font-black" style={{ direction: 'rtl' }}>{moneyC(order.total_minor)}</div>
-            {paid > 0 && <div className="mt-2 text-gold">المتبقي: <span className="num">{money(remaining)}</span></div>}
+            {paid > 0 && <div className="mt-2 font-semibold text-white/90">المتبقي: <span className="num">{money(remaining)}</span></div>}
           </div>
           <div className="grid grid-cols-2 gap-2">
             {methods.map((m) => (
               <button key={m.code} onClick={() => setMethod(m.code)}
-                className={cx('flex items-center gap-2 rounded-xl border-2 p-3 font-semibold', method === m.code ? 'border-brand-600 bg-brand-50' : 'border-stone-200')}>
+                className={cx('flex items-center gap-2 rounded-xl border-2 p-3 font-semibold', method === m.code ? 'border-primary bg-primary-soft' : 'border-line')}>
                 {m.is_cash ? <Banknote className="size-5" /> : <CreditCard className="size-5" />}{m.name}
               </button>
             ))}
@@ -309,7 +309,7 @@ export function PayDialog({ order, onClose, onPaid }) {
                 <div key={i} className="flex items-center justify-between px-3 py-2">
                   <span>{methods.find((m) => m.code === t.method)?.name}</span>
                   <span className="num">{money(t.amount_minor)}</span>
-                  <button onClick={() => setTenders(tenders.filter((_, j) => j !== i))}><Trash2 className="size-4 text-red-600" /></button>
+                  <button onClick={() => setTenders(tenders.filter((_, j) => j !== i))}><Trash2 className="size-4 text-danger" /></button>
                 </div>
               ))}
             </div>
@@ -329,7 +329,7 @@ export function PayDialog({ order, onClose, onPaid }) {
                   <div className="flex flex-wrap gap-2">
                     {quick.map((v) => <Button key={v} variant="secondary" onClick={() => setReceived(String(v))}>{v}</Button>)}
                   </div>
-                  {change > 0 && <div className="rounded-xl bg-amber-50 p-3 text-lg font-bold text-amber-800">الباقي للعميل: <span className="num">{money(change)}</span></div>}
+                  {change > 0 && <div className="rounded-xl bg-warning-soft p-3 text-lg font-bold text-warning">الباقي للعميل: <span className="num">{money(change)}</span></div>}
                 </>
               )}
               <div className="flex gap-2">

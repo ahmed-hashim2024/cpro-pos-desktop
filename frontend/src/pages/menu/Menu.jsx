@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { Plus, Trash2, ImagePlus, Utensils } from 'lucide-react';
+import { Plus, Trash2, ImagePlus, Utensils, UtensilsCrossed } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useTab } from '@/lib/useTab';
 import { toast } from '@/lib/store';
 import { money, minorInput, toMinor, toMilli, milliInput, units, pct } from '@/lib/format';
 import { Button, Badge, Checkbox, Field, Input, Modal, PageHeader, Select, Table, Td, Tabs, Textarea, useLoad, useAction } from '@/components/ui';
 
 export default function Menu() {
-  const [tab, setTab] = useState('items');
+  const [tab, setTab] = useTab('items');
   return (
-    <div className="p-5">
-      <PageHeader title="المنيو" />
+    <div>
+      <PageHeader title="المنيو" icon={UtensilsCrossed} subtitle="الأصناف والوصفات والإضافات والطاولات" crumb="المنيو" />
       <Tabs value={tab} onChange={setTab} tabs={[['items', 'الأصناف'], ['categories', 'الأقسام'], ['modifiers', 'الإضافات'], ['tables', 'الطاولات'], ['stations', 'محطات المطبخ']]} />
       {tab === 'items' && <Items />}
       {tab === 'categories' && <Categories />}
@@ -48,12 +49,12 @@ function Items() {
         {rows.map((i) => {
           const margin = i.price_minor ? Math.round(((i.price_minor - i.cost_minor) / i.price_minor) * 10000) : 0;
           return (
-            <tr key={i.id} className="cursor-pointer hover:bg-stone-50" onClick={() => setEdit(i)}>
-              <Td>{i.image ? <img src={i.image} className="size-10 rounded object-cover" alt="" /> : <Utensils className="size-5 text-stone-300" />}</Td>
+            <tr key={i.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setEdit(i)}>
+              <Td>{i.image ? <img src={i.image} className="size-10 rounded object-cover" alt="" /> : <Utensils className="size-5 text-muted/70" />}</Td>
               <Td className="num">{i.code}</Td><Td className="font-semibold">{i.name}</Td><Td>{catName[i.category_id] || '—'}</Td>
               <Td className="num">{money(i.price_minor)}</Td>
-              <Td className="num">{i.recipe.length ? money(i.cost_minor) : <span className="text-amber-600">بدون وصفة</span>}</Td>
-              <Td className={`num ${margin < 5000 ? 'text-red-600' : 'text-brand-700'}`}>{i.recipe.length ? pct(margin) : '—'}</Td>
+              <Td className="num">{i.recipe.length ? money(i.cost_minor) : <span className="text-warning">بدون وصفة</span>}</Td>
+              <Td className={`num ${margin < 5000 ? 'text-danger' : 'text-primary'}`}>{i.recipe.length ? pct(margin) : '—'}</Td>
               <Td>{i.active ? <Badge tone="green">متاح</Badge> : <Badge>موقوف</Badge>}</Td>
             </tr>
           );
@@ -106,7 +107,7 @@ function ItemDialog({ item, data, onClose, onSaved }) {
           <Field label="الوصف"><Textarea value={f.description} onChange={set('description')} /></Field>
           <div className="flex items-center gap-3">
             {(image || f.image) && <img src={image || f.image} className="size-20 rounded-lg object-cover" alt="" />}
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-stone-300 px-3 py-2">
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-line px-3 py-2">
               <ImagePlus className="size-4" />صورة<input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={pickImage} />
             </label>
             <Checkbox label="متاح للبيع" checked={f.active} onChange={(v) => setF({ ...f, active: v })} />
@@ -122,7 +123,7 @@ function ItemDialog({ item, data, onClose, onSaved }) {
                   </Button>
                 );
               })}
-              {!data.groups.length && <span className="text-sm text-stone-400">لا توجد مجموعات إضافات</span>}
+              {!data.groups.length && <span className="text-sm text-muted/70">لا توجد مجموعات إضافات</span>}
             </div>
           </Field>
         </div>
@@ -140,9 +141,9 @@ export function RecipeEditor({ title, recipe, ingredients, onChange, footer }) {
   const [draft, setDraft] = useState({});
   const update = (i, patch) => onChange(recipe.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   return (
-    <div className="rounded-xl bg-stone-50 p-3">
+    <div className="rounded-xl bg-surface-2 p-3">
       <div className="mb-2 font-bold">{title}</div>
-      {!ingredients.length && <div className="text-sm text-stone-500">أضف الخامات أولاً من صفحة المخزون</div>}
+      {!ingredients.length && <div className="text-sm text-muted">أضف الخامات أولاً من صفحة المخزون</div>}
       <div className="grid gap-2">
         {recipe.map((r, i) => (
           <div key={i} className="flex items-center gap-2">
@@ -152,8 +153,8 @@ export function RecipeEditor({ title, recipe, ingredients, onChange, footer }) {
             </Select>
             <Input className="num w-24" value={draft[i] ?? milliInput(r.qty_milli)}
               onChange={(e) => { setDraft({ ...draft, [i]: e.target.value }); const m = toMilli(e.target.value); if (m != null) update(i, { qty_milli: m }); }} />
-            <span className="w-12 text-sm text-stone-500">{units[ing[r.ingredient_id]?.unit] || ''}</span>
-            <button onClick={() => onChange(recipe.filter((_, j) => j !== i))}><Trash2 className="size-4 text-red-600" /></button>
+            <span className="w-12 text-sm text-muted">{units[ing[r.ingredient_id]?.unit] || ''}</span>
+            <button onClick={() => onChange(recipe.filter((_, j) => j !== i))}><Trash2 className="size-4 text-danger" /></button>
           </div>
         ))}
       </div>
@@ -181,7 +182,7 @@ function Categories() {
       <Button className="mb-3" onClick={() => setEdit({ name: '', kitchen_station_id: '', sort: 0, active: true })}><Plus className="size-4" />قسم جديد</Button>
       <Table head={['القسم', 'محطة المطبخ', 'الترتيب', 'الحالة']}>
         {(data.data?.cats || []).map((c) => (
-          <tr key={c.id} className="cursor-pointer hover:bg-stone-50" onClick={() => setEdit(c)}>
+          <tr key={c.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setEdit(c)}>
             <Td className="font-semibold">{c.name}</Td><Td>{st[c.kitchen_station_id] || '—'}</Td><Td>{c.sort}</Td>
             <Td>{c.active ? <Badge tone="green">ظاهر</Badge> : <Badge>مخفي</Badge>}</Td>
           </tr>
@@ -224,7 +225,7 @@ function ModifierGroups() {
       <Button className="mb-3" onClick={() => setEdit({ name: '', min_select: 0, max_select: 0, active: true, modifiers: [] })}><Plus className="size-4" />مجموعة جديدة</Button>
       <Table head={['المجموعة', 'الاختيار', 'الإضافات', 'الحالة']}>
         {(data.data?.groups || []).map((g) => (
-          <tr key={g.id} className="cursor-pointer hover:bg-stone-50" onClick={() => open(g)}>
+          <tr key={g.id} className="cursor-pointer hover:bg-surface-2" onClick={() => open(g)}>
             <Td className="font-semibold">{g.name}</Td>
             <Td>{g.min_select > 0 ? `إجباري ${g.min_select}` : 'اختياري'}{g.max_select ? ` — حتى ${g.max_select}` : ''}</Td>
             <Td>{g.modifiers.filter((m) => m.active).map((m) => m.name).join('، ')}</Td>
@@ -246,7 +247,7 @@ function ModifierGroups() {
                 <Input className="flex-1" placeholder="الاسم" value={m.name} onChange={(e) => setEdit({ ...edit, modifiers: edit.modifiers.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} />
                 <Input className="num w-28" placeholder="السعر" value={m.price} onChange={(e) => setEdit({ ...edit, modifiers: edit.modifiers.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)) })} />
                 <Button size="sm" variant="secondary" onClick={() => setRecipeFor(i)}>وصفة ({(m.recipe || []).length})</Button>
-                <button onClick={() => setEdit({ ...edit, modifiers: edit.modifiers.filter((_, j) => j !== i) })}><Trash2 className="size-4 text-red-600" /></button>
+                <button onClick={() => setEdit({ ...edit, modifiers: edit.modifiers.filter((_, j) => j !== i) })}><Trash2 className="size-4 text-danger" /></button>
               </div>
             ))}
             <Button variant="secondary" onClick={() => setEdit({ ...edit, modifiers: [...edit.modifiers, { name: '', price: '', active: true, recipe: [] }] })}><Plus className="size-4" />إضافة</Button>
@@ -290,7 +291,7 @@ function Tables() {
       </div>
       <Table head={['الطاولة', 'المنطقة', 'المقاعد', 'الحالة']}>
         {(data.data || []).map((t) => (
-          <tr key={t.id} className="cursor-pointer hover:bg-stone-50" onClick={() => setEdit(t)}>
+          <tr key={t.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setEdit(t)}>
             <Td className="font-semibold">{t.name}</Td><Td>{t.area}</Td><Td>{t.seats}</Td>
             <Td>{t.active ? <Badge tone="green">مفعّلة</Badge> : <Badge>موقوفة</Badge>}</Td>
           </tr>
@@ -332,11 +333,11 @@ function Stations() {
   });
   return (
     <>
-      <p className="mb-3 text-sm text-stone-600">قسّم المطبخ لمحطات (مشويات، مشروبات، حلويات…) واربط كل قسم من المنيو بمحطة، ثم افتح شاشة المطبخ على كل محطة.</p>
+      <p className="mb-3 text-sm text-muted">قسّم المطبخ لمحطات (مشويات، مشروبات، حلويات…) واربط كل قسم من المنيو بمحطة، ثم افتح شاشة المطبخ على كل محطة.</p>
       <Button className="mb-3" onClick={() => setEdit({ name: '', printer: '', active: true })}><Plus className="size-4" />محطة</Button>
       <Table head={['المحطة', 'الحالة']}>
         {(data.data || []).map((s) => (
-          <tr key={s.id} className="cursor-pointer hover:bg-stone-50" onClick={() => setEdit(s)}>
+          <tr key={s.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setEdit(s)}>
             <Td className="font-semibold">{s.name}</Td><Td>{s.active ? <Badge tone="green">مفعّلة</Badge> : <Badge>موقوفة</Badge>}</Td>
           </tr>
         ))}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeftRight, Combine, Users } from 'lucide-react';
+import { ArrowLeftRight, Combine, Users, LayoutGrid } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast, toastError } from '@/lib/store';
 import { money, minutesSince } from '@/lib/format';
@@ -46,41 +46,41 @@ export default function Tables() {
   };
 
   return (
-    <div className="p-5">
-      <PageHeader title="الطاولات">
+    <div>
+      <PageHeader title="الطاولات" icon={LayoutGrid} subtitle="حالة الصالة لحظياً — اضغط على طاولة لفتح طلبها" crumb="المبيعات">
         <Badge tone="green">{Object.keys(byTable).length} مشغولة</Badge>
         <Badge>{data.data.tables.length - Object.keys(byTable).length} متاحة</Badge>
       </PageHeader>
       {action && (
-        <div className="mb-4 flex items-center justify-between rounded-xl bg-amber-50 p-3 text-amber-900">
+        <div className="mb-4 flex items-center justify-between rounded-xl bg-warning-soft p-3 text-warning">
           <span>{action.kind === 'move' ? `اختر الطاولة الجديدة للطلب #${action.order.number}` : `اختر الطاولة التي سيُدمج فيها الطلب #${action.order.number}`}</span>
           <Button variant="secondary" size="sm" onClick={() => setAction(null)}>إلغاء</Button>
         </div>
       )}
-      {!data.data.tables.length && <div className="rounded-xl bg-white p-10 text-center text-stone-400">لا توجد طاولات — أضفها من المنيو ← الطاولات</div>}
+      {!data.data.tables.length && <div className="rounded-xl bg-surface p-10 text-center text-muted/70">لا توجد طاولات — أضفها من المنيو ← الطاولات</div>}
       {areas.map(([area, tables]) => (
         <div key={area} className="mb-6">
-          <h2 className="mb-2 font-bold text-stone-600">{area}</h2>
+          <h2 className="mb-2 font-bold text-muted">{area}</h2>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
             {tables.map((t) => {
               const o = byTable[t.id];
               const mins = o ? minutesSince(o.created_at) : 0;
               return (
                 <div key={t.id} className={cx('relative rounded-2xl border-2 p-3 transition',
-                  o ? 'border-brand-600 bg-brand-50' : 'border-stone-200 bg-white', action && 'ring-2 ring-amber-300')}>
+                  o ? 'border-primary bg-primary-soft' : 'border-line bg-surface', action && 'ring-2 ring-warning/40')}>
                   <button onClick={() => pick(t)} className="block w-full text-right">
                     <div className="flex items-center justify-between">
                       <span className="text-xl font-black">{t.name}</span>
-                      <span className="flex items-center gap-1 text-sm text-stone-500"><Users className="size-4" />{o?.guests || t.seats}</span>
+                      <span className="flex items-center gap-1 text-sm text-muted"><Users className="size-4" />{o?.guests || t.seats}</span>
                     </div>
                     {o ? (
                       <div className="mt-2 text-sm">
-                        <div className="num text-lg font-bold text-brand-700">{money(o.total_minor)}</div>
-                        <div className="text-stone-600">#{o.number} · {o.user_name}</div>
-                        <div className={cx('text-xs', mins > 60 ? 'text-red-600' : 'text-stone-500')}>منذ {mins} دقيقة</div>
+                        <div className="num text-lg font-bold text-primary">{money(o.total_minor)}</div>
+                        <div className="text-muted">#{o.number} · {o.user_name}</div>
+                        <div className={cx('text-xs', mins > 60 ? 'text-danger' : 'text-muted')}>منذ {mins} دقيقة</div>
                         {o.pending_lines > 0 && <Badge tone="red">{o.pending_lines} لم تُرسل</Badge>}
                       </div>
-                    ) : <div className="mt-6 text-sm text-stone-400">متاحة</div>}
+                    ) : <div className="mt-6 text-sm text-muted/70">متاحة</div>}
                   </button>
                   {o && !action && (
                     <div className="mt-2 flex gap-1">
@@ -96,12 +96,12 @@ export default function Tables() {
       ))}
       {others.length > 0 && (
         <div>
-          <h2 className="mb-2 font-bold text-stone-600">طلبات بدون طاولة</h2>
+          <h2 className="mb-2 font-bold text-muted">طلبات بدون طاولة</h2>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
             {others.map((o) => (
-              <button key={o.id} onClick={() => navigate(`/pos?order=${o.id}`)} className="rounded-xl border border-stone-200 bg-white p-3 text-right hover:border-brand-500">
+              <button key={o.id} onClick={() => navigate(`/pos?order=${o.id}`)} className="rounded-xl border border-line bg-surface p-3 text-right hover:border-primary">
                 <div className="flex justify-between font-bold"><span>#{o.number}</span><span className="num">{money(o.total_minor)}</span></div>
-                <div className="text-sm text-stone-500">{o.customer_name || o.user_name}</div>
+                <div className="text-sm text-muted">{o.customer_name || o.user_name}</div>
                 {o.status === 'held' && <Badge tone="amber">معلّق</Badge>}
               </button>
             ))}

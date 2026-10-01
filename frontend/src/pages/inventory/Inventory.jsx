@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Plus, Trash2, AlertTriangle, ClipboardCheck } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle, ClipboardCheck, Wheat, Coins, Boxes } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useTab } from '@/lib/useTab';
 import { useApp, toast } from '@/lib/store';
 import { money, toMinor, minorInput, toMilli, milliInput, qty, units, dateTime, daysAgo, today, movementKinds, monthStart } from '@/lib/format';
 import { exportCSV } from '@/lib/csv';
@@ -13,10 +14,10 @@ export default function Inventory() {
   tabs.push(['waste', 'الهالك']);
   if (can('inventory.count')) tabs.push(['counts', 'الجرد']);
   tabs.push(['movements', 'حركة المخزون']);
-  const [tab, setTab] = useState('stock');
+  const [tab, setTab] = useTab('stock');
   return (
-    <div className="p-5">
-      <PageHeader title="المخزون" />
+    <div>
+      <PageHeader title="المخزون" icon={Boxes} subtitle="المواد الخام والمشتريات والهالك والجرد" crumb="المخزون" />
       <Tabs value={tab} onChange={setTab} tabs={tabs} />
       {tab === 'stock' && <Stock />}
       {tab === 'purchases' && <Purchases />}
@@ -44,8 +45,8 @@ function Stock() {
   return (
     <>
       <div className="mb-4 grid grid-cols-3 gap-3">
-        <Stat label="عدد الخامات" value={data.data?.length || 0} />
-        <Stat label="قيمة المخزون" value={money(value)} tone="gold" />
+        <Stat label="عدد الخامات" value={data.data?.length || 0} icon={Wheat} />
+        <Stat label="قيمة المخزون" value={money(value)} icon={Coins} tone="success" />
         <Stat label="خامات تحت الحد الأدنى" value={low} tone={low ? 'bad' : 'good'} />
       </div>
       <div className="mb-3 flex items-center gap-3">
@@ -56,9 +57,9 @@ function Stock() {
       </div>
       <Table head={['الخامة', 'الرصيد', 'الحد الأدنى', 'متوسط التكلفة', 'القيمة', 'تُستخدم في', '']}>
         {rows.map((g) => (
-          <tr key={g.id} className={g.low ? 'bg-red-50/60' : ''}>
+          <tr key={g.id} className={g.low ? 'bg-danger-soft' : ''}>
             <Td className="font-semibold">{g.name} {!g.active && <Badge>موقوفة</Badge>}</Td>
-            <Td className={`num font-bold ${g.stock_milli < 0 ? 'text-red-600' : ''}`}>{qty(g.stock_milli, g.unit)} {g.low && <AlertTriangle className="inline size-4 text-red-600" />}</Td>
+            <Td className={`num font-bold ${g.stock_milli < 0 ? 'text-danger' : ''}`}>{qty(g.stock_milli, g.unit)} {g.low && <AlertTriangle className="inline size-4 text-danger" />}</Td>
             <Td className="num">{qty(g.min_stock_milli, g.unit)}</Td>
             <Td className="num">{money(g.cost_minor)} / {units[g.unit]}</Td>
             <Td className="num">{money(g.value_minor)}</Td>
@@ -121,7 +122,7 @@ function AdjustDialog({ g, onClose, onSaved }) {
     <Modal open onClose={onClose} title={`تسوية رصيد ${g.name}`} size="sm"
       footer={<Button busy={busy} disabled={toMilli(v) == null || !reason.trim()} onClick={save}>حفظ</Button>}>
       <div className="grid gap-3">
-        <div className="text-stone-600">الرصيد الحالي: <b className="num">{qty(g.stock_milli, g.unit)}</b></div>
+        <div className="text-muted">الرصيد الحالي: <b className="num">{qty(g.stock_milli, g.unit)}</b></div>
         <Field label={`الرصيد الصحيح (${units[g.unit]})`}><Input autoFocus className="num" value={v} onChange={(e) => setV(e.target.value)} /></Field>
         <Field label="السبب"><Input value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
       </div>
@@ -145,7 +146,7 @@ function Purchases() {
       </div>
       <Table head={['التاريخ', 'المورد', 'رقم الفاتورة', 'الأصناف', 'الإجمالي', 'المستخدم']}>
         {(list.data || []).map((p) => (
-          <tr key={p.id} className="cursor-pointer hover:bg-stone-50" onClick={() => setView(p)}>
+          <tr key={p.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setView(p)}>
             <Td>{dateTime(p.received_at)}</Td><Td>{p.supplier_name || '—'}</Td><Td className="num">{p.reference}</Td>
             <Td>{p.lines.length}</Td><Td className="num font-semibold">{money(p.total_minor)}</Td><Td>{p.user_name}</Td>
           </tr>
@@ -157,7 +158,7 @@ function Purchases() {
           <Table head={['الخامة', 'الكمية', 'سعر الوحدة', 'الإجمالي']}>
             {view.lines.map((l, i) => <tr key={i}><Td>{l.name}</Td><Td className="num">{qty(l.qty_milli, l.unit)}</Td><Td className="num">{money(l.unit_cost_minor)}</Td><Td className="num">{money(l.total_minor)}</Td></tr>)}
           </Table>
-          {view.notes && <p className="mt-2 text-stone-600">{view.notes}</p>}
+          {view.notes && <p className="mt-2 text-muted">{view.notes}</p>}
         </Modal>
       )}
     </>
@@ -198,10 +199,10 @@ function PurchaseDialog({ onClose, onSaved }) {
               <option value="">— الخامة —</option>{data.data?.ingredients.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </Select>
             <Input className="num w-28" placeholder="الكمية" value={l.qty} onChange={(e) => set(i, { qty: e.target.value })} />
-            <span className="w-12 text-sm text-stone-500">{units[ing[l.ingredient_id]?.unit] || ''}</span>
+            <span className="w-12 text-sm text-muted">{units[ing[l.ingredient_id]?.unit] || ''}</span>
             <Input className="num w-32" placeholder="سعر الوحدة" value={l.cost} onChange={(e) => set(i, { cost: e.target.value })} />
             <span className="num w-28 text-left">{money(Math.round(((toMinor(l.cost) || 0) * (toMilli(l.qty) || 0)) / 1000))}</span>
-            <button onClick={() => setLines(lines.filter((_, j) => j !== i))}><Trash2 className="size-4 text-red-600" /></button>
+            <button onClick={() => setLines(lines.filter((_, j) => j !== i))}><Trash2 className="size-4 text-danger" /></button>
           </div>
         ))}
         <Button variant="secondary" onClick={() => setLines([...lines, { ingredient_id: '', qty: '', cost: '' }])}><Plus className="size-4" />سطر</Button>
@@ -220,7 +221,7 @@ function Suppliers() {
       <Button className="mb-3" onClick={() => setEdit({ name: '', phone: '', notes: '' })}><Plus className="size-4" />مورد</Button>
       <Table head={['المورد', 'الهاتف', 'إجمالي المشتريات', 'ملاحظات']}>
         {(data.data || []).map((s) => (
-          <tr key={s.id} className="cursor-pointer hover:bg-stone-50" onClick={() => setEdit(s)}>
+          <tr key={s.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setEdit(s)}>
             <Td className="font-semibold">{s.name}</Td><Td className="num">{s.phone}</Td><Td className="num">{money(s.purchases_minor)}</Td><Td>{s.notes}</Td>
           </tr>
         ))}
@@ -250,7 +251,7 @@ function Waste() {
       <div className="mb-3 flex gap-2">
         <Button onClick={() => setOpen(true)}><Plus className="size-4" />تسجيل هالك</Button>
         <DateRange from={range.from} to={range.to} onChange={(from, to) => setRange({ from, to })} />
-        <div className="mr-auto self-center">تكلفة الهالك: <b className="num text-red-600">{money(total)}</b></div>
+        <div className="mr-auto self-center">تكلفة الهالك: <b className="num text-danger">{money(total)}</b></div>
       </div>
       <Table head={['الوقت', 'الصنف / الخامة', 'النوع', 'الكمية', 'السبب', 'التكلفة', 'المستخدم']}>
         {(list.data || []).map((w) => (
@@ -258,7 +259,7 @@ function Waste() {
             <Td>{dateTime(w.created_at)}</Td><Td className="font-semibold">{w.name}</Td>
             <Td>{w.kind === 'item' ? <Badge tone="amber">صنف جاهز</Badge> : <Badge>خامة</Badge>}</Td>
             <Td className="num">{w.kind === 'item' ? qty(w.qty_milli) : qty(w.qty_milli, w.unit)}</Td><Td>{w.reason}</Td>
-            <Td className="num text-red-600">{money(w.cost_minor)}</Td><Td>{w.user_name}</Td>
+            <Td className="num text-danger">{money(w.cost_minor)}</Td><Td>{w.user_name}</Td>
           </tr>
         ))}
       </Table>
@@ -317,10 +318,10 @@ function Counts() {
       </div>
       <Table head={['التاريخ', 'الحالة', 'بدأه', 'رحّله', 'خامات معدودة', 'قيمة الفروق']}>
         {(list.data || []).map((c) => (
-          <tr key={c.id} className="cursor-pointer hover:bg-stone-50" onClick={() => setOpenId(c.id)}>
+          <tr key={c.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setOpenId(c.id)}>
             <Td>{dateTime(c.created_at)}</Td><Td><Badge tone={status[c.status][0]}>{status[c.status][1]}</Badge></Td>
             <Td>{c.created_by}</Td><Td>{c.posted_by ? `${c.posted_by} — ${dateTime(c.posted_at)}` : '—'}</Td>
-            <Td>{c.counted}</Td><Td className={`num ${c.variance_cost_minor < 0 ? 'text-red-600' : ''}`}>{c.status === 'posted' ? money(c.variance_cost_minor) : '—'}</Td>
+            <Td>{c.counted}</Td><Td className={`num ${c.variance_cost_minor < 0 ? 'text-danger' : ''}`}>{c.status === 'posted' ? money(c.variance_cost_minor) : '—'}</Td>
           </tr>
         ))}
       </Table>
@@ -371,14 +372,14 @@ function CountSheet({ id, onClose }) {
   return (
     <Modal open onClose={onClose} title={`جرد ${c ? dateTime(c.created_at) : ''}`} size="xl"
       footer={c && <>
-        <span className={`ml-auto text-lg ${totalVar < 0 ? 'text-red-600' : ''}`}>قيمة الفروق: <b className="num">{money(totalVar)}</b></span>
+        <span className={`ml-auto text-lg ${totalVar < 0 ? 'text-danger' : ''}`}>قيمة الفروق: <b className="num">{money(totalVar)}</b></span>
         {draft && <Button variant="ghost" onClick={cancel}>إلغاء الجرد</Button>}
         {draft && <Button variant="secondary" busy={busy} disabled={!dirty} onClick={save}>حفظ</Button>}
         {draft && can('inventory.manage') && <Button busy={busy} onClick={post}>ترحيل وتسوية الأرصدة</Button>}
         <Button variant="secondary" onClick={() => exportCSV('stock-count', ['الخامة', 'الوحدة', 'المتوقع', 'المعدود', 'الفرق', 'قيمة الفرق'],
           preview.map((l) => [l.name, units[l.unit], milliInput(l.expected_milli), l.counted == null ? '' : milliInput(l.counted), l.variance == null ? '' : milliInput(l.variance), money(l.varianceCost)]))}>تصدير</Button>
       </>}>
-      {draft && <p className="mb-3 text-sm text-stone-600">أدخل الكمية الفعلية لكل خامة. الخامات المتروكة فارغة لن تتأثر. عند الترحيل يصبح الرصيد = المعدود، ويُسجَّل الفرق في تقرير الاستهلاك.</p>}
+      {draft && <p className="mb-3 text-sm text-muted">أدخل الكمية الفعلية لكل خامة. الخامات المتروكة فارغة لن تتأثر. عند الترحيل يصبح الرصيد = المعدود، ويُسجَّل الفرق في تقرير الاستهلاك.</p>}
       <Table head={['الخامة', 'الرصيد في النظام', 'المعدود فعلياً', 'الفرق', 'قيمة الفرق']}>
         {preview.map((l) => (
           <tr key={l.ingredient_id}>
@@ -388,10 +389,10 @@ function CountSheet({ id, onClose }) {
               <div className="flex items-center gap-2">
                 <Input className="num w-28" value={edits[l.ingredient_id] ?? (l.counted_milli == null ? '' : milliInput(l.counted_milli))}
                   onChange={(e) => setEdits({ ...edits, [l.ingredient_id]: e.target.value })} />
-                <span className="text-sm text-stone-500">{units[l.unit]}</span>
+                <span className="text-sm text-muted">{units[l.unit]}</span>
               </div>
             ) : <span className="num">{l.counted == null ? '—' : qty(l.counted, l.unit)}</span>}</Td>
-            <Td className={`num font-bold ${l.variance < 0 ? 'text-red-600' : l.variance > 0 ? 'text-amber-600' : ''}`}>{l.variance == null ? '—' : qty(l.variance, l.unit)}</Td>
+            <Td className={`num font-bold ${l.variance < 0 ? 'text-danger' : l.variance > 0 ? 'text-warning' : ''}`}>{l.variance == null ? '—' : qty(l.variance, l.unit)}</Td>
             <Td className="num">{l.variance == null ? '—' : money(l.varianceCost)}</Td>
           </tr>
         ))}
@@ -423,7 +424,7 @@ function Movements() {
         {(list.data || []).map((m) => (
           <tr key={m.id}>
             <Td>{dateTime(m.created_at)}</Td><Td className="font-semibold">{m.ingredient}</Td><Td>{movementKinds[m.kind]}</Td>
-            <Td className={`num font-semibold ${m.qty_milli < 0 ? 'text-red-600' : 'text-brand-700'}`}>{qty(m.qty_milli, m.unit)}</Td>
+            <Td className={`num font-semibold ${m.qty_milli < 0 ? 'text-danger' : 'text-primary'}`}>{qty(m.qty_milli, m.unit)}</Td>
             <Td className="num">{money(m.value_minor)}</Td><Td>{m.reason}</Td><Td>{m.user_name}</Td>
           </tr>
         ))}

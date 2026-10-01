@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Printer, Undo2 } from 'lucide-react';
+import { Printer, Undo2, Receipt } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp, toast } from '@/lib/store';
 import { money, orderTypes, orderStatus, dateTime, today, qty, kitchenStatus } from '@/lib/format';
@@ -19,8 +19,8 @@ export default function Orders() {
   const total = rows.filter((o) => o.status === 'paid').reduce((s, o) => s + o.total_minor - o.refunded_minor, 0);
 
   return (
-    <div className="p-5">
-      <PageHeader title="الطلبات والفواتير">
+    <div>
+      <PageHeader title="الطلبات والفواتير" icon={Receipt} subtitle="البحث في الطلبات، إعادة الطباعة والمرتجعات" crumb="المبيعات">
         <DateRange from={f.from} to={f.to} onChange={(from, to) => setF({ ...f, from, to })} />
         <Select className="w-32" value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
           <option value="">كل الحالات</option><option value="paid">مدفوع</option><option value="void">ملغي</option>
@@ -36,17 +36,17 @@ export default function Orders() {
           تصدير Excel
         </Button>
       </PageHeader>
-      <div className="mb-3 text-stone-600">{rows.length} طلب — صافي المدفوع: <b className="num">{money(total)}</b></div>
+      <div className="mb-3 text-muted">{rows.length} طلب — صافي المدفوع: <b className="num">{money(total)}</b></div>
       <Table head={['#', 'الفاتورة', 'الوقت', 'النوع', 'الطاولة / العميل', 'المستخدم', 'الإجمالي', 'الحالة']}>
         {rows.map((o) => (
-          <tr key={o.id} className="cursor-pointer hover:bg-stone-50" onClick={() => setOpenId(o.id)}>
+          <tr key={o.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setOpenId(o.id)}>
             <Td className="font-bold">{o.number}</Td>
             <Td className="num">{o.invoice_number}</Td>
             <Td>{dateTime(o.closed_at || o.created_at)}</Td>
             <Td>{orderTypes[o.type]}</Td>
             <Td>{o.table_name || o.customer_name || '—'}</Td>
             <Td>{o.user_name}</Td>
-            <Td className="num font-semibold">{money(o.total_minor)}{o.refunded_minor > 0 && <span className="text-red-600"> (−{money(o.refunded_minor)})</span>}</Td>
+            <Td className="num font-semibold">{money(o.total_minor)}{o.refunded_minor > 0 && <span className="text-danger"> (−{money(o.refunded_minor)})</span>}</Td>
             <Td><Badge tone={statusTone[o.status]}>{orderStatus[o.status]}</Badge></Td>
           </tr>
         ))}
@@ -84,9 +84,9 @@ export function OrderDetail({ id, onClose }) {
       </div>
       <Table head={['الصنف', 'الكمية', 'السعر', 'الصافي', 'الحالة']}>
         {o.lines.map((l) => (
-          <tr key={l.id} className={l.voided ? 'text-red-600 line-through' : ''}>
-            <Td>{l.name}{l.modifiers.map((m) => <div key={m.name} className="text-xs text-stone-500">+ {m.name}</div>)}</Td>
-            <Td className="num">{qty(l.qty_milli)}{l.refunded_qty_milli > 0 && <span className="text-red-600"> (مرتجع {qty(l.refunded_qty_milli)})</span>}</Td>
+          <tr key={l.id} className={l.voided ? 'text-danger line-through' : ''}>
+            <Td>{l.name}{l.modifiers.map((m) => <div key={m.name} className="text-xs text-muted">+ {m.name}</div>)}</Td>
+            <Td className="num">{qty(l.qty_milli)}{l.refunded_qty_milli > 0 && <span className="text-danger"> (مرتجع {qty(l.refunded_qty_milli)})</span>}</Td>
             <Td className="num">{money(l.unit_price_minor)}</Td>
             <Td className="num">{money(l.net_minor)}</Td>
             <Td>{l.voided ? `ملغي: ${l.void_reason}` : kitchenStatus[l.kitchen_status]}</Td>
@@ -103,7 +103,7 @@ export function OrderDetail({ id, onClose }) {
           <Line k="الإجمالي" v={o.subtotal_minor} /><Line k="الخصم" v={o.line_discounts_minor + o.order_discount_minor} />
           <Line k="الخدمة" v={o.service_minor} /><Line k="الضريبة" v={o.tax_minor} /><Line k="التوصيل" v={o.delivery_fee_minor} />
           <div className="flex justify-between text-lg font-bold"><span>المطلوب</span><span className="num">{money(o.total_minor)}</span></div>
-          {o.refunded_minor > 0 && <div className="flex justify-between text-red-600"><span>مرتجع</span><span className="num">{money(o.refunded_minor)}</span></div>}
+          {o.refunded_minor > 0 && <div className="flex justify-between text-danger"><span>مرتجع</span><span className="num">{money(o.refunded_minor)}</span></div>}
         </div>
       </div>
       {refund && <RefundDialog order={o} onClose={() => setRefund(false)} onDone={() => { setRefund(false); order.reload(); }} />}
@@ -130,7 +130,7 @@ function RefundDialog({ order, onClose, onDone }) {
     <Modal open onClose={onClose} title="مرتجع" size="lg"
       footer={<><Button variant="secondary" onClick={onClose}>إلغاء</Button>
         <Button variant="danger" busy={busy} disabled={!picked.length || !reason.trim() || !shift} onClick={submit}>تأكيد المرتجع</Button></>}>
-      {!shift && <div className="mb-3 rounded-lg bg-red-50 p-3 text-red-700">يجب فتح وردية لصرف المرتجع من الدرج</div>}
+      {!shift && <div className="mb-3 rounded-lg bg-danger-soft p-3 text-danger">يجب فتح وردية لصرف المرتجع من الدرج</div>}
       <Table head={['الصنف', 'المتاح', 'الكمية المرتجعة']}>
         {avail.map((l) => {
           const max = (l.qty_milli - l.refunded_qty_milli) / 1000;
@@ -157,5 +157,5 @@ function RefundDialog({ order, onClose, onDone }) {
   );
 }
 
-const Info = ({ k, v }) => <div className="rounded-lg bg-stone-50 p-2"><div className="text-xs text-stone-500">{k}</div><div className="font-semibold">{v || '—'}</div></div>;
-const Line = ({ k, v }) => (v ? <div className="flex justify-between text-stone-600"><span>{k}</span><span className="num">{money(v)}</span></div> : null);
+const Info = ({ k, v }) => <div className="rounded-lg bg-surface-2 p-2"><div className="text-xs text-muted">{k}</div><div className="font-semibold">{v || '—'}</div></div>;
+const Line = ({ k, v }) => (v ? <div className="flex justify-between text-muted"><span>{k}</span><span className="num">{money(v)}</span></div> : null);

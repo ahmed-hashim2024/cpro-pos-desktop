@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp, toast } from '@/lib/store';
 import { money, dateTime } from '@/lib/format';
@@ -14,8 +14,8 @@ export default function Customers() {
   const [busy, run] = useAction();
   const save = () => run(async () => { await api.post('/customers', edit); toast('تم الحفظ'); setEdit(null); list.reload(true); });
   return (
-    <div className="p-5">
-      <PageHeader title="العملاء">
+    <div>
+      <PageHeader title="العملاء" icon={Users} subtitle="بيانات العملاء وسجل مشترياتهم" crumb="العملاء">
         <Input className="w-64" placeholder="بحث بالاسم أو الهاتف" value={q} onChange={(e) => setQ(e.target.value)} />
         <Button onClick={() => setEdit({ name: '', phone: '', address: '', notes: '' })}><Plus className="size-4" />عميل</Button>
         <Button variant="secondary" onClick={() => exportCSV('customers', ['الاسم', 'الهاتف', 'العنوان', 'عدد الطلبات', 'إجمالي المشتريات', 'آخر طلب'],
@@ -23,7 +23,7 @@ export default function Customers() {
       </PageHeader>
       <Table head={['الاسم', 'الهاتف', 'العنوان', 'الطلبات', 'إجمالي المشتريات', 'آخر طلب']}>
         {(list.data || []).map((c) => (
-          <tr key={c.id} className={can('customers.manage') ? 'cursor-pointer hover:bg-stone-50' : ''} onClick={() => can('customers.manage') && setEdit(c)}>
+          <tr key={c.id} className={can('customers.manage') ? 'cursor-pointer hover:bg-surface-2' : ''} onClick={() => can('customers.manage') && setEdit(c)}>
             <Td className="font-semibold">{c.name}</Td><Td className="num">{c.phone}</Td><Td>{c.address}</Td>
             <Td>{c.orders}</Td><Td className="num">{money(c.total_spent_minor)}</Td><Td>{dateTime(c.last_order_at)}</Td>
           </tr>

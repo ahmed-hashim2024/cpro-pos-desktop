@@ -36,8 +36,8 @@ export function ApprovalModal() {
     <Modal open={open} onClose={() => close(null)} title="موافقة المدير" size="sm"
       footer={<><Button variant="secondary" onClick={() => close(null)}>إلغاء</Button><Button onClick={() => close(pin)} disabled={pin.length < 4}>موافقة</Button></>}>
       <div className="flex flex-col items-center gap-3">
-        <ShieldCheck className="size-10 text-gold" />
-        <p className="text-center text-stone-600">هذا الإجراء يتطلب الرقم السري لمدير أو المالك</p>
+        <ShieldCheck className="size-10 text-warning" />
+        <p className="text-center text-muted">هذا الإجراء يتطلب الرقم السري لمدير أو المالك</p>
         <Input type="password" inputMode="numeric" autoFocus maxLength={6} value={pin} className="text-center text-2xl tracking-[0.5em]"
           onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} onKeyDown={(e) => e.key === 'Enter' && pin.length >= 4 && close(pin)} />
       </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ScrollText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { dateTime, today, money } from '@/lib/format';
 import { exportCSV } from '@/lib/csv';
@@ -33,8 +34,8 @@ export default function Audit() {
   const [f, setF] = useState({ from: today(), to: today(), action: '' });
   const list = useLoad(() => api.get('/audit', f), [f.from, f.to, f.action]);
   return (
-    <div className="p-5">
-      <PageHeader title="سجل النشاط">
+    <div>
+      <PageHeader title="سجل النشاط" icon={ScrollText} subtitle="كل عملية مسجلة بالمستخدم والجهاز والوقت" crumb="الإدارة">
         <DateRange from={f.from} to={f.to} onChange={(from, to) => setF({ ...f, from, to })} />
         <Select className="w-40" value={f.action} onChange={(e) => setF({ ...f, action: e.target.value })}>
           {groups.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -42,12 +43,12 @@ export default function Audit() {
         <Button variant="secondary" onClick={() => exportCSV('audit', ['الوقت', 'المستخدم', 'الجهاز', 'القناة', 'الإجراء', 'التفاصيل'],
           (list.data || []).map((e) => [dateTime(e.at), e.user_name, e.device_name, e.channel, actions[e.action] || e.action, details(e.data)]))}>تصدير Excel</Button>
       </PageHeader>
-      <p className="mb-3 text-sm text-stone-500">السجل للقراءة فقط ولا يمكن تعديله أو حذفه من أي مستخدم.</p>
+      <p className="mb-3 text-sm text-muted">السجل للقراءة فقط ولا يمكن تعديله أو حذفه من أي مستخدم.</p>
       <Table head={['الوقت', 'المستخدم', 'الجهاز', 'الإجراء', 'التفاصيل']}>
         {(list.data || []).map((e) => (
-          <tr key={e.id} className={e.action.includes('void') || e.action.includes('failed') || e.action.includes('refund') ? 'bg-red-50/50' : ''}>
+          <tr key={e.id} className={e.action.includes('void') || e.action.includes('failed') || e.action.includes('refund') ? 'bg-danger-soft' : ''}>
             <Td className="whitespace-nowrap">{dateTime(e.at)}</Td><Td>{e.user_name}</Td><Td>{e.device_name}</Td>
-            <Td className="font-semibold">{actions[e.action] || e.action}</Td><Td className="text-xs text-stone-600">{details(e.data)}</Td>
+            <Td className="font-semibold">{actions[e.action] || e.action}</Td><Td className="text-xs text-muted">{details(e.data)}</Td>
           </tr>
         ))}
       </Table>

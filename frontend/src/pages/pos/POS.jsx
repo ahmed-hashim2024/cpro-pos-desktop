@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Search, Send, PauseCircle, Percent, Trash2, User, Printer, Plus, Minus, ChefHat, ClipboardList, X, Utensils,
+  Send, PauseCircle, Percent, Trash2, User, Printer, Plus, Minus, ChefHat, ClipboardList, X, Utensils,
+  LayoutDashboard, LayoutGrid, RefreshCw, ShoppingBag, CreditCard, Store, Lock, Timer, Wallet,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp, toast, toastError } from '@/lib/store';
-import { money, moneyC, orderTypes, qty, kitchenStatus } from '@/lib/format';
+import { money, moneyC, orderTypes, qty, kitchenStatus, currencyLabel } from '@/lib/format';
 import { printReceipt, printKitchenTicket } from '@/lib/print';
-import { Button, Badge, Modal, Select, Spinner, cx, useLoad } from '@/components/ui';
+import { Button, Badge, Modal, Select, Spinner, Empty, IconButton, SearchInput, Segmented, cx, useLoad } from '@/components/ui';
 import { withApproval } from '@/components/Approval';
 import { ModifierDialog, LineDialog, VoidDialog, DiscountDialog, CustomerDialog, OpenShiftDialog, PayDialog } from './dialogs';
 
@@ -152,132 +153,151 @@ export default function POS() {
   const type = order?.type || draft.type;
   const tableId = order?.table_id || draft.table_id;
   const customerName = order?.customer_name || draft.customer?.name;
+  const inCart = Object.fromEntries(live.map((l) => [l.item_id, 0]));
+  live.forEach((l) => { inCart[l.item_id] += l.qty_milli / 1000; });
+  const countBy = (id) => menu.data.items.filter((i) => i.category_id === id).length;
 
   return (
-    <div className="flex h-full">
-      {/* menu */}
+    <div className="flex h-full bg-bg">
+      {/* menu side */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b border-stone-200 bg-white p-3">
-          <div className="relative w-72">
-            <Search className="absolute right-3 top-2.5 size-5 text-stone-400" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم أو الكود"
-              className="h-10 w-full rounded-lg border border-stone-300 pr-10 outline-none focus:border-brand-500" />
+        <div className="space-y-3 border-b border-line bg-surface px-5 py-4">
+          <div className="flex items-center gap-2">
+            <SearchInput className="flex-1" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث عن صنف بالاسم أو الكود…" aria-label="بحث في الأصناف" />
+            <IconButton icon={LayoutDashboard} label="الرجوع للوحة التحكم" onClick={() => navigate('/')} />
           </div>
-          <Button variant="secondary" onClick={() => setDialog({ kind: 'open' })}>
-            <ClipboardList className="size-4" />الطلبات المفتوحة
-            <Badge tone="amber">{openOrders.data?.length || 0}</Badge>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <ShiftPill shift={shift} canCash={can('shift.cash')} onOpen={() => setDialog({ kind: 'shift' })} onGo={() => navigate('/shift')} />
+            <span className="flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-2 text-sm font-semibold text-muted"><Store className="size-4" aria-hidden />{settings.restaurant_name}</span>
+            <div className="mr-auto flex items-center gap-2">
+              <Button variant="secondary" icon={ClipboardList} onClick={() => setDialog({ kind: 'open' })}>
+                الطلبات المفتوحة <span className="num rounded-full bg-warning-soft px-2 text-warning">{openOrders.data?.length || 0}</span>
+              </Button>
+              <IconButton icon={LayoutGrid} label="الطاولات" onClick={() => navigate('/tables')} />
+              <IconButton icon={RefreshCw} label="تحديث المنيو" onClick={() => { menu.reload(); openOrders.reload(true); }} />
+            </div>
+          </div>
         </div>
-        <div className="flex gap-2 overflow-x-auto border-b border-stone-200 bg-white px-3 py-2">
-          <CatButton active={!cat && !search} onClick={() => { setCat(''); setSearch(''); }}>الكل</CatButton>
+        <div className="flex gap-2 overflow-x-auto px-5 py-3" role="tablist" aria-label="الأقسام">
+          <CatPill active={!cat && !search} onClick={() => { setCat(''); setSearch(''); }} count={menu.data.items.length}>الكل</CatPill>
           {menu.data.categories.map((c) => (
-            <CatButton key={c.id} active={cat === c.id && !search} onClick={() => { setCat(c.id); setSearch(''); }}>{c.name}</CatButton>
+            <CatPill key={c.id} active={cat === c.id && !search} count={countBy(c.id)} onClick={() => { setCat(c.id); setSearch(''); }}>{c.name}</CatPill>
           ))}
         </div>
-        <div className="grid flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3 overflow-y-auto p-3">
+        <div className="grid flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4 overflow-y-auto px-5 pb-5">
           {items.map((i) => (
             <button key={i.id} onClick={() => pickItem(i)} disabled={busy}
-              className="flex flex-col overflow-hidden rounded-xl border border-stone-200 bg-white text-right shadow-sm transition hover:border-brand-500 hover:shadow active:scale-[.98]">
-              {i.image ? <img src={i.image} alt="" className="h-24 w-full object-cover" /> : (
-                <div className="flex h-24 items-center justify-center bg-brand-50 text-brand-500"><Utensils className="size-8" /></div>
+              className={cx('group relative flex flex-col overflow-hidden rounded-card border bg-surface text-right shadow-card transition duration-150 hover:-translate-y-0.5 hover:shadow-pop active:scale-[.98]',
+                inCart[i.id] ? 'border-primary ring-2 ring-primary/20' : 'border-line')}>
+              {i.image ? <img src={i.image} alt="" className="aspect-[4/3] w-full object-cover" loading="lazy" /> : (
+                <div className="flex aspect-[4/3] items-center justify-center bg-gradient-to-br from-primary-soft to-surface-2 text-primary">
+                  <Utensils className="size-10 opacity-70" aria-hidden />
+                </div>
               )}
-              <div className="p-2">
-                <div className="line-clamp-2 font-semibold leading-tight">{i.name}</div>
-                <div className="num mt-1 font-bold text-brand-700">{money(i.price_minor)}</div>
+              {inCart[i.id] > 0 && <span className="bg-brand num absolute left-2 top-2 flex size-7 items-center justify-center rounded-full text-sm font-bold text-white shadow">{inCart[i.id]}</span>}
+              {i.modifier_group_ids.length > 0 && <span className="absolute right-2 top-2 rounded-full bg-surface/90 px-2 py-0.5 text-[11px] font-semibold text-muted shadow-sm">+ إضافات</span>}
+              <div className="flex flex-1 flex-col justify-between gap-2 p-3">
+                <div className="line-clamp-2 font-semibold leading-snug">{i.name}</div>
+                <div className="num text-lg font-bold text-primary">{money(i.price_minor)} <span className="text-xs font-semibold text-muted">{currencyLabel()}</span></div>
               </div>
             </button>
           ))}
-          {!items.length && <div className="col-span-full p-10 text-center text-stone-400">لا توجد أصناف — أضفها من صفحة المنيو</div>}
+          {!items.length && <div className="col-span-full"><Empty icon={Utensils} title="لا توجد أصناف">{search ? 'لا نتائج للبحث' : 'أضف الأصناف من صفحة المنيو'}</Empty></div>}
         </div>
       </div>
 
       {/* order panel */}
-      <aside className="flex w-[420px] shrink-0 flex-col border-r border-stone-200 bg-white">
-        <div className="grid gap-2 border-b border-stone-200 p-3">
-          <div className="flex items-center justify-between">
-            <div className="text-lg font-bold">{order ? `طلب #${order.number}` : 'طلب جديد'}
-              {order?.status === 'held' && <Badge tone="amber">معلّق</Badge>}
+      <aside className="flex w-[440px] shrink-0 flex-col border-r border-line bg-surface">
+        <div className="flex items-center gap-3 border-b border-line px-5 py-4">
+          <span className="bg-brand flex size-11 items-center justify-center rounded-xl text-white shadow-md shadow-primary/30"><ShoppingBag className="size-5" aria-hidden /></span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 text-lg font-bold">{order ? `طلب #${order.number}` : 'طلب جديد'}
+              {order?.status === 'held' && <Badge tone="warning">معلّق</Badge>}
             </div>
-            <Button variant="ghost" size="sm" onClick={newOrder}><Plus className="size-4" />جديد</Button>
+            <div className="text-sm text-muted">{live.length ? `${live.length} صنف` : 'الطلب فارغ'}</div>
           </div>
-          <div className="grid grid-cols-3 gap-1 rounded-lg bg-stone-100 p-1">
-            {Object.entries(orderTypes).map(([k, v]) => (
-              <button key={k} onClick={() => updateHeader({ type: k })}
-                className={cx('rounded-md py-1.5 text-sm font-semibold', type === k ? 'bg-white shadow-sm text-brand-700' : 'text-stone-600')}>{v}</button>
-            ))}
-          </div>
+          <Button variant="soft" size="sm" icon={Plus} onClick={newOrder}>جديد</Button>
+          {order && <Button variant="danger-soft" size="sm" icon={X} onClick={() => setDialog({ kind: 'voidOrder' })}>إلغاء</Button>}
+        </div>
+
+        <div className="space-y-2 border-b border-line px-5 py-3">
+          <Segmented options={Object.entries(orderTypes)} value={type} onChange={(k) => updateHeader({ type: k })} />
           <div className="flex gap-2">
             {type === 'dine_in' && (
-              <Select value={tableId} onChange={(e) => updateHeader({ table_id: e.target.value })} className="flex-1">
-                <option value="">— الطاولة —</option>
+              <Select value={tableId} onChange={(e) => updateHeader({ table_id: e.target.value })} className="flex-1" aria-label="الطاولة">
+                <option value="">— اختر الطاولة —</option>
                 {menu.data.tables.map((t) => <option key={t.id} value={t.id}>{t.area ? `${t.area} / ` : ''}{t.name}</option>)}
               </Select>
             )}
-            <Button variant="secondary" className="flex-1 truncate" onClick={() => setDialog({ kind: 'customer' })}>
-              <User className="size-4" />{customerName || 'عميل'}
-            </Button>
-            {customerName && <Button variant="ghost" onClick={() => updateHeader({ customer: null })}><X className="size-4" /></Button>}
+            <button onClick={() => setDialog({ kind: 'customer' })}
+              className="flex h-10 flex-1 items-center gap-2 truncate rounded-xl border border-line px-3 text-sm font-semibold hover:bg-surface-2">
+              <User className="size-4 text-primary" aria-hidden /><span className="truncate">{customerName || 'عميل مباشر'}</span>
+            </button>
+            {customerName && <IconButton icon={X} label="إزالة العميل" onClick={() => updateHeader({ customer: null })} />}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          {live.length === 0 && <div className="p-10 text-center text-stone-400">اضغط على صنف لإضافته</div>}
+        <div className="flex-1 overflow-y-auto px-3 py-2">
+          {live.length === 0 && <Empty icon={ShoppingBag} title="الطلب فارغ">اختر صنفاً لبدء البيع</Empty>}
           {order?.lines.map((l) => (
-            <div key={l.id} className={cx('border-b border-stone-100 px-3 py-2', l.voided && 'opacity-50')}>
+            <div key={l.id} className={cx('mb-2 rounded-2xl border p-3 transition', l.voided ? 'border-danger/20 bg-danger-soft/50 opacity-70' : 'border-line bg-surface hover:border-primary/40')}>
               <div className="flex items-start gap-2">
                 <button className="min-w-0 flex-1 text-right" disabled={l.voided} onClick={() => setDialog({ kind: 'line', line: l })}>
-                  <div className={cx('font-semibold', l.voided && 'line-through')}>{l.name}</div>
-                  {l.modifiers.map((m, i) => <div key={i} className="text-xs text-stone-500">+ {m.name}{m.price_minor ? ` (${money(m.price_minor)})` : ''}</div>)}
-                  {l.notes && <div className="text-xs text-amber-700">* {l.notes}</div>}
-                  {l.discount_kind && <div className="text-xs text-red-600">خصم {money(l.gross_minor - l.net_minor)}</div>}
-                  {l.voided && <div className="text-xs text-red-600">ملغي: {l.void_reason}</div>}
-                  {!l.voided && l.sent_at && <Badge tone="green">{kitchenStatus[l.kitchen_status]}</Badge>}
+                  <div className={cx('font-bold', l.voided && 'line-through')}>{l.name}</div>
+                  {l.modifiers.map((m, i) => <div key={i} className="text-xs text-muted">+ {m.name}{m.price_minor ? ` (${money(m.price_minor)})` : ''}</div>)}
+                  {l.notes && <div className="text-xs font-semibold text-warning">✎ {l.notes}</div>}
+                  {l.discount_kind && <div className="text-xs font-semibold text-danger">خصم {money(l.gross_minor - l.net_minor)}</div>}
+                  {l.voided && <div className="text-xs font-semibold text-danger">ملغي: {l.void_reason}</div>}
+                  {!l.voided && l.sent_at && <span className="mt-1 inline-block"><Badge tone="success" dot>{kitchenStatus[l.kitchen_status]}</Badge></span>}
                 </button>
-                {!l.voided && (
-                  <div className="flex items-center gap-1">
-                    {!l.sent_at && (
-                      <>
-                        <IconBtn onClick={() => l.qty_milli > 1000 ? run(() => api.put(`/orders/${order.id}/lines/${l.id}`, { ...lineBody(l), qty_milli: l.qty_milli - 1000 })) : run(() => api.post(`/orders/${order.id}/lines/${l.id}/remove`, {}))}><Minus className="size-4" /></IconBtn>
-                        <span className="num w-6 text-center font-bold">{qty(l.qty_milli)}</span>
-                        <IconBtn onClick={() => run(() => api.put(`/orders/${order.id}/lines/${l.id}`, { ...lineBody(l), qty_milli: l.qty_milli + 1000 }))}><Plus className="size-4" /></IconBtn>
-                      </>
-                    )}
-                    {l.sent_at && <span className="num px-2 font-bold">×{qty(l.qty_milli)}</span>}
-                    <span className="num w-20 text-left font-semibold">{money(l.net_minor)}</span>
-                    {l.sent_at && <IconBtn onClick={() => setDialog({ kind: 'voidLine', line: l })}><Trash2 className="size-4 text-red-600" /></IconBtn>}
-                  </div>
-                )}
+                <div className="num text-left font-bold">{money(l.net_minor)}</div>
               </div>
+              {!l.voided && (
+                <div className="mt-2 flex items-center justify-between">
+                  {!l.sent_at ? (
+                    <div className="flex items-center gap-1 rounded-xl bg-surface-2 p-1">
+                      <QtyBtn label="إنقاص" onClick={() => l.qty_milli > 1000 ? run(() => api.put(`/orders/${order.id}/lines/${l.id}`, { ...lineBody(l), qty_milli: l.qty_milli - 1000 })) : run(() => api.post(`/orders/${order.id}/lines/${l.id}/remove`, {}))}>
+                        {l.qty_milli > 1000 ? <Minus className="size-4" /> : <Trash2 className="size-4 text-danger" />}
+                      </QtyBtn>
+                      <span className="num w-8 text-center font-bold">{qty(l.qty_milli)}</span>
+                      <QtyBtn label="زيادة" onClick={() => run(() => api.put(`/orders/${order.id}/lines/${l.id}`, { ...lineBody(l), qty_milli: l.qty_milli + 1000 }))}><Plus className="size-4" /></QtyBtn>
+                    </div>
+                  ) : <span className="num text-sm font-bold text-muted">× {qty(l.qty_milli)}</span>}
+                  <span className="num text-xs text-muted">{money(l.unit_price_minor)} للوحدة</span>
+                  {l.sent_at && <Button variant="ghost" size="sm" icon={Trash2} className="text-danger" onClick={() => setDialog({ kind: 'voidLine', line: l })}>إلغاء</Button>}
+                </div>
+              )}
             </div>
           ))}
         </div>
 
-        {order && (
-          <div className="border-t border-stone-200 p-3 text-sm">
-            <Row label="الإجمالي" v={order.subtotal_minor} />
-            <Row label="الخصم" v={-(order.line_discounts_minor + order.order_discount_minor)} />
-            <Row label="الخدمة" v={order.service_minor} />
-            <Row label={settings.tax_inclusive ? 'الضريبة (شاملة)' : 'الضريبة'} v={order.tax_minor} />
-            <Row label="التوصيل" v={order.delivery_fee_minor} />
-            <div className="mt-2 flex items-center justify-between text-2xl font-black">
-              <span>المطلوب</span><span className="num">{moneyC(order.total_minor)}</span>
-            </div>
+        <div className="border-t border-line bg-surface-2/50 px-5 py-3 text-sm">
+          <Row label="المجموع الفرعي" v={order?.subtotal_minor || 0} always />
+          <Row label="الخصم" v={-((order?.line_discounts_minor || 0) + (order?.order_discount_minor || 0))} />
+          <Row label="الخدمة" v={order?.service_minor} />
+          <Row label={settings.tax_inclusive ? 'الضريبة (شاملة)' : 'الضريبة'} v={order?.tax_minor} />
+          <Row label="التوصيل" v={order?.delivery_fee_minor} />
+          <div className="mt-2 flex items-center justify-between rounded-xl bg-primary-soft px-4 py-3">
+            <span className="text-lg font-bold">الإجمالي</span>
+            <span className="num text-2xl font-black text-primary-ink">{moneyC(order?.total_minor || 0)}</span>
           </div>
-        )}
+        </div>
 
-        <div className="grid grid-cols-4 gap-2 border-t border-stone-200 p-3">
+        <div className="grid grid-cols-4 gap-2 border-t border-line px-5 py-3">
           <ActionBtn icon={Send} label={pending ? `إرسال (${pending})` : 'إرسال'} disabled={!order || !pending || busy} onClick={send} />
           <ActionBtn icon={PauseCircle} label="تعليق" disabled={!order || !live.length || busy} onClick={hold} />
           <ActionBtn icon={Percent} label="خصم" disabled={!order || !live.length} onClick={() => setDialog({ kind: 'discount' })} />
           <ActionBtn icon={Printer} label="فاتورة مبدئية" disabled={!order || !live.length} onClick={() => printReceipt(order, settings)} />
-          <ActionBtn icon={ChefHat} label="طباعة للمطبخ" disabled={!order || !live.some((l) => l.sent_at)} onClick={() => printKitchenTicket(order, live.filter((l) => l.sent_at))} />
-          <ActionBtn icon={Trash2} label="إلغاء الطلب" danger disabled={!order} onClick={() => setDialog({ kind: 'voidOrder' })} />
+        </div>
+        <div className="flex gap-2 px-5 pb-4">
+          <IconButton icon={ChefHat} label="طباعة للمطبخ" className="size-14 shrink-0 rounded-2xl" disabled={!order || !live.some((l) => l.sent_at)}
+            onClick={() => printKitchenTicket(order, live.filter((l) => l.sent_at))} />
           {can('pos.pay') ? (
-            <Button size="lg" className="col-span-2 h-auto" disabled={!order || !live.length || busy} onClick={startPay}>
-              دفع {order ? money(order.total_minor) : ''}
+            <Button size="xl" icon={CreditCard} className="flex-1" disabled={!order || !live.length || busy} onClick={startPay}>
+              الدفع <span className="num">{order ? money(order.total_minor) : ''}</span>
             </Button>
           ) : (
-            <Button size="lg" className="col-span-2 h-auto" disabled={!order || !pending || busy} onClick={send}>إرسال للمطبخ</Button>
+            <Button size="xl" icon={Send} className="flex-1" disabled={!order || !pending || busy} onClick={send}>إرسال للمطبخ</Button>
           )}
         </div>
       </aside>
@@ -326,14 +346,14 @@ export default function POS() {
           <div className="grid grid-cols-2 gap-2">
             {(openOrders.data || []).map((o) => (
               <button key={o.id} onClick={() => { setDialog(null); setParams({ order: o.id }); }}
-                className="rounded-xl border border-stone-200 p-3 text-right hover:border-brand-500">
+                className="rounded-xl border border-line p-3 text-right hover:border-primary">
                 <div className="flex justify-between font-bold"><span>#{o.number} {orderTypes[o.type]}</span><span className="num">{money(o.total_minor)}</span></div>
-                <div className="text-sm text-stone-500">{o.table_name || o.customer_name || '—'} · {o.user_name}</div>
+                <div className="text-sm text-muted">{o.table_name || o.customer_name || '—'} · {o.user_name}</div>
                 {o.status === 'held' && <Badge tone="amber">معلّق</Badge>}
                 {o.pending_lines > 0 && <Badge tone="red">{o.pending_lines} لم تُرسل</Badge>}
               </button>
             ))}
-            {!openOrders.data?.length && <div className="col-span-2 p-6 text-center text-stone-400">لا توجد طلبات مفتوحة</div>}
+            {!openOrders.data?.length && <div className="col-span-2 p-6 text-center text-muted/70">لا توجد طلبات مفتوحة</div>}
           </div>
         </Modal>
       )}
@@ -345,17 +365,43 @@ const lineBody = (l) => ({
   qty_milli: l.qty_milli, notes: l.notes, discount_kind: l.discount_kind, discount_rate_bp: l.discount_rate_bp, discount_amount_minor: l.discount_amount_minor,
 });
 
-function Row({ label, v }) {
-  if (!v) return null;
-  return <div className="flex justify-between py-0.5 text-stone-600"><span>{label}</span><span className="num">{money(v)}</span></div>;
+function Row({ label, v, always }) {
+  if (!v && !always) return null;
+  return <div className="flex justify-between py-0.5 text-muted"><span>{label}</span><span className="num font-semibold text-fg">{money(v)}</span></div>;
 }
 
-const CatButton = ({ active, children, ...p }) => (
-  <button {...p} className={cx('shrink-0 rounded-full px-4 py-2 text-sm font-semibold', active ? 'bg-brand-600 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200')}>{children}</button>
-);
-const IconBtn = (p) => <button {...p} className="rounded-md p-1.5 hover:bg-stone-100" />;
-const ActionBtn = ({ icon: Icon, label, danger, ...p }) => (
-  <button {...p} className={cx('flex flex-col items-center gap-1 rounded-xl border border-stone-200 py-2 text-xs font-semibold hover:bg-stone-50 disabled:opacity-40', danger && 'text-red-600')}>
-    <Icon className="size-5" />{label}
+const CatPill = ({ active, count, children, ...p }) => (
+  <button {...p} role="tab" aria-selected={active}
+    className={cx('flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition',
+      active ? 'bg-brand border-transparent text-white shadow-md shadow-primary/25' : 'border-line bg-surface text-fg hover:border-primary/40')}>
+    {children}
+    <span className={cx('num rounded-full px-2 text-xs', active ? 'bg-white/25' : 'bg-surface-2 text-muted')}>{count}</span>
   </button>
 );
+const QtyBtn = ({ label, ...p }) => <button {...p} aria-label={label} className="flex size-8 items-center justify-center rounded-lg bg-surface text-fg shadow-sm hover:text-primary" />;
+const ActionBtn = ({ icon: Icon, label, ...p }) => (
+  <button {...p} className="flex flex-col items-center gap-1 rounded-xl border border-line bg-surface py-2.5 text-xs font-semibold text-fg transition hover:border-primary/40 hover:bg-primary-soft hover:text-primary-ink disabled:pointer-events-none disabled:opacity-40">
+    <Icon className="size-5" aria-hidden />{label}
+  </button>
+);
+
+// Shift status with a running timer since it opened.
+function ShiftPill({ shift, canCash, onOpen, onGo }) {
+  const [, tick] = useState(0);
+  useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 1000); return () => clearInterval(t); }, []);
+  if (!canCash) return null;
+  if (!shift) {
+    return <button onClick={onOpen} className="flex items-center gap-2 rounded-xl border border-warning/30 bg-warning-soft px-3 py-2 text-sm font-bold text-warning"><Lock className="size-4" aria-hidden />فتح وردية</button>;
+  }
+  const secs = Math.max(0, Math.floor((Date.now() - new Date(shift.opened_at).getTime()) / 1000));
+  const hh = String(Math.floor(secs / 3600)).padStart(2, '0');
+  const mm = String(Math.floor((secs % 3600) / 60)).padStart(2, '0');
+  const ss = String(secs % 60).padStart(2, '0');
+  return (
+    <button onClick={onGo} title="تفاصيل الوردية" className="flex items-center gap-3 rounded-xl border border-success/30 bg-success-soft px-3 py-2 text-sm font-bold text-success">
+      <span className="flex items-center gap-1.5"><span className="size-2 animate-pulse rounded-full bg-success" /><Timer className="size-4" aria-hidden /><span className="num">{hh}:{mm}:{ss}</span></span>
+      <span className="h-4 w-px bg-success/30" />
+      <span className="flex items-center gap-1.5"><Wallet className="size-4" aria-hidden />درج <span className="num">{money(shift.opening_float_minor)}</span></span>
+    </button>
+  );
+}

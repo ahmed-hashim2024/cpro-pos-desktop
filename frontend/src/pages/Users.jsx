@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, UserCog } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp, toast } from '@/lib/store';
 import { roles, dateTime } from '@/lib/format';
@@ -26,13 +26,13 @@ export default function Users() {
     list.reload(true);
   });
   return (
-    <div className="p-5">
-      <PageHeader title="المستخدمون">
+    <div>
+      <PageHeader title="المستخدمون" icon={UserCog} subtitle="الحسابات والأدوار والأرقام السرية" crumb="الإدارة">
         <Button onClick={() => setEdit({ full_name: '', username: '', role: 'cashier', password: '', pin: '', active: true })}><Plus className="size-4" />مستخدم</Button>
       </PageHeader>
       <Table head={['الاسم', 'اسم المستخدم', 'الدور', 'رقم سري', 'الحالة', 'أُنشئ']}>
         {(list.data || []).map((u) => (
-          <tr key={u.id} className="cursor-pointer hover:bg-stone-50" onClick={() => setEdit({ ...u, password: '', pin: '' })}>
+          <tr key={u.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setEdit({ ...u, password: '', pin: '' })}>
             <Td className="font-semibold">{u.full_name}</Td><Td className="num">{u.username}</Td><Td>{roles[u.role]}</Td>
             <Td>{u.has_pin ? '✓' : '—'}</Td>
             <Td>{u.active ? <Badge tone="green">نشط</Badge> : <Badge tone="red">معطّل</Badge>}</Td>
@@ -58,7 +58,7 @@ export default function Users() {
             </Field>
             <Checkbox label="نشط" checked={edit.active} onChange={(v) => setEdit({ ...edit, active: v })} />
           </div>
-          {edit.id && <p className="mt-3 text-sm text-stone-500">تعطيل المستخدم أو تغيير كلمة المرور يُخرجه من كل الأجهزة فوراً.</p>}
+          {edit.id && <p className="mt-3 text-sm text-muted">تعطيل المستخدم أو تغيير كلمة المرور يُخرجه من كل الأجهزة فوراً.</p>}
         </Modal>
       )}
     </div>

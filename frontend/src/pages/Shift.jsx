@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowDownCircle, ArrowUpCircle, Lock, Printer } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, Lock, Printer, Wallet, TrendingUp, Undo2, Percent } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp, toast } from '@/lib/store';
 import { money, toMinor, dateTime, daysAgo, today } from '@/lib/format';
@@ -16,8 +16,8 @@ export default function Shift() {
   const [view, setView] = useState(null);
 
   return (
-    <div className="p-5">
-      <PageHeader title="الوردية">
+    <div>
+      <PageHeader title="الوردية" icon={Wallet} subtitle="الدرج والنقدية وتقارير X و Z" crumb="المبيعات">
         {shift ? (
           <>
             <Button variant="secondary" onClick={() => setDialog('in')}><ArrowDownCircle className="size-4" />إيداع نقدي</Button>
@@ -29,7 +29,7 @@ export default function Shift() {
       </PageHeader>
 
       {shift && (report.data ? <ShiftSummary r={report.data} /> : <Spinner />)}
-      {!shift && <div className="mb-6 rounded-xl bg-white p-8 text-center text-stone-500">لا توجد وردية مفتوحة لك على هذا الجهاز</div>}
+      {!shift && <div className="mb-6 rounded-xl bg-surface p-8 text-center text-muted">لا توجد وردية مفتوحة لك على هذا الجهاز</div>}
 
       <Card title="سجل الورديات" className="mt-6" actions={<DateRange from={range.from} to={range.to} onChange={(from, to) => setRange({ from, to })} />}>
         <Table head={['المستخدم', 'الجهاز', 'فُتحت', 'أُغلقت', 'الافتتاح', 'المتوقع', 'المعدود', 'الفرق', '']}>
@@ -42,7 +42,7 @@ export default function Shift() {
                 <Td className="num">{money(s.opening_float_minor)}</Td>
                 <Td className="num">{s.expected_cash_minor != null ? money(s.expected_cash_minor) : '—'}</Td>
                 <Td className="num">{s.counted_cash_minor != null ? money(s.counted_cash_minor) : '—'}</Td>
-                <Td className={`num font-bold ${diff < 0 ? 'text-red-600' : diff > 0 ? 'text-amber-600' : ''}`}>{diff != null ? money(diff) : '—'}</Td>
+                <Td className={`num font-bold ${diff < 0 ? 'text-danger' : diff > 0 ? 'text-warning' : ''}`}>{diff != null ? money(diff) : '—'}</Td>
                 <Td><Button size="sm" variant="ghost" onClick={() => setView(s.id)}>التفاصيل</Button></Td>
               </tr>
             );
@@ -67,15 +67,15 @@ function ShiftSummary({ r }) {
   return (
     <div className="grid gap-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="المبيعات" value={money(r.sales_minor)} sub={`${r.orders} طلب`} tone="good" />
-        <Stat label="النقدية المتوقعة في الدرج" value={money(r.expected_cash_minor)} tone="gold" />
-        <Stat label="المرتجعات" value={money(r.refunds_minor)} tone={r.refunds_minor ? 'bad' : 'default'} />
-        <Stat label="الخصومات" value={money(r.discounts_minor)} sub={`${r.voided_orders} طلب ملغي`} />
+        <Stat label="المبيعات" icon={TrendingUp} value={money(r.sales_minor)} sub={`${r.orders} طلب`} tone="success" />
+        <Stat label="النقدية المتوقعة في الدرج" icon={Wallet} value={money(r.expected_cash_minor)} tone="warning" />
+        <Stat label="المرتجعات" icon={Undo2} value={money(r.refunds_minor)} tone={r.refunds_minor ? 'bad' : 'default'} />
+        <Stat label="الخصومات" icon={Percent} value={money(r.discounts_minor)} sub={`${r.voided_orders} طلب ملغي`} />
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <Card title="حسب طريقة الدفع">
           {r.by_method.map((m) => <div key={m.method} className="flex justify-between py-1"><span>{name[m.method] || m.name} ({m.count})</span><span className="num font-semibold">{money(m.amount_minor)}</span></div>)}
-          {!r.by_method.length && <div className="text-stone-400">لا توجد مدفوعات</div>}
+          {!r.by_method.length && <div className="text-muted/70">لا توجد مدفوعات</div>}
         </Card>
         <Card title="الدرج">
           <Row k="رصيد الافتتاح" v={r.shift.opening_float_minor} />
@@ -84,7 +84,7 @@ function ShiftSummary({ r }) {
           <Row k="مصروفات" v={-r.cash_out_minor} />
           <div className="mt-1 flex justify-between border-t pt-1 font-bold"><span>المتوقع</span><span className="num">{money(r.expected_cash_minor)}</span></div>
           {r.cash_movements.map((m) => (
-            <div key={m.id} className="flex justify-between text-sm text-stone-500"><span>{m.kind === 'in' ? 'إيداع' : 'صرف'}: {m.reason}</span><span className="num">{money(m.amount_minor)}</span></div>
+            <div key={m.id} className="flex justify-between text-sm text-muted"><span>{m.kind === 'in' ? 'إيداع' : 'صرف'}: {m.reason}</span><span className="num">{money(m.amount_minor)}</span></div>
           ))}
         </Card>
       </div>
@@ -130,7 +130,7 @@ function CloseDialog({ report, onClose, onDone }) {
       <div className="grid gap-3">
         <Field label="عُدّ النقدية في الدرج وأدخل المبلغ"><Input autoFocus className="num text-xl" value={counted} onChange={(e) => setCounted(e.target.value)} /></Field>
         {diff != null && (
-          <div className={`rounded-lg p-3 font-bold ${diff === 0 ? 'bg-brand-50 text-brand-700' : diff < 0 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-800'}`}>
+          <div className={`rounded-lg p-3 font-bold ${diff === 0 ? 'bg-primary-soft text-primary' : diff < 0 ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'}`}>
             {diff === 0 ? 'الدرج مطابق' : diff < 0 ? `عجز ${money(-diff)}` : `زيادة ${money(diff)}`}
           </div>
         )}

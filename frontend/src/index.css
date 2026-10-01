@@ -1,32 +1,121 @@
 @import "tailwindcss";
+@import "@fontsource/ibm-plex-sans-arabic/400.css";
+@import "@fontsource/ibm-plex-sans-arabic/500.css";
+@import "@fontsource/ibm-plex-sans-arabic/600.css";
+@import "@fontsource/ibm-plex-sans-arabic/700.css";
 
-@theme {
-  --color-brand-50: #eef6f2;
-  --color-brand-100: #d6eadf;
-  --color-brand-500: #2a7a5a;
-  --color-brand-600: #1f6449;
-  --color-brand-700: #18503a;
-  --color-brand-900: #10322a;
-  --color-gold: #b4863b;
-  --color-paper: #fbf8f2;
-  --color-ink: #1f2420;
-  --font-sans: "Cairo", "Segoe UI", Tahoma, "Noto Sans Arabic", system-ui, sans-serif;
+/* Dark mode follows a class on <html> so the user can choose. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * CPro design tokens. Components use only these semantic names, never raw
+ * palette colours, so light and dark stay consistent everywhere.
+ *   bg        page background            surface   cards, sidebar, header
+ *   surface-2 inputs, hovers, wells      line      borders and dividers
+ *   fg        primary text               muted     secondary text (≥4.5:1)
+ *   primary   brand indigo (+ -2 violet for the gradient, -soft tint, -ink text on tint)
+ *   success / warning / danger / info    each with a -soft tint
+ */
+:root {
+  --bg: #f5f6fb;
+  --surface: #ffffff;
+  --surface-2: #f1f3f9;
+  --line: #e3e6f0;
+  --fg: #111827;
+  --muted: #5b6478;
+  --primary: #4f46e5;
+  --primary-2: #7c3aed;
+  --primary-soft: #eef0ff;
+  --primary-ink: #4338ca;
+  --success: #059669;
+  --success-soft: #e6f6ef;
+  --warning: #c2680a;
+  --warning-soft: #fdf2e1;
+  --danger: #dc2626;
+  --danger-soft: #fdecec;
+  --info: #0369a1;
+  --info-soft: #e5f3fb;
+  --shadow: 0 1px 2px rgb(17 24 39 / 0.04), 0 4px 16px -4px rgb(17 24 39 / 0.06);
+  --shadow-lg: 0 12px 40px -8px rgb(30 27 75 / 0.18);
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #0b1020;
+  --surface: #121830;
+  --surface-2: #1a2140;
+  --line: #273055;
+  --fg: #e8ebf7;
+  --muted: #a1a9c3;
+  --primary: #6366f1;
+  --primary-2: #8b5cf6;
+  --primary-soft: #222755;
+  --primary-ink: #b4bcff;
+  --success: #34d399;
+  --success-soft: #0f2c24;
+  --warning: #fbbf24;
+  --warning-soft: #33280f;
+  --danger: #f87171;
+  --danger-soft: #3a1717;
+  --info: #38bdf8;
+  --info-soft: #0d2a3a;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px -4px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 12px 40px -8px rgb(0 0 0 / 0.6);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-2: var(--primary-2);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-ink: var(--primary-ink);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --shadow-card: var(--shadow);
+  --shadow-pop: var(--shadow-lg);
+  --font-sans: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, system-ui, sans-serif;
+  --radius-card: 1rem;
 }
 
 html, body, #root { height: 100%; }
 body {
   margin: 0;
-  background: var(--color-paper);
-  color: var(--color-ink);
+  background: var(--bg);
+  color: var(--fg);
   font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
 input, textarea, select { user-select: text; }
+button, [role="button"], a { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* Numbers: tabular, always left-to-right inside RTL text. */
 .num { font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
 
+/* The brand gradient used for primary actions and highlights. */
+.bg-brand { background-image: linear-gradient(135deg, var(--primary), var(--primary-2)); }
+.text-brand { background-image: linear-gradient(135deg, var(--primary), var(--primary-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: #cfd6d1; border-radius: 8px; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
-@media print { body { background: white; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+}

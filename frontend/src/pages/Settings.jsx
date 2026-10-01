@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Download, HardDriveDownload } from 'lucide-react';
+import { Plus, Trash2, Download, HardDriveDownload, Settings as SettingsIcon } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp, toast } from '@/lib/store';
 import { toMinor, minorInput, toBP, dateTime } from '@/lib/format';
@@ -8,8 +8,8 @@ import { Badge, Button, Card, Checkbox, Field, Input, PageHeader, Select, Spinne
 export default function Settings() {
   const [tab, setTab] = useState('general');
   return (
-    <div className="p-5">
-      <PageHeader title="الإعدادات" />
+    <div>
+      <PageHeader title="الإعدادات" icon={SettingsIcon} subtitle="بيانات المطعم والضرائب والطباعة والأجهزة" crumb="الإدارة" />
       <Tabs value={tab} onChange={setTab} tabs={[['general', 'عام'], ['payments', 'طرق الدفع'], ['devices', 'الأجهزة والشبكة'], ['backups', 'النسخ الاحتياطي'], ['account', 'حسابي']]} />
       {tab === 'general' && <General />}
       {tab === 'payments' && <Payments />}
@@ -71,7 +71,7 @@ function General() {
           <Checkbox label="الأسعار شاملة الضريبة" checked={s.tax_inclusive} onChange={(v) => set({ tax_inclusive: v })} />
           <Checkbox label="الضريبة تُحسب على الخدمة" checked={s.service_taxable} onChange={(v) => set({ service_taxable: v })} />
           <div className="col-span-2 flex gap-4">
-            <span className="text-sm text-stone-600">الخدمة على:</span>
+            <span className="text-sm text-muted">الخدمة على:</span>
             <Checkbox label="صالة" checked={s.service_order_types.includes('dine_in')} onChange={(v) => toggleService('dine_in', v)} />
             <Checkbox label="تيك أواي" checked={s.service_order_types.includes('takeaway')} onChange={(v) => toggleService('takeaway', v)} />
             <Checkbox label="توصيل" checked={s.service_order_types.includes('delivery')} onChange={(v) => toggleService('delivery', v)} />
@@ -108,7 +108,7 @@ function Payments() {
             <Input className="flex-1" placeholder="الاسم" value={m.name} onChange={(e) => update(i, { name: e.target.value })} />
             <Checkbox label="نقدي" checked={m.is_cash} onChange={(v) => update(i, { is_cash: v })} />
             <Checkbox label="مفعّل" checked={m.active} onChange={(v) => update(i, { active: v })} />
-            {m.isNew && <button onClick={() => setMethods(list.filter((_, j) => j !== i))}><Trash2 className="size-4 text-red-600" /></button>}
+            {m.isNew && <button onClick={() => setMethods(list.filter((_, j) => j !== i))}><Trash2 className="size-4 text-danger" /></button>}
           </div>
         ))}
       </div>
@@ -116,7 +116,7 @@ function Payments() {
         <Button variant="secondary" onClick={() => setMethods([...list, { code: '', name: '', is_cash: false, active: true, isNew: true }])}><Plus className="size-4" />طريقة دفع</Button>
         <Button busy={busy} onClick={() => save({ ...data.data, payment_methods: list.map(({ isNew, ...m }) => m) })}>حفظ</Button>
       </div>
-      <p className="mt-3 text-sm text-stone-500">لا يمكن حذف طريقة دفع استُخدمت من قبل، يمكنك إيقافها فقط.</p>
+      <p className="mt-3 text-sm text-muted">لا يمكن حذف طريقة دفع استُخدمت من قبل، يمكنك إيقافها فقط.</p>
     </Card>
   );
 }
@@ -134,7 +134,7 @@ function Devices() {
         <div className="grid gap-3">
           <Checkbox label="السماح للأجهزة على نفس الشبكة بالاتصال" checked={s.lan_enabled} onChange={(v) => save({ ...s, lan_enabled: v })} />
           <Field label="المنفذ" className="w-40"><Input type="number" defaultValue={s.lan_port} onBlur={(e) => Number(e.target.value) !== s.lan_port && save({ ...s, lan_port: Number(e.target.value) })} /></Field>
-          <p className="text-sm text-stone-600">
+          <p className="text-sm text-muted">
             بعد التفعيل أعد تشغيل البرنامج، ثم افتح من التابلت أو شاشة المطبخ المتصفح على العنوان:
             <b className="num mx-1">http://[عنوان-هذا-الجهاز]:{s.lan_port}</b>
             وسجّل الدخول. كل جهاز يظهر في القائمة بالأسفل ويمكنك إيقافه في أي وقت.
@@ -172,7 +172,7 @@ function Backups() {
           <Field label="الاحتفاظ بآخر" hint="نسخة"><Input type="number" className="w-28" defaultValue={s.backup_keep} id="bk" /></Field>
           <Button busy={busy} onClick={() => save({ ...s, auto_backup_hours: Number(document.getElementById('bh').value), backup_keep: Number(document.getElementById('bk').value) })}>حفظ</Button>
         </div>
-        <p className="mt-2 text-sm text-stone-500">تُؤخذ نسخة أيضاً عند إغلاق البرنامج. احتفظ بنسخة خارج الجهاز (فلاشة أو سحابة) بشكل دوري.</p>
+        <p className="mt-2 text-sm text-muted">تُؤخذ نسخة أيضاً عند إغلاق البرنامج. احتفظ بنسخة خارج الجهاز (فلاشة أو سحابة) بشكل دوري.</p>
       </Card>
       <Card title="النسخ المحفوظة" actions={<Button busy={creating} onClick={() => run(async () => { await api.post('/backups'); toast('تم إنشاء نسخة'); list.reload(true); })}><HardDriveDownload className="size-4" />نسخة الآن</Button>}>
         <Table head={['الملف', 'الحجم', 'التاريخ', '']}>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Printer, Download } from 'lucide-react';
+import { Printer, Download, BarChart3, TrendingUp, Coins, Wheat, Receipt, Percent, Undo2, Landmark, Ban, Truck, FlaskConical, Trash2, ClipboardCheck } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useTab } from '@/lib/useTab';
 import { money, pct, qty, milliInput, orderTypes, dateTime, today, daysAgo, monthStart, units } from '@/lib/format';
 import { exportCSV } from '@/lib/csv';
 import { printReport } from '@/lib/print';
@@ -17,10 +18,10 @@ const presets = [
 
 export default function Reports() {
   const [range, setRange] = useState({ from: today(), to: today() });
-  const [tab, setTab] = useState('sales');
+  const [tab, setTab] = useTab('sales');
   return (
-    <div className="p-5">
-      <PageHeader title="التقارير">
+    <div>
+      <PageHeader title="التقارير" icon={BarChart3} subtitle="المبيعات والربحية واستهلاك الخامات" crumb="التقارير">
         {presets.map(([label, fn]) => (
           <Button key={label} size="sm" variant="secondary" onClick={() => { const [from, to] = fn(); setRange({ from, to }); }}>{label}</Button>
         ))}
@@ -58,14 +59,14 @@ function Sales({ range, tab }) {
           ])}><Printer className="size-4" />طباعة</Button>
         </div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Stat label="صافي المبيعات" value={money(s.net_sales_minor)} sub={`${s.orders} طلب · ${s.guests} ضيف`} tone="good" />
-          <Stat label="مجمل الربح" value={money(s.gross_profit_minor)} sub={`هامش ${pct(s.margin_bp)}`} tone="gold" />
-          <Stat label="تكلفة البضاعة المباعة" value={money(s.cost_minor)} sub="من الوصفات" />
-          <Stat label="متوسط الفاتورة" value={money(s.avg_ticket_minor)} />
-          <Stat label="الخصومات" value={money(s.discounts_minor)} tone={s.discounts_minor ? 'bad' : 'default'} />
-          <Stat label="المرتجعات" value={money(s.refunds_minor)} tone={s.refunds_minor ? 'bad' : 'default'} />
-          <Stat label="الضريبة / الخدمة" value={money(s.tax_minor)} sub={`خدمة ${money(s.service_minor)}`} />
-          <Stat label="الإلغاءات والهالك" value={money(s.void_value_minor + s.waste_cost_minor)} sub={`${s.void_orders} طلب · ${s.void_lines} صنف`} tone="bad" />
+          <Stat label="صافي المبيعات" icon={TrendingUp} value={money(s.net_sales_minor)} sub={`${s.orders} طلب · ${s.guests} ضيف`} tone="success" />
+          <Stat label="مجمل الربح" icon={Coins} value={money(s.gross_profit_minor)} sub={`هامش ${pct(s.margin_bp)}`} tone="warning" />
+          <Stat label="تكلفة البضاعة المباعة" icon={Wheat} value={money(s.cost_minor)} sub="من الوصفات" />
+          <Stat label="متوسط الفاتورة" icon={Receipt} value={money(s.avg_ticket_minor)} />
+          <Stat label="الخصومات" icon={Percent} value={money(s.discounts_minor)} tone={s.discounts_minor ? 'bad' : 'default'} />
+          <Stat label="المرتجعات" icon={Undo2} value={money(s.refunds_minor)} tone={s.refunds_minor ? 'bad' : 'default'} />
+          <Stat label="الضريبة / الخدمة" icon={Landmark} value={money(s.tax_minor)} sub={`خدمة ${money(s.service_minor)}`} />
+          <Stat label="الإلغاءات والهالك" icon={Ban} value={money(s.void_value_minor + s.waste_cost_minor)} sub={`${s.void_orders} طلب · ${s.void_lines} صنف`} tone="danger" />
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <Card title="المبيعات حسب اليوم"><Bars data={d.by_day.map((b) => ({ label: b.key.slice(5), value: b.amount_minor }))} /></Card>
@@ -87,7 +88,7 @@ function Sales({ range, tab }) {
               <Td className="font-semibold">{i.name}</Td><Td>{i.category}</Td><Td className="num">{qty(i.qty_milli)}</Td>
               <Td className="num">{money(i.net_minor)}</Td><Td className="num">{money(i.cost_minor)}</Td>
               <Td className="num font-semibold">{money(i.profit_minor)}</Td>
-              <Td className={`num ${i.cost_minor === 0 ? 'text-amber-600' : i.margin_bp < 5000 ? 'text-red-600' : 'text-brand-700'}`}>{i.cost_minor === 0 ? 'بدون وصفة' : pct(i.margin_bp)}</Td>
+              <Td className={`num ${i.cost_minor === 0 ? 'text-warning' : i.margin_bp < 5000 ? 'text-danger' : 'text-primary'}`}>{i.cost_minor === 0 ? 'بدون وصفة' : pct(i.margin_bp)}</Td>
             </tr>
           ))}
         </Table>
@@ -153,13 +154,13 @@ function Consumption({ range }) {
   return (
     <div className="grid gap-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="قيمة المشتريات" value={money(total.purchase_value_minor)} />
-        <Stat label="قيمة استهلاك المبيعات (نظري)" value={money(total.sales_use_value_minor)} tone="gold" />
-        <Stat label="قيمة الهالك" value={money(total.waste_value_minor)} tone="bad" />
-        <Stat label="فروق الجرد والتسويات" value={money(total.variance_value_minor)} tone={total.variance_value_minor < 0 ? 'bad' : 'good'}
+        <Stat label="قيمة المشتريات" icon={Truck} value={money(total.purchase_value_minor)} />
+        <Stat label="قيمة استهلاك المبيعات (نظري)" icon={FlaskConical} value={money(total.sales_use_value_minor)} tone="warning" />
+        <Stat label="قيمة الهالك" icon={Trash2} value={money(total.waste_value_minor)} tone="danger" />
+        <Stat label="فروق الجرد والتسويات" icon={ClipboardCheck} value={money(total.variance_value_minor)} tone={total.variance_value_minor < 0 ? 'bad' : 'good'}
           sub="السالب = عجز في المخزون" />
       </div>
-      <p className="text-sm text-stone-600">
+      <p className="text-sm text-muted">
         <b>الاستهلاك الفعلي</b> = أول المدة + الوارد − آخر المدة. الفرق بينه وبين استهلاك المبيعات والهالك يظهر في عمود فرق الجرد،
         وهو ما يكشف الهدر غير المسجل أو أخطاء الوصفات.
       </p>
@@ -171,7 +172,7 @@ function Consumption({ range }) {
             {[c.opening_milli, c.purchased_milli, c.sales_use_milli, c.waste_milli, c.returned_milli, c.adjustments_milli].map((v, i) => (
               <Td key={i} className="num">{qty(v, c.unit)}</Td>
             ))}
-            <Td className={`num font-bold ${c.count_variance_milli < 0 ? 'text-red-600' : c.count_variance_milli > 0 ? 'text-amber-600' : ''}`}>{qty(c.count_variance_milli, c.unit)}</Td>
+            <Td className={`num font-bold ${c.count_variance_milli < 0 ? 'text-danger' : c.count_variance_milli > 0 ? 'text-warning' : ''}`}>{qty(c.count_variance_milli, c.unit)}</Td>
             <Td className="num">{qty(c.closing_milli, c.unit)}</Td>
             <Td className="num font-semibold">{qty(c.actual_use_milli, c.unit)}</Td>
             <Td className="num">{money(c.sales_use_value_minor)}</Td>

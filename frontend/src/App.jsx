@@ -2,7 +2,8 @@ import { useEffect, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useApp } from '@/lib/store';
 import { setUnauthorizedHandler } from '@/lib/api';
-import Layout, { nav, allowed } from '@/components/Layout';
+import '@/lib/theme';
+import Layout, { navLeaves, allowed } from '@/components/Layout';
 import { Toasts, Spinner } from '@/components/ui';
 import { ApprovalModal } from '@/components/Approval';
 import Login from '@/pages/Login';
@@ -22,11 +23,21 @@ const pages = {
   '/audit': lazy(() => import('@/pages/Audit')),
   '/settings': lazy(() => import('@/pages/Settings')),
 };
+// Work screens run full-screen, without the sidebar.
+const fullScreen = new Set(['/pos', '/kitchen']);
+
+// A path is reachable if any nav entry pointing at it is allowed.
+function permittedPaths(can) {
+  const ok = new Set();
+  navLeaves.forEach((n) => { if (allowed(can, n.perm)) ok.add(n.to.split('?')[0]); });
+  return [...ok];
+}
 
 function Home() {
   const can = useApp((s) => s.can);
-  const first = nav.find((n) => allowed(can, n.perm));
-  return <Navigate to={first?.to || '/login'} replace />;
+  const paths = permittedPaths(can);
+  const first = ['/dashboard', '/pos', '/kitchen'].find((p) => paths.includes(p)) || paths[0];
+  return <Navigate to={first || '/login'} replace />;
 }
 
 export default function App() {
@@ -37,19 +48,22 @@ export default function App() {
   }, [boot, expired]);
 
   if (!ready) return <Spinner />;
+  const paths = me ? permittedPaths(can) : [];
+  const route = (p) => { const Page = pages[p]; return <Route key={p} path={`${p}/*`} element={<Page />} />; };
   return (
     <HashRouter>
       <Suspense fallback={<Spinner />}>
         <Routes>
           <Route path="/login" element={me ? <Navigate to="/" replace /> : <Login />} />
-          <Route element={me ? <Layout /> : <Navigate to="/login" replace />}>
-            <Route index element={<Home />} />
-            {nav.filter((n) => allowed(can, n.perm)).map((n) => {
-              const Page = pages[n.to];
-              return <Route key={n.to} path={`${n.to}/*`} element={<Page />} />;
-            })}
-            <Route path="*" element={<Home />} />
-          </Route>
+          {!me && <Route path="*" element={<Navigate to="/login" replace />} />}
+          {me && paths.filter((p) => fullScreen.has(p)).map(route)}
+          {me && (
+            <Route element={<Layout />}>
+              <Route index element={<Home />} />
+              {paths.filter((p) => !fullScreen.has(p)).map(route)}
+              <Route path="*" element={<Home />} />
+            </Route>
+          )}
         </Routes>
       </Suspense>
       <ApprovalModal />
