@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   ShoppingCart, LayoutGrid, ChefHat, Receipt, Wallet, BarChart3, LayoutDashboard, UtensilsCrossed,
-  Boxes, Users, UserCog, ScrollText, Settings, LogOut, ChevronDown, Moon, Sun, Clock, Search,
+  Boxes, Users, UserCog, ScrollText, Settings, LogOut, ChevronDown, Moon, Sun, Search,
   Wheat, Truck, Trash2, ClipboardCheck, ArrowUpDown, Layers, ListPlus, Armchair, Flame, PanelRightClose, PanelRightOpen,
   TrendingUp, PieChart, FlaskConical, Ban, Store, FileSpreadsheet, Languages,
 } from 'lucide-react';
@@ -10,7 +10,7 @@ import { useApp } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 import { roles } from '@/lib/format';
 import { cx } from './ui';
-import { T, locale, lang, languages, setLang } from '@/lib/i18n';
+import { T, lang, languages, setLang } from '@/lib/i18n';
 
 // One navigation tree drives the sidebar, the header search and the routes.
 export const navTree = [
@@ -174,10 +174,8 @@ function NavItem({ item, collapsed, active, sub }) {
 
 function Header({ collapsed, onToggle }) {
   const { me, shift, can } = useApp();
-  const { dark, toggle, step, scale } = useTheme();
+  const { dark, toggle } = useTheme();
   const navigate = useNavigate();
-  const [now, setNow] = useState(new Date());
-  useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t); }, []);
   const initials = (me?.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('');
 
   return (
@@ -194,15 +192,6 @@ function Header({ collapsed, onToggle }) {
             {shift ? T('الوردية مفتوحة') : T('لا توجد وردية')}
           </button>
         )}
-        <span className="hidden items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-sm text-muted lg:flex">
-          <Clock className="size-4" aria-hidden />{now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
-        </span>
-        <div className="flex items-center rounded-xl border border-line" role="group" aria-label={T('حجم الخط')}>
-          <button onClick={() => step(-1)} disabled={scale === 'xs'} aria-label={T('تصغير الخط')} className="px-2.5 py-1.5 text-sm font-bold text-muted hover:text-fg disabled:opacity-30">A−</button>
-          <span className="h-5 w-px bg-line" />
-          <button onClick={() => step(1)} disabled={scale === 'xl'} aria-label={T('تكبير الخط')} className="px-2.5 py-1.5 text-sm font-bold text-muted hover:text-fg disabled:opacity-30">A+</button>
-        </div>
-        <LangMenu />
         <button onClick={toggle} aria-label={dark ? T('الوضع الفاتح') : T('الوضع الداكن')} className="rounded-xl p-2.5 text-muted hover:bg-surface-2 hover:text-fg">
           {dark ? <Sun className="size-5" /> : <Moon className="size-5" />}
         </button>
