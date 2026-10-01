@@ -83,7 +83,7 @@ export default function Platform() {
             {platform.last_error && <p className="rounded-xl bg-warning-soft p-2 text-xs text-warning" dir="auto">{T('آخر خطأ')}: {platform.last_error}</p>}
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" icon={RefreshCw} busy={busy === 'sync'} onClick={sync}>{T('مزامنة الآن')}</Button>
-              {platform.url && <Button variant="ghost" icon={ExternalLink} onClick={() => openExternal(`${platform.url}/app/my-restaurant`)}>{T('حسابي على المنصة')}</Button>}
+              {platform.url && <Button variant="ghost" icon={ExternalLink} onClick={() => openExternal(`${platform.url}/portal`)}>{T('حسابي على المنصة')}</Button>}
               <Button variant="danger-soft" icon={Unlink} busy={busy === 'unlink'} onClick={unlink} className="ms-auto">{T('فك الربط')}</Button>
             </div>
           </div>
@@ -108,7 +108,7 @@ function EMenuCard({ platform }) {
       ) : !url ? (
         <div className="grid gap-2 text-sm text-muted">
           <p>{T('اختر دومين مطعمك من حسابك على المنصة (حسابي ← الدومين). سيتصل البرنامج به تلقائياً خلال دقيقة.')}</p>
-          {platform.url && <div><Button variant="secondary" icon={ExternalLink} onClick={() => openExternal(`${platform.url}/app/tenant`)}>{T('اختيار الدومين')}</Button></div>}
+          {platform.url && <div><Button variant="secondary" icon={ExternalLink} onClick={() => openExternal(`${platform.url}/portal/site`)}>{T('اختيار الدومين')}</Button></div>}
         </div>
       ) : (
         <div className="grid gap-3">
