@@ -965,5 +965,21 @@
  "الطلب ده اتعامل معاه بالفعل": "This order was already handled",
  "اكتب سبب الرفض": "Enter a reason for rejecting",
  "المنيو غير متاح حالياً": "The menu is not available right now",
- "طلبات كثيرة، حاول بعد قليل": "Too many requests, try again shortly"
+ "طلبات كثيرة، حاول بعد قليل": "Too many requests, try again shortly",
+ "تم ربط البرنامج بحسابك": "The app is linked to your account",
+ "سجّل الدخول في المتصفح ثم اضغط «ربط الجهاز». تأكد إن الكود ده هو نفس الكود الظاهر هناك:": "Sign in in the browser, then press “Link device”. Make sure this code matches the one shown there:",
+ "في انتظار الموافقة من المتصفح…": "Waiting for approval in the browser…",
+ "فتح المتصفح مرة أخرى": "Open the browser again",
+ "كود جديد": "New code",
+ "تم رفض الربط من المتصفح": "Linking was declined in the browser",
+ "انتهت صلاحية الكود، ابدأ من جديد": "The code expired, start again",
+ "تسجيل الدخول من المتصفح": "Sign in with the browser",
+ "هيفتح المتصفح لتسجيل حساب جديد أو الدخول بحسابك (جوجل أو الإيميل)": "Opens the browser to sign up or sign in (Google or email)",
+ "عندي كود تفعيل": "I have an activation code",
+ "اربط البرنامج بحسابك للبدء": "Link the app to your account to start",
+ "ربط البرنامج بحسابك": "Link the app to your account",
+ "سجّل حساب جديد أو ادخل بحسابك في المتصفح، والبرنامج هيتفعّل لوحده.": "Sign up or sign in in the browser and the app activates itself.",
+ "تخطي الآن والتفعيل لاحقاً": "Skip for now and activate later",
+ "متاح فقط أثناء الإعداد الأول": "Only available during first-time setup",
+ "رد غير متوقع من المنصة": "Unexpected reply from the Platform"
 }

@@ -965,5 +965,21 @@
  "الطلب ده اتعامل معاه بالفعل": "Cette commande a déjà été traitée",
  "اكتب سبب الرفض": "Indiquez le motif du refus",
  "المنيو غير متاح حالياً": "Le menu n'est pas disponible",
- "طلبات كثيرة، حاول بعد قليل": "Trop de demandes, réessayez dans un instant"
+ "طلبات كثيرة، حاول بعد قليل": "Trop de demandes, réessayez dans un instant",
+ "تم ربط البرنامج بحسابك": "L'application est liée à votre compte",
+ "سجّل الدخول في المتصفح ثم اضغط «ربط الجهاز». تأكد إن الكود ده هو نفس الكود الظاهر هناك:": "Connectez-vous dans le navigateur puis appuyez sur « Lier l'appareil ». Vérifiez que ce code correspond à celui affiché :",
+ "في انتظار الموافقة من المتصفح…": "En attente de validation dans le navigateur…",
+ "فتح المتصفح مرة أخرى": "Rouvrir le navigateur",
+ "كود جديد": "Nouveau code",
+ "تم رفض الربط من المتصفح": "La liaison a été refusée dans le navigateur",
+ "انتهت صلاحية الكود، ابدأ من جديد": "Le code a expiré, recommencez",
+ "تسجيل الدخول من المتصفح": "Se connecter via le navigateur",
+ "هيفتح المتصفح لتسجيل حساب جديد أو الدخول بحسابك (جوجل أو الإيميل)": "Ouvre le navigateur pour créer un compte ou se connecter (Google ou e-mail)",
+ "عندي كود تفعيل": "J'ai un code d'activation",
+ "اربط البرنامج بحسابك للبدء": "Liez l'application à votre compte pour commencer",
+ "ربط البرنامج بحسابك": "Lier l'application à votre compte",
+ "سجّل حساب جديد أو ادخل بحسابك في المتصفح، والبرنامج هيتفعّل لوحده.": "Créez un compte ou connectez-vous dans le navigateur, l'application s'active toute seule.",
+ "تخطي الآن والتفعيل لاحقاً": "Passer et activer plus tard",
+ "متاح فقط أثناء الإعداد الأول": "Disponible uniquement lors de la première configuration",
+ "رد غير متوقع من المنصة": "Réponse inattendue de la plateforme"
 }

@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { useApp, toast, toastError } from '@/lib/store';
 import { dateTime } from '@/lib/format';
 import { Button, Field, Input, cx } from '@/components/ui';
+import { BrowserLink } from '@/components/BrowserLink';
 import { T } from '@/lib/i18n';
 
 export const licenseReason = (p) => ({
@@ -16,6 +17,21 @@ export const licenseReason = (p) => ({
 
 // The activation code form (Settings and the POS gate).
 export function ActivationForm({ onDone, compact }) {
+  const loadPlatform = useApp((s) => s.loadPlatform);
+  const [withCode, setWithCode] = useState(false);
+  const linked = async () => { await loadPlatform(); toast(T('تم تفعيل البرنامج')); onDone?.(); };
+  if (!withCode) {
+    return (
+      <div className="grid gap-2">
+        <BrowserLink onDone={linked} />
+        <button type="button" onClick={() => setWithCode(true)} className="text-sm text-muted underline underline-offset-2 hover:text-fg">{T('عندي كود تفعيل')}</button>
+      </div>
+    );
+  }
+  return <CodeForm onDone={onDone} compact={compact} />;
+}
+
+function CodeForm({ onDone, compact }) {
   const loadPlatform = useApp((s) => s.loadPlatform);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');

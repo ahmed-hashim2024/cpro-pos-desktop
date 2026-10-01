@@ -118,10 +118,13 @@ type Tunnel struct {
 // Sync is the unsigned config the owner manages on the Platform. EMenu is
 // kept raw; the app decodes the fields it knows.
 type Sync struct {
-	Tunnel     *Tunnel         `json:"tunnel"`
-	EMenu      json.RawMessage `json:"emenu"`
-	Ver        int64           `json:"ver"`
-	ServerTime int64           `json:"server_time"`
+	Tunnel *Tunnel         `json:"tunnel"`
+	EMenu  json.RawMessage `json:"emenu"`
+	// Integrations holds each enabled add-on's settings by feature key
+	// (e.g. "whatsapp_ai"); the module owning the key reads its own entry.
+	Integrations map[string]json.RawMessage `json:"integrations"`
+	Ver          int64                      `json:"ver"`
+	ServerTime   int64                      `json:"server_time"`
 }
 
 type Reply struct {
@@ -187,6 +190,42 @@ func (c *Client) Activate(ctx context.Context, base, code string, info DeviceInf
 	}
 	var r Reply
 	return r, c.call(ctx, base, "activate", body, &r)
+}
+
+// LinkStart is a pending browser link: show Code, open URL, poll every
+// Interval seconds until approved or ExpiresIn runs out.
+type LinkStart struct {
+	Code      string `json:"code"`
+	URL       string `json:"url"`
+	ExpiresIn int    `json:"expires_in"`
+	Interval  int    `json:"interval"`
+}
+
+// LinkPoll is pending | approved | denied | expired; approved carries the
+// same license and sync as Activate.
+type LinkPoll struct {
+	Status string `json:"status"`
+	Reply
+}
+
+// StartLink begins linking this device from the browser (the owner signs in
+// on the Platform and approves). The request is signed with the key the
+// license will be bound to.
+func (c *Client) StartLink(ctx context.Context, base string, info DeviceInfo) (LinkStart, error) {
+	body := map[string]any{
+		"public_key":  c.ID.PublicKey(),
+		"device_name": info.Name,
+		"os":          info.OS,
+		"app_version": info.AppVersion,
+		"fingerprint": info.Fingerprint,
+	}
+	var r LinkStart
+	return r, c.call(ctx, base, "start_link", body, &r)
+}
+
+func (c *Client) PollLink(ctx context.Context, base string) (LinkPoll, error) {
+	var r LinkPoll
+	return r, c.call(ctx, base, "poll_link", map[string]any{}, &r)
 }
 
 func (c *Client) Refresh(ctx context.Context, base string) (Reply, error) {

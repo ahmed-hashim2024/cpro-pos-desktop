@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { LangMenu } from '@/components/Layout';
-import { Delete, KeyRound, UserRound, ShoppingCart, ChefHat, FlaskConical, ShieldCheck } from 'lucide-react';
+import { Delete, KeyRound, UserRound, ShoppingCart, ChefHat, FlaskConical, ShieldCheck, Globe } from 'lucide-react';
+import { BrowserLink } from '@/components/BrowserLink';
 import { api, deviceId } from '@/lib/api';
 import { useApp, toastError } from '@/lib/store';
 import { roles } from '@/lib/format';
@@ -13,8 +14,12 @@ const stored = (k, d) => { try { return localStorage.getItem(k) || d; } catch { 
 
 export default function Login() {
   const [status, setStatus] = useState(null);
-  useEffect(() => { api.get('/status').then(setStatus).catch(toastError); }, []);
+  const [skipLink, setSkipLink] = useState(false);
+  const load = () => api.get('/status').then(setStatus).catch(toastError);
+  useEffect(() => { load(); }, []);
   if (!status) return <Spinner />;
+  // First run of a licensed build: link to the owner's account first.
+  const linkFirst = status.needs_setup && status.platform?.enabled && !status.platform.linked && !skipLink;
   return (
     <div className="flex min-h-full bg-bg">
       <aside className="bg-brand relative hidden w-[42%] flex-col justify-between overflow-hidden p-12 text-white lg:flex">
@@ -40,18 +45,32 @@ export default function Login() {
         <div className="w-full max-w-2xl">
           <div className="mb-8">
             <h2 className="text-3xl font-bold">{status.needs_setup ? T('مرحباً بك في CPro') : T('تسجيل الدخول')}</h2>
-            <p className="mt-1 text-muted">{status.needs_setup ? T('أنشئ حساب المالك لبدء استخدام النظام') : T('اختر حسابك وأدخل الرقم السري')}</p>
+            <p className="mt-1 text-muted">
+              {linkFirst ? T('اربط البرنامج بحسابك للبدء') : status.needs_setup ? T('أنشئ حساب المالك لبدء استخدام النظام') : T('اختر حسابك وأدخل الرقم السري')}
+            </p>
           </div>
-          {status.needs_setup ? <Setup /> : <SignIn channel={status.channel} />}
+          {linkFirst ? <LinkFirst onLinked={load} onSkip={() => setSkipLink(true)} />
+            : status.needs_setup ? <Setup restaurant={status.platform?.tenant_name} /> : <SignIn channel={status.channel} />}
         </div>
       </main>
     </div>
   );
 }
 
-function Setup() {
+function LinkFirst({ onLinked, onSkip }) {
+  return (
+    <div className="grid max-w-md gap-4 rounded-card border border-line bg-surface p-6 shadow-card">
+      <h3 className="flex items-center gap-2 text-lg font-bold"><Globe className="size-5 text-primary" aria-hidden />{T('ربط البرنامج بحسابك')}</h3>
+      <p className="text-sm text-muted">{T('سجّل حساب جديد أو ادخل بحسابك في المتصفح، والبرنامج هيتفعّل لوحده.')}</p>
+      <BrowserLink setup auto onDone={onLinked} />
+      <button type="button" onClick={onSkip} className="text-sm text-muted underline underline-offset-2 hover:text-fg">{T('تخطي الآن والتفعيل لاحقاً')}</button>
+    </div>
+  );
+}
+
+function Setup({ restaurant = '' }) {
   const signedIn = useApp((s) => s.signedIn);
-  const [f, setF] = useState({ restaurant_name: '', owner_name: '', username: '', password: '', pin: '' });
+  const [f, setF] = useState({ restaurant_name: restaurant, owner_name: '', username: '', password: '', pin: '' });
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const submit = async (e) => {

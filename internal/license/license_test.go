@@ -38,7 +38,7 @@ func TestVerifyPlatformVector(t *testing.T) {
 	if c.Tenant != "TEN-00001" || c.TenantName != "مطعم الكرامة" || c.DeviceID != "01JDEVICE0000000000000000A" {
 		t.Fatalf("claims: %+v", c)
 	}
-	if c.Status != "active" || !c.Features.EMenu || !c.Features.EMenuOrdering || c.Features.RemoteAccess {
+	if c.Status != "active" || !c.Features.EMenu() || !c.Features.EMenuOrdering() || c.Features.RemoteAccess() {
 		t.Fatalf("claims: %+v", c)
 	}
 	if c.ExpiresAt != 1790604800 || c.GraceDays != 14 || c.Ver != 3 {

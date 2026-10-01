@@ -32,11 +32,25 @@ func Key() string {
 	return os.Getenv("CPRO_LICENSE_PUBKEY")
 }
 
-type Features struct {
-	EMenu         bool `json:"emenu"`
-	EMenuOrdering bool `json:"emenu_ordering"`
-	RemoteAccess  bool `json:"remote_access"`
-}
+// Features are the modules the account has, keyed by name. The set is open:
+// an add-on enabled on the Platform (e.g. "whatsapp_ai") shows up here with
+// no change to this package; the module that owns it checks Has(key).
+type Features map[string]bool
+
+// Built-in feature keys.
+const (
+	FeatureEMenu         = "emenu"
+	FeatureEMenuOrdering = "emenu_ordering"
+	FeatureRemoteAccess  = "remote_access"
+)
+
+func (f Features) Has(key string) bool { return f[key] }
+func (f Features) EMenu() bool         { return f[FeatureEMenu] }
+func (f Features) EMenuOrdering() bool { return f[FeatureEMenuOrdering] }
+func (f Features) RemoteAccess() bool  { return f[FeatureRemoteAccess] }
+
+// Everything is what licensing-off builds get.
+var Everything = Features{FeatureEMenu: true, FeatureEMenuOrdering: true, FeatureRemoteAccess: true}
 
 // Claims are the signed contents of a license.
 type Claims struct {

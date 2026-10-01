@@ -26,9 +26,19 @@ type Tenant struct {
 	EMenu, Ordering, Remote bool
 	Tunnel                  *saas.Tunnel
 	EMenuSettings           map[string]any
+	Extra                   map[string]bool           // add-on features
+	Integrations            map[string]map[string]any // add-on settings
 	Ver                     int64
 	ValidFor                time.Duration
 	GraceDays               int
+}
+
+func (t *Tenant) features() map[string]bool {
+	out := map[string]bool{"emenu": t.EMenu, "emenu_ordering": t.Ordering, "remote_access": t.Remote}
+	for k, v := range t.Extra {
+		out[k] = v
+	}
+	return out
 }
 
 type device struct {
@@ -46,6 +56,7 @@ type Fake struct {
 	Tenants map[string]*Tenant // by code
 	devices map[string]*device
 	nonces  map[string]bool
+	links   map[string]*link // by code
 	Calls   map[string]int
 	Now     func() time.Time
 	srv     *httptest.Server
@@ -69,6 +80,7 @@ func NewHandler(code string) *Fake {
 		Tenants: map[string]*Tenant{},
 		devices: map[string]*device{},
 		nonces:  map[string]bool{},
+		links:   map[string]*link{},
 		Calls:   map[string]int{},
 		Now:     time.Now,
 	}
@@ -84,6 +96,9 @@ func NewHandler(code string) *Fake {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/method/{method}", f.serve)
+	// The browser side of linking: a bare page with an approve button.
+	mux.HandleFunc("GET /link", f.linkPage)
+	mux.HandleFunc("POST /link", f.linkApprove)
 	f.handler = mux
 	return f
 }
@@ -120,6 +135,54 @@ func (f *Fake) Revoke(deviceID string) {
 			}
 		}
 	}
+}
+
+type link struct {
+	code, deviceID, key, name, tenant, status string
+}
+
+// ApproveLink approves a pending browser link for the tenant with code
+// (as the signed-in owner would on the Platform).
+func (f *Fake) ApproveLink(linkCode, tenantCode string) bool {
+	f.Lock()
+	defer f.Unlock()
+	l := f.links[linkCode]
+	t := f.Tenants[tenantCode]
+	if l == nil || t == nil || l.status != "pending" {
+		return false
+	}
+	l.status, l.tenant = "approved", t.Name
+	return true
+}
+
+func (f *Fake) linkPage(w http.ResponseWriter, r *http.Request) {
+	code := r.URL.Query().Get("code")
+	f.Lock()
+	l := f.links[code]
+	f.Unlock()
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if l == nil {
+		fmt.Fprint(w, `<h1>expired</h1>`)
+		return
+	}
+	fmt.Fprintf(w, `<!doctype html><meta charset="utf-8"><h1>ربط الجهاز</h1><p id="code">%s</p><p>%s</p>
+<form method="post" action="/link?code=%s"><button>ربط الجهاز</button></form>`, code, l.name, code)
+}
+
+func (f *Fake) linkApprove(w http.ResponseWriter, r *http.Request) {
+	var tenant string
+	f.Lock()
+	for c := range f.Tenants {
+		tenant = c
+		break
+	}
+	f.Unlock()
+	if !f.ApproveLink(r.URL.Query().Get("code"), tenant) {
+		http.Error(w, "expired", http.StatusGone)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, `<!doctype html><meta charset="utf-8"><h1>تم ربط الجهاز</h1>`)
 }
 
 type frappeErr struct {
@@ -221,6 +284,43 @@ func (f *Fake) handle(method, deviceID string, ts int64, nonce, body, sig string
 		f.devices[deviceID] = &device{tenant: t.Name, key: key}
 		return f.reply(t, deviceID, key), nil
 	}
+	switch method {
+	case "start_link":
+		key, _ := data["public_key"].(string)
+		if e := f.verify(key, deviceID, ts, nonce, body, sig); e != nil {
+			return nil, e
+		}
+		if d := f.devices[deviceID]; d != nil && d.key != key {
+			return nil, &frappeErr{403, "This device ID belongs to a different installation."}
+		}
+		b := make([]byte, 4)
+		rand.Read(b)
+		code := strings.ToUpper(fmt.Sprintf("%X-%X", b[:2], b[2:]))
+		name, _ := data["device_name"].(string)
+		f.links[code] = &link{code: code, deviceID: deviceID, key: key, name: name, status: "pending"}
+		return map[string]any{"code": code, "url": f.URL + "/link?code=" + code, "expires_in": 900, "interval": 1}, nil
+	case "poll_link":
+		var l *link
+		for _, x := range f.links {
+			if x.deviceID == deviceID {
+				l = x
+			}
+		}
+		if l == nil {
+			return map[string]any{"status": "expired"}, nil
+		}
+		if e := f.verify(l.key, deviceID, ts, nonce, body, sig); e != nil {
+			return nil, e
+		}
+		if l.status != "approved" {
+			return map[string]any{"status": l.status}, nil
+		}
+		delete(f.links, l.code)
+		f.devices[deviceID] = &device{tenant: l.tenant, key: l.key}
+		out := f.reply(f.tenantByName(l.tenant), deviceID, l.key)
+		out["status"] = "approved"
+		return out, nil
+	}
 	d := f.devices[deviceID]
 	if d == nil {
 		return nil, &frappeErr{401, "This device is not activated."}
@@ -260,12 +360,13 @@ func (f *Fake) reply(t *Tenant, deviceID, key string) map[string]any {
 	}
 	claims := map[string]any{
 		"tenant": t.Name, "tenant_name": t.DisplayName, "device_id": deviceID, "device_key": key, "status": t.Status,
-		"features": map[string]bool{"emenu": t.EMenu, "emenu_ordering": t.Ordering, "remote_access": t.Remote},
+		"features": t.features(),
 		"iat":      now.Unix(), "exp": exp.Unix(), "grace_days": grace, "ver": t.Ver,
 	}
 	return map[string]any{
 		"license": f.Sign(claims),
-		"sync":    map[string]any{"tunnel": t.Tunnel, "emenu": t.EMenuSettings, "ver": t.Ver, "server_time": now.Unix()},
+		"sync": map[string]any{"tunnel": t.Tunnel, "emenu": t.EMenuSettings, "integrations": t.Integrations,
+			"ver": t.Ver, "server_time": now.Unix()},
 	}
 }
 

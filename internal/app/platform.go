@@ -48,6 +48,8 @@ type platformState struct {
 	LastRefresh int64           `json:"last_refresh"`
 	LastSync    string          `json:"last_sync"`
 	LastError   string          `json:"last_error"`
+	// Add-on settings by feature key, as sent by the Platform.
+	Integrations map[string]json.RawMessage `json:"integrations"`
 }
 
 type platformLink struct {
@@ -57,6 +59,15 @@ type platformLink struct {
 	claims   *license.Claims // verified and bound to this device
 	wake     chan struct{}
 	onChange []func()
+	link     *pendingLink // browser link in progress (memory only)
+}
+
+type pendingLink struct {
+	code, url string
+	expires   time.Time
+	interval  time.Duration
+	lastPoll  time.Time
+	status    string
 }
 
 // EnablePlatform turns licensing on. Tests and tools that never call it run
@@ -134,7 +145,7 @@ func (p *platformLink) statusLocked(now time.Time) license.Status {
 func (a *App) features() license.Features {
 	p := a.platform
 	if p == nil {
-		return license.Features{EMenu: true, EMenuOrdering: true, RemoteAccess: true}
+		return license.Everything
 	}
 	if !a.licenseStatus().CanSell() {
 		return license.Features{}
@@ -164,7 +175,7 @@ func (a *App) TunnelConfig() (token, domain string) {
 	f := a.features()
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	if p.st.Tunnel == nil || !(f.EMenu || f.RemoteAccess) {
+	if p.st.Tunnel == nil || !(f.EMenu() || f.RemoteAccess()) {
 		return "", ""
 	}
 	return p.st.Tunnel.ConnectorToken, p.st.Tunnel.Domain
@@ -216,6 +227,7 @@ func (a *App) applyReply(ctx context.Context, r saas.Reply) error {
 			p.st.EMenu = r.Sync.EMenu
 		}
 		p.st.Ver = r.Sync.Ver
+		p.st.Integrations = r.Sync.Integrations
 		p.st.HighWater = max(p.st.HighWater, claims.IssuedAt)
 	}
 	p.st.HighWater = max(p.st.HighWater, now.Unix())
@@ -520,4 +532,180 @@ func (a *App) SetPlatformURL(ctx context.Context, actor Actor, raw string) error
 		return err
 	}
 	return a.audit(ctx, a.db.Write, actor, "platform.url", "settings", platformKey, map[string]string{"url": url})
+}
+
+// ---- add-ons -------------------------------------------------------------------
+
+// IntegrationConfig returns an add-on's settings when the account has that
+// feature. Modules (WhatsApp AI, aggregators, ...) call this with their own
+// key; nothing else needs to know they exist.
+func (a *App) IntegrationConfig(key string) (json.RawMessage, bool) {
+	if !a.features().Has(key) {
+		return nil, false
+	}
+	p := a.platform
+	if p == nil {
+		return nil, true
+	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.st.Integrations[key], true // config may be empty for add-ons without settings
+}
+
+// ---- browser linking -------------------------------------------------------------
+
+// LinkStatus is what the app shows while the owner signs in on the Platform.
+type LinkStatus struct {
+	State     string `json:"state"` // idle | pending | approved | denied | expired
+	Code      string `json:"code"`
+	URL       string `json:"url"`
+	ExpiresAt string `json:"expires_at"`
+}
+
+// StartLink asks the Platform for a link code; the UI opens URL in the
+// browser, where the owner signs in or signs up and approves this device.
+func (a *App) StartLink(ctx context.Context, actor Actor, deviceName string) (LinkStatus, error) {
+	if err := actor.require(rbac.SettingsManage); err != nil {
+		return LinkStatus{}, err
+	}
+	return a.startLink(ctx, deviceName)
+}
+
+// PollLink checks whether the owner approved; on approval the license is
+// stored exactly as with an activation code.
+func (a *App) PollLink(ctx context.Context, actor Actor) (LinkStatus, error) {
+	if err := actor.require(rbac.SettingsManage); err != nil {
+		return LinkStatus{}, err
+	}
+	return a.pollLink(ctx)
+}
+
+// First run: linking happens before any local user exists, so these are
+// open only while the app still needs setup, and only inside the desktop
+// window.
+var errNotFirstRun = &Error{CodeForbidden, "متاح فقط أثناء الإعداد الأول"}
+
+func (a *App) setupOnly(ctx context.Context, ch Channel) error {
+	needs, err := a.NeedsSetup(ctx)
+	if err != nil {
+		return err
+	}
+	if !needs || ch != ChannelApp {
+		return errNotFirstRun
+	}
+	return nil
+}
+
+func (a *App) StartSetupLink(ctx context.Context, ch Channel, deviceName string) (LinkStatus, error) {
+	if err := a.setupOnly(ctx, ch); err != nil {
+		return LinkStatus{}, err
+	}
+	return a.startLink(ctx, deviceName)
+}
+
+func (a *App) PollSetupLink(ctx context.Context, ch Channel) (LinkStatus, error) {
+	if err := a.setupOnly(ctx, ch); err != nil {
+		return LinkStatus{}, err
+	}
+	return a.pollLink(ctx)
+}
+
+// SetupPlatform tells the first-run screen whether to link first, and the
+// restaurant name to prefill once linked.
+type SetupPlatform struct {
+	Enabled    bool   `json:"enabled"`
+	Linked     bool   `json:"linked"`
+	TenantName string `json:"tenant_name"`
+}
+
+func (a *App) SetupPlatformInfo() SetupPlatform {
+	p := a.platform
+	if p == nil {
+		return SetupPlatform{}
+	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	out := SetupPlatform{Enabled: true, Linked: p.claims != nil}
+	if p.claims != nil {
+		out.TenantName = p.claims.TenantName
+	}
+	return out
+}
+
+func (a *App) startLink(ctx context.Context, deviceName string) (LinkStatus, error) {
+	p, err := a.platformRequired()
+	if err != nil {
+		return LinkStatus{}, err
+	}
+	p.mu.RLock()
+	base := p.baseURL()
+	p.mu.RUnlock()
+	if base == "" {
+		return LinkStatus{}, invalid("عنوان المنصة غير مضبوط")
+	}
+	r, err := p.client.StartLink(ctx, base, deviceInfo(strings.TrimSpace(deviceName)))
+	if err != nil {
+		return LinkStatus{}, platformErr(err)
+	}
+	if !strings.HasPrefix(r.URL, base+"/") {
+		// Only ever open pages of the Platform we talk to.
+		return LinkStatus{}, conflict("رد غير متوقع من المنصة")
+	}
+	interval := time.Duration(max(r.Interval, 1)) * time.Second
+	l := &pendingLink{code: r.Code, url: r.URL, expires: a.now().Add(time.Duration(r.ExpiresIn) * time.Second), interval: interval, status: "pending"}
+	p.mu.Lock()
+	p.link = l
+	p.mu.Unlock()
+	return l.view(), nil
+}
+
+func (l *pendingLink) view() LinkStatus {
+	return LinkStatus{State: l.status, Code: l.code, URL: l.url, ExpiresAt: sqlite.FormatTime(l.expires)}
+}
+
+func (a *App) pollLink(ctx context.Context) (LinkStatus, error) {
+	p, err := a.platformRequired()
+	if err != nil {
+		return LinkStatus{}, err
+	}
+	p.mu.Lock()
+	l := p.link
+	if l == nil {
+		p.mu.Unlock()
+		return LinkStatus{State: "idle"}, nil
+	}
+	now := a.now()
+	if l.status == "pending" && now.After(l.expires) {
+		l.status = "expired"
+	}
+	if l.status != "pending" || now.Sub(l.lastPoll) < l.interval {
+		v := l.view()
+		p.mu.Unlock()
+		return v, nil
+	}
+	l.lastPoll = now
+	base := p.baseURL()
+	p.mu.Unlock()
+
+	r, err := p.client.PollLink(ctx, base)
+	if err != nil {
+		return LinkStatus{}, platformErr(err)
+	}
+	switch r.Status {
+	case "approved":
+		if err := a.applyReply(ctx, r.Reply); err != nil {
+			return LinkStatus{}, err
+		}
+	case "pending", "denied", "expired":
+	default:
+		return LinkStatus{}, conflict("رد غير متوقع من المنصة")
+	}
+	p.mu.Lock()
+	l.status = r.Status
+	v := l.view()
+	if r.Status != "pending" {
+		p.link = nil
+	}
+	p.mu.Unlock()
+	return v, nil
 }

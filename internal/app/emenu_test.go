@@ -1,6 +1,9 @@
 package app
 
 import (
+	"context"
+	"io"
+	"log/slog"
 	"path/filepath"
 	"testing"
 	"time"
@@ -8,8 +11,10 @@ import (
 	"cpro/internal/domain/money"
 	"cpro/internal/domain/rbac"
 	"cpro/internal/license"
+	"cpro/internal/platform/paths"
 	"cpro/internal/saas"
 	"cpro/internal/saas/saastest"
+	"cpro/internal/store/sqlite"
 )
 
 // linkedFixture is a fixture with licensing on, talking to a fake Platform.
@@ -71,7 +76,7 @@ func TestActivationGatesSelling(t *testing.T) {
 	}
 	info, err := a.ActivateDevice(ctx, owner, "act-test", "الكاشير")
 	f.must(err)
-	if info.State != license.Active || info.TenantName != "مطعم التجربة" || !info.Features.EMenu {
+	if info.State != license.Active || info.TenantName != "مطعم التجربة" || !info.Features.EMenu() {
 		t.Fatalf("info after activation: %+v", info)
 	}
 	if _, err := a.OpenShift(ctx, owner, 0); err != nil {
@@ -276,5 +281,100 @@ func TestEMenuRespectsLicense(t *testing.T) {
 	f.app.syncOnce(f.ctx, false)
 	if _, err := f.app.PublicMenu(f.ctx, ""); code(err) != CodeNotFound {
 		t.Fatalf("menu open while disabled: %v", err)
+	}
+}
+
+func TestBrowserLinking(t *testing.T) {
+	f, fake := linkedFixture(t)
+	a, ctx, owner := f.app, f.ctx, f.owner
+
+	cashier := f.login(rbac.Cashier, "cashier")
+	if _, err := a.StartLink(ctx, cashier, ""); code(err) != CodeForbidden {
+		t.Fatalf("cashier started a link: %v", err)
+	}
+	// The first-run endpoints close once the app is set up.
+	if _, err := a.StartSetupLink(ctx, ChannelApp, ""); code(err) != CodeForbidden {
+		t.Fatalf("setup link after setup: %v", err)
+	}
+
+	st, err := a.StartLink(ctx, owner, "الكاشير")
+	f.must(err)
+	if st.State != "pending" || st.Code == "" || st.URL != fake.URL+"/link?code="+st.Code {
+		t.Fatalf("start: %+v", st)
+	}
+	if st, err = a.PollLink(ctx, owner); err != nil || st.State != "pending" {
+		t.Fatalf("poll before approval: %+v %v", st, err)
+	}
+	if a.licenseStatus().CanSell() {
+		t.Fatal("licensed before approval")
+	}
+	if !fake.ApproveLink(st.Code, "ACT-TEST") {
+		t.Fatal("approve failed")
+	}
+	// Polls are throttled to the Platform's interval.
+	base := time.Now()
+	a.now = func() time.Time { return base.Add(2 * time.Second) }
+	st, err = a.PollLink(ctx, owner)
+	f.must(err)
+	if st.State != "approved" || !a.licenseStatus().CanSell() {
+		t.Fatalf("after approval: %+v %+v", st, a.licenseStatus())
+	}
+	if st, _ = a.PollLink(ctx, owner); st.State != "idle" {
+		t.Fatalf("link not cleared: %+v", st)
+	}
+}
+
+func TestFirstRunLinkBeforeSetup(t *testing.T) {
+	t.Setenv("CPRO_DATA_DIR", t.TempDir())
+	p, _ := paths.Resolve()
+	ctx := context.Background()
+	db, err := sqlite.Open(ctx, p.DB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	a := New(db, p, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	fake := saastest.New("ACT-TEST")
+	t.Cleanup(fake.Close)
+	old := license.PublicKey
+	license.PublicKey = fake.Public
+	t.Cleanup(func() { license.PublicKey = old })
+	id, _ := saas.LoadIdentity(filepath.Join(t.TempDir(), "d.json"))
+	if err := a.EnablePlatform(ctx, saas.NewClient(id)); err != nil {
+		t.Fatal(err)
+	}
+	a.platform.st.URL = fake.URL
+
+	if _, err := a.StartSetupLink(ctx, ChannelLAN, ""); code(err) != CodeForbidden {
+		t.Fatalf("setup link from the LAN: %v", err)
+	}
+	st, err := a.StartSetupLink(ctx, ChannelApp, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake.ApproveLink(st.Code, "ACT-TEST")
+	if st, err = a.PollSetupLink(ctx, ChannelApp); err != nil || st.State != "approved" {
+		t.Fatalf("poll: %+v %v", st, err)
+	}
+	if info := a.SetupPlatformInfo(); !info.Linked || info.TenantName != "مطعم التجربة" {
+		t.Fatalf("setup info: %+v", info)
+	}
+}
+
+func TestAddOnsFromPlatform(t *testing.T) {
+	f, fake := linkedFixture(t)
+	_, err := f.app.ActivateDevice(f.ctx, f.owner, "ACT-TEST", "")
+	f.must(err)
+	if _, ok := f.app.IntegrationConfig("whatsapp_ai"); ok {
+		t.Fatal("add-on on before it was enabled")
+	}
+	fake.Update("ACT-TEST", func(t *saastest.Tenant) {
+		t.Extra = map[string]bool{"whatsapp_ai": true}
+		t.Integrations = map[string]map[string]any{"whatsapp_ai": {"model": "fast"}}
+	})
+	f.app.syncOnce(f.ctx, false)
+	cfg, ok := f.app.IntegrationConfig("whatsapp_ai")
+	if !ok || string(cfg) != `{"model":"fast"}` {
+		t.Fatalf("add-on config: %s %v", cfg, ok)
 	}
 }

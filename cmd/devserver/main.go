@@ -91,6 +91,7 @@ func run(addr, ui string, fake bool, public string) error {
 		if err != nil {
 			return err
 		}
+		f.URL = "http://" + ln.Addr().String()
 		go http.Serve(ln, f.Handler())
 		license.PublicKey = f.Public // dev tool only; release builds embed the real key
 		id, err := saas.LoadIdentity(filepath.Join(p.Data, "device.json"))

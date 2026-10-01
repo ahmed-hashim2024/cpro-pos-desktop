@@ -152,7 +152,7 @@ func (a *App) emenuConfig() EMenuConfig {
 
 // menuOpen reports whether guests may see the menu at all.
 func (a *App) menuOpen() bool {
-	return a.features().EMenu && bool(a.emenuConfig().Enabled)
+	return a.features().EMenu() && bool(a.emenuConfig().Enabled)
 }
 
 var errMenuClosed = &Error{CodeNotFound, "المنيو غير متاح حالياً"}
@@ -235,8 +235,8 @@ func (a *App) ordering(cfg EMenuConfig, atTable bool) PublicOrdering {
 	f := a.features()
 	return PublicOrdering{
 		CallWaiter:   atTable && bool(cfg.AllowCallWaiter),
-		DineIn:       atTable && f.EMenuOrdering && bool(cfg.AllowDineIn),
-		Takeaway:     f.EMenuOrdering && bool(cfg.AllowTakeaway),
+		DineIn:       atTable && f.EMenuOrdering() && bool(cfg.AllowDineIn),
+		Takeaway:     f.EMenuOrdering() && bool(cfg.AllowTakeaway),
 		RequirePhone: bool(cfg.RequirePhone),
 		Note:         cfg.OrderNote,
 	}

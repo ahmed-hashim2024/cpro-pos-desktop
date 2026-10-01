@@ -33,7 +33,24 @@ func (s *server) routes(mux *http.ServeMux) {
 	// ---- public ----
 	mux.HandleFunc("GET /api/v1/status", s.public(func(w http.ResponseWriter, r *http.Request) (any, error) {
 		needs, err := a.NeedsSetup(r.Context())
-		return map[string]any{"needs_setup": needs, "channel": s.channel}, err
+		out := map[string]any{"needs_setup": needs, "channel": s.channel}
+		if needs && s.channel == app.ChannelApp {
+			out["platform"] = a.SetupPlatformInfo()
+		}
+		return out, err
+	}))
+	// First run: link this computer to the owner's account from the browser.
+	mux.HandleFunc("POST /api/v1/setup/link", s.public(func(w http.ResponseWriter, r *http.Request) (any, error) {
+		var in struct {
+			DeviceName string `json:"device_name"`
+		}
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return a.StartSetupLink(r.Context(), s.channel, in.DeviceName)
+	}))
+	mux.HandleFunc("GET /api/v1/setup/link", s.public(func(w http.ResponseWriter, r *http.Request) (any, error) {
+		return a.PollSetupLink(r.Context(), s.channel)
 	}))
 	mux.HandleFunc("POST /api/v1/setup", s.public(func(w http.ResponseWriter, r *http.Request) (any, error) {
 		var in app.SetupInput
@@ -535,6 +552,18 @@ func (s *server) routes(mux *http.ServeMux) {
 			return nil, err
 		}
 		return a.ActivateDevice(r.Context(), actor, in.Code, in.DeviceName)
+	}))
+	mux.HandleFunc("POST /api/v1/platform/link", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		var in struct {
+			DeviceName string `json:"device_name"`
+		}
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return a.StartLink(r.Context(), actor, in.DeviceName)
+	}))
+	mux.HandleFunc("GET /api/v1/platform/link", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		return a.PollLink(r.Context(), actor)
 	}))
 	mux.HandleFunc("POST /api/v1/platform/sync", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
 		return a.SyncPlatform(r.Context(), actor)
