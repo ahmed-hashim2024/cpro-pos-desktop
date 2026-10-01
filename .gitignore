@@ -1,0 +1,15 @@
+# build output
+/build/bin
+/frontend/dist
+/frontend/wailsjs
+node_modules
+
+# local data — never commit databases or binaries
+*.db
+*.db-shm
+*.db-wal
+*.bak
+/cpro-wails
+*.exe
+.DS_Store
+.env
