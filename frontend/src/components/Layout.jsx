@@ -4,9 +4,10 @@ import {
   ShoppingCart, LayoutGrid, ChefHat, Receipt, Wallet, BarChart3, LayoutDashboard, UtensilsCrossed,
   Boxes, Users, UserCog, ScrollText, Settings, LogOut, ChevronDown, Search,
   Wheat, Truck, Trash2, ClipboardCheck, ArrowUpDown, Layers, ListPlus, Armchair, Flame, PanelRightClose, PanelRightOpen,
-  TrendingUp, PieChart, FlaskConical, Ban, Store, FileSpreadsheet, Languages,
+  TrendingUp, PieChart, FlaskConical, Ban, Store, FileSpreadsheet, Languages, Moon, Sun, ZoomIn,
 } from 'lucide-react';
 import { useApp } from '@/lib/store';
+import { useTheme, fontScales } from '@/lib/theme';
 import { roles } from '@/lib/format';
 import { cx } from './ui';
 import { T, lang, languages, setLang } from '@/lib/i18n';
@@ -190,6 +191,7 @@ function Header({ collapsed, onToggle }) {
             {shift ? T('الوردية مفتوحة') : T('لا توجد وردية')}
           </button>
         )}
+        <HeaderIcons />
         <div className="mx-1 h-8 w-px bg-line" />
         <div className="flex items-center gap-3">
           <div className="text-end leading-tight">
@@ -232,16 +234,34 @@ function QuickSearch() {
   );
 }
 
+const iconBtn = 'flex size-9 items-center justify-center rounded-xl text-muted transition hover:bg-surface-2 hover:text-fg';
+
+// Theme, language and text size: icons only; names show as tooltips.
+function HeaderIcons() {
+  const { dark, toggle, cycleScale, scale } = useTheme();
+  const sizeLabel = fontScales.find(([k]) => k === scale)?.[1];
+  return (
+    <div className="flex items-center gap-0.5">
+      <button onClick={cycleScale} className={iconBtn} aria-label={T('حجم الخط')} title={`${T('حجم الخط')}: ${sizeLabel}`}>
+        <ZoomIn className="size-5" aria-hidden />
+      </button>
+      <LangMenu />
+      <button onClick={toggle} className={iconBtn} aria-label={dark ? T('الوضع الفاتح') : T('الوضع الداكن')} title={dark ? T('الوضع الفاتح') : T('الوضع الداكن')}>
+        {dark ? <Sun className="size-5" aria-hidden /> : <Moon className="size-5" aria-hidden />}
+      </button>
+    </div>
+  );
+}
+
 export function LangMenu() {
   const [open, setOpen] = useState(false);
   return (
     <div className="relative">
-      <button onClick={() => setOpen(!open)} aria-expanded={open} aria-label={T('اللغة')}
-        className="flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-bold text-muted hover:bg-surface-2 hover:text-fg">
-        <Languages className="size-5" aria-hidden /><span className="uppercase">{lang}</span>
+      <button onClick={() => setOpen(!open)} aria-expanded={open} aria-label={T('اللغة')} title={T('اللغة')} className={iconBtn}>
+        <Languages className="size-5" aria-hidden />
       </button>
       {open && (
-        <div className="absolute end-0 top-11 z-30 w-40 overflow-hidden rounded-xl border border-line bg-surface shadow-pop" onMouseLeave={() => setOpen(false)}>
+        <div className="absolute end-0 top-10 z-30 w-40 overflow-hidden rounded-xl border border-line bg-surface shadow-pop" onMouseLeave={() => setOpen(false)}>
           {languages.map(([k, label]) => (
             <button key={k} onClick={() => (k === lang ? setOpen(false) : setLang(k))}
               className={cx('flex w-full items-center justify-between px-4 py-2.5 text-start hover:bg-surface-2', k === lang && 'font-bold text-primary-ink')}>

@@ -39,10 +39,10 @@ export const useTheme = create((set, get) => ({
     set({ scale });
   },
   // Step one size up or down (header A−/A+ buttons).
-  step(dir) {
+  // Next text size, wrapping from the largest back to the smallest.
+  cycleScale() {
     const i = fontScales.findIndex(([k]) => k === get().scale);
-    const next = fontScales[Math.min(fontScales.length - 1, Math.max(0, i + dir))][0];
-    get().setScale(next);
+    get().setScale(fontScales[(i + 1) % fontScales.length][0]);
   },
 }));
 
