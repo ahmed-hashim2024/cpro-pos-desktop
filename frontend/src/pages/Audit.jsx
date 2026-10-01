@@ -10,7 +10,7 @@ const actions = {
   'auth.login': T('تسجيل دخول'), 'auth.login_failed': T('محاولة دخول فاشلة'), setup: T('إعداد النظام'),
   'order.pay': T('دفع طلب'), 'order.void': T('إلغاء طلب'), 'order.void_line': T('إلغاء صنف'), 'order.discount': T('خصم على طلب'),
   'order.line_discount': T('خصم على صنف'), 'order.refund': T('مرتجع'), 'order.merge': T('دمج طلبات'), 'order.transfer_table': T('نقل طاولة'),
-  'shift.open': T('فتح وردية'), 'shift.close': T('إغلاق وردية'), 'shift.cash_in': T('إيداع نقدي'), 'shift.cash_out': T('صرف نقدي'),
+  'shift.open': T('فتح وردية'), 'shift.close': T('إغلاق وردية'), 'shift.cash_in': T('إيداع نقدي'), 'shift.cash_out': T('صرف نقدي'), 'shift.recount': T('تصحيح عد وردية'),
   'item.save': T('تعديل صنف'), 'category.save': T('تعديل قسم'), 'modifier_group.save': T('تعديل إضافات'), 'table.save': T('تعديل طاولة'), 'station.save': T('تعديل محطة'),
   'ingredient.save': T('تعديل خامة'), 'stock.adjust': T('تسوية مخزون'), 'purchase.receive': T('استلام مشتريات'), 'waste.record': T('تسجيل هالك'),
   'count.start': T('بدء جرد'), 'count.post': T('ترحيل جرد'), 'count.cancel': T('إلغاء جرد'),

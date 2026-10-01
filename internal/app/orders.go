@@ -91,6 +91,17 @@ type Order struct {
 	Payments       []Payment          `json:"payments"`
 }
 
+// cashierShift enforces "no shift, no selling" for anyone who takes cash.
+// Waiters (no ShiftCash permission) take orders without a shift; the
+// cashier who settles them needs one.
+func cashierShift(ctx context.Context, q sqlite.Querier, actor Actor) error {
+	if !actor.Can(rbac.ShiftCash) {
+		return nil
+	}
+	_, err := requireShift(ctx, q, actor)
+	return err
+}
+
 var orderTypes = map[string]bool{"dine_in": true, "takeaway": true, "delivery": true}
 
 // ---- loading ---------------------------------------------------------------
@@ -281,6 +292,9 @@ func (a *App) CreateOrder(ctx context.Context, actor Actor, in OrderInput, idemK
 	}
 	var id string
 	err := a.tx(ctx, func(tx *sql.Tx) error {
+		if err := cashierShift(ctx, tx, actor); err != nil {
+			return err
+		}
 		if idemKey != "" {
 			if err := tx.QueryRowContext(ctx, `SELECT id FROM orders WHERE idempotency_key = ?`, idemKey).Scan(&id); err == nil {
 				return nil
@@ -395,6 +409,9 @@ func (a *App) AddLine(ctx context.Context, actor Actor, orderID string, in LineI
 		in.Course = 1
 	}
 	err := a.tx(ctx, func(tx *sql.Tx) error {
+		if err := cashierShift(ctx, tx, actor); err != nil {
+			return err
+		}
 		if _, err := editable(ctx, tx, orderID); err != nil {
 			return err
 		}

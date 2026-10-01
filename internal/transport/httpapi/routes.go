@@ -263,6 +263,16 @@ func (s *server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/shifts/{id}/report", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
 		return a.ShiftReport(r.Context(), actor, r.PathValue("id"))
 	}))
+	mux.HandleFunc("POST /api/v1/shifts/{id}/recount", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		var in struct {
+			Counted money.Minor `json:"counted_cash_minor"`
+			Reason  string      `json:"reason"`
+		}
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return a.RecountShift(r.Context(), actor, r.PathValue("id"), in.Counted, in.Reason)
+	}))
 	mux.HandleFunc("POST /api/v1/shifts/{id}/close", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
 		var in struct {
 			Counted money.Minor `json:"counted_cash_minor"`

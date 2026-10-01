@@ -42,6 +42,15 @@ type ShiftReport struct {
 	ExpectedCash  money.Minor    `json:"expected_cash_minor"`
 	Difference    *int64         `json:"difference_minor"` // counted - expected, once closed
 	CashMovements []CashMovement `json:"cash_movements"`
+	Recounts      []Recount      `json:"recounts"` // corrections after closing, oldest first
+}
+
+type Recount struct {
+	Previous money.Minor `json:"previous_minor"`
+	Counted  money.Minor `json:"counted_minor"`
+	Reason   string      `json:"reason"`
+	User     string      `json:"user_name"`
+	At       string      `json:"created_at"`
 }
 
 type MethodTotal struct {
@@ -266,13 +275,28 @@ func (a *App) shiftReport(ctx context.Context, q sqlite.Querier, shiftID string)
 		}
 		r.CashMovements = append(r.CashMovements, m)
 	}
+	rows.Close()
+	rq, err := q.QueryContext(ctx, `SELECT r.previous_minor, r.counted_minor, r.reason, u.full_name, r.created_at
+		FROM shift_recounts r JOIN users u ON u.id = r.user_id WHERE r.shift_id = ? ORDER BY r.created_at`, shiftID)
+	if err != nil {
+		return r, err
+	}
+	defer rq.Close()
+	r.Recounts = []Recount{}
+	for rq.Next() {
+		var c Recount
+		if err := rq.Scan(&c.Previous, &c.Counted, &c.Reason, &c.User, &c.At); err != nil {
+			return r, err
+		}
+		r.Recounts = append(r.Recounts, c)
+	}
 	r.ExpectedCash = r.Shift.OpeningFloat + r.CashSales + r.CashIn - r.CashOut
 	if r.Shift.CountedCash != nil && r.Shift.ExpectedCash != nil {
 		d := *r.Shift.CountedCash - *r.Shift.ExpectedCash
 		r.Difference = &d
 		r.ExpectedCash = money.Minor(*r.Shift.ExpectedCash)
 	}
-	return r, rows.Err()
+	return r, rq.Err()
 }
 
 // Shifts lists recent shifts: all of them for managers, own otherwise.
@@ -306,4 +330,43 @@ func (a *App) Shifts(ctx context.Context, actor Actor, from, to string) ([]Shift
 		out = append(out, s)
 	}
 	return out, rows.Err()
+}
+
+// RecountShift corrects the counted cash of a closed shift (a miscount, or
+// money found after closing). Only managers may do it, a reason is
+// required, and the previous figure is kept in shift_recounts and the
+// audit log, so the history of the drawer is never rewritten silently.
+func (a *App) RecountShift(ctx context.Context, actor Actor, shiftID string, counted money.Minor, reason string) (ShiftReport, error) {
+	if err := actor.require(rbac.ShiftManage); err != nil {
+		return ShiftReport{}, err
+	}
+	reason = strings.TrimSpace(reason)
+	if counted < 0 || reason == "" {
+		return ShiftReport{}, invalid("المبلغ المعدود والسبب مطلوبان")
+	}
+	err := a.tx(ctx, func(tx *sql.Tx) error {
+		var status string
+		var prev sql.NullInt64
+		if err := tx.QueryRowContext(ctx, `SELECT status, counted_cash_minor FROM shifts WHERE id = ?`, shiftID).Scan(&status, &prev); err != nil {
+			return noRows(err, "الوردية")
+		}
+		if status != "closed" {
+			return conflict("الوردية مفتوحة — أغلقها أولاً")
+		}
+		if money.Minor(prev.Int64) == counted {
+			return invalid("المبلغ الجديد مطابق للمعدود الحالي")
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO shift_recounts(id, shift_id, previous_minor, counted_minor, reason, user_id, created_at) VALUES (?,?,?,?,?,?,?)`,
+			sqlite.NewID(), shiftID, prev.Int64, counted, reason, actor.UserID, a.stamp()); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE shifts SET counted_cash_minor = ? WHERE id = ?`, counted, shiftID); err != nil {
+			return err
+		}
+		return a.audit(ctx, tx, actor, "shift.recount", "shifts", shiftID, map[string]any{"previous": prev.Int64, "counted": counted, "reason": reason})
+	})
+	if err != nil {
+		return ShiftReport{}, err
+	}
+	return a.ShiftReport(ctx, actor, shiftID)
 }

@@ -225,6 +225,19 @@ func TestFullRestaurantDay(t *testing.T) {
 		t.Fatalf("Z report: %+v", closed)
 	}
 
+	// Miscount fixed afterwards: only a manager, with a reason; history kept.
+	if _, err := a.RecountShift(ctx, cashier, shiftID, 0, "x"); code(err) != CodeForbidden {
+		t.Fatalf("cashier recounted: %v", err)
+	}
+	if _, err := a.RecountShift(ctx, owner, shiftID, rep.ExpectedCash-5000, ""); code(err) != CodeInvalid {
+		t.Fatalf("recount without reason: %v", err)
+	}
+	fixed, err := a.RecountShift(ctx, owner, shiftID, rep.ExpectedCash-5000, "خطأ في العد")
+	f.must(err)
+	if *fixed.Difference != -5000 || len(fixed.Recounts) != 1 || fixed.Recounts[0].Previous != rep.ExpectedCash {
+		t.Fatalf("recount: diff=%d recounts=%+v", *fixed.Difference, fixed.Recounts)
+	}
+
 	// Stock count: 9.6 kg beef found vs 9.7 expected → 100 g missing.
 	countID, err := a.StartCount(ctx, owner, "جرد شهري")
 	f.must(err)
@@ -288,6 +301,11 @@ func TestDiscountsNeedApproval(t *testing.T) {
 	item, err := a.SaveItem(ctx, f.owner, ItemInput{Item: Item{Name: "شاي", Price: 2000, Active: true}})
 	f.must(err)
 	cashier := f.login(rbac.Cashier, "c")
+	if _, err := a.CreateOrder(ctx, cashier, OrderInput{Type: "takeaway"}, ""); code(err) != CodeConflict {
+		t.Fatalf("cashier sold without a shift: %v", err)
+	}
+	_, err = a.OpenShift(ctx, cashier, 0)
+	f.must(err)
 	o, err := a.CreateOrder(ctx, cashier, OrderInput{Type: "takeaway"}, "k1")
 	f.must(err)
 	if dup, _ := a.CreateOrder(ctx, cashier, OrderInput{Type: "takeaway"}, "k1"); dup.ID != o.ID {
@@ -364,6 +382,8 @@ func TestDeleteAndToggleCatalog(t *testing.T) {
 	sold, err := a.SaveItem(ctx, f.owner, ItemInput{Item: Item{Name: "قهوة", Code: "COF", CategoryID: cat.ID, Price: 3000, Active: true}})
 	f.must(err)
 
+	_, err = a.OpenShift(ctx, f.owner, 0)
+	f.must(err)
 	// Disabling hides the item from sale.
 	f.must(a.SetActive(ctx, f.owner, "items", sold, false))
 	o, err := a.CreateOrder(ctx, f.owner, OrderInput{Type: "takeaway"}, "")

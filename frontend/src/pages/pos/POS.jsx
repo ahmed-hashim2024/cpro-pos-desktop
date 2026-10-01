@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Send, PauseCircle, Percent, Trash2, User, Printer, Plus, Minus, ChefHat, ClipboardList, X, Utensils,
-  LayoutDashboard, LayoutGrid, RefreshCw, ShoppingBag, CreditCard, Store, Lock, Timer, Wallet,
+  LayoutDashboard, LayoutGrid, RefreshCw, ShoppingBag, CreditCard, Store, Lock, Unlock, Timer, Wallet,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp, toast, toastError } from '@/lib/store';
-import { money, moneyC, orderTypes, qty, kitchenStatus, currencyLabel } from '@/lib/format';
+import { money, moneyC, orderTypes, qty, kitchenStatus, currencyLabel, toMinor } from '@/lib/format';
 import { printReceipt, printKitchenTicket } from '@/lib/print';
 import { Button, Badge, Modal, Select, Spinner, Empty, IconButton, SearchInput, Segmented, cx, useLoad } from '@/components/ui';
 import { withApproval } from '@/components/Approval';
@@ -149,6 +149,8 @@ export default function POS() {
   }, [menu.data, cat, search]);
 
   if (menu.loading && !menu.data) return <Spinner />;
+  // Anyone who takes cash must open a shift before selling.
+  if (can('shift.cash') && !shift) return <ShiftGate onBack={() => navigate('/')} />;
   const live = order?.lines.filter((l) => !l.voided) || [];
   const pending = live.filter((l) => !l.sent_at).length;
   const type = order?.type || draft.type;
@@ -403,5 +405,46 @@ function ShiftPill({ shift, canCash, onOpen, onGo }) {
       <span className="h-4 w-px bg-success/30" />
       <span className="flex items-center gap-1.5"><Wallet className="size-4" aria-hidden />{T('درج')} <span className="num">{money(shift.opening_float_minor)}</span></span>
     </button>
+  );
+}
+
+// Shown instead of the POS until the cashier opens a shift.
+function ShiftGate({ onBack }) {
+  const me = useApp((st) => st.me);
+  const [float, setFloat] = useState('');
+  const [busy, setBusy] = useState(false);
+  const open = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await api.post('/shifts', { opening_float_minor: toMinor(float) ?? 0 });
+      await useApp.getState().loadShift();
+      toast(T('تم فتح الوردية'));
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex h-full items-center justify-center bg-bg p-6">
+      <form onSubmit={open} className="w-full max-w-md overflow-hidden rounded-3xl border border-line bg-surface shadow-pop">
+        <div className="bg-brand flex flex-col items-center gap-2 px-6 py-6 text-white">
+          <span className="flex size-14 items-center justify-center rounded-2xl bg-white/20"><Lock className="size-7" aria-hidden /></span>
+          <h1 className="text-xl font-bold">{T('افتح وردية لبدء البيع')}</h1>
+          <p className="text-sm text-white/85">{T('لا يمكن البيع أو تحصيل المدفوعات بدون وردية مفتوحة')}</p>
+        </div>
+        <div className="grid gap-4 p-6">
+          <div className="text-sm text-muted">{T('الكاشير')}: <span className="font-bold text-fg">{me?.name}</span></div>
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold">{T('النقدية في الدرج عند البداية')}</span>
+            <input autoFocus inputMode="decimal" value={float} onChange={(e) => setFloat(e.target.value)} placeholder="0"
+              className="num h-12 w-full rounded-xl border border-line bg-surface px-3 text-xl outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
+          </label>
+          <Button size="lg" busy={busy} icon={Unlock}>{T('فتح الوردية')}</Button>
+          <Button type="button" variant="ghost" icon={LayoutDashboard} onClick={onBack}>{T('الرجوع للوحة التحكم')}</Button>
+        </div>
+      </form>
+    </div>
   );
 }

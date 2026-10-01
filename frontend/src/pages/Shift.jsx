@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowDownCircle, ArrowUpCircle, Lock, Printer, Wallet, TrendingUp, Undo2, Percent } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, Lock, Printer, Wallet, TrendingUp, Undo2, Percent, Scale, Calculator } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp, toast } from '@/lib/store';
 import { money, toMinor, dateTime, daysAgo, today } from '@/lib/format';
@@ -65,27 +65,64 @@ export default function Shift() {
 function ShiftSummary({ r }) {
   const s = useApp((st) => st.settings);
   const name = Object.fromEntries(s.payment_methods.map((m) => [m.code, m.name]));
+  const sh = r.shift;
+  const closed = sh.status === 'closed';
+  const diff = r.difference_minor;
+  const mins = Math.max(0, Math.round(((closed ? new Date(sh.closed_at) : new Date()) - new Date(sh.opened_at)) / 60000));
+  const duration = `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')}`;
   return (
     <div className="grid gap-3">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-card border border-line bg-surface px-4 py-3 shadow-card text-sm">
+        <Badge tone={closed ? 'gray' : 'success'} dot>{closed ? T('مغلقة') : T('مفتوحة')}</Badge>
+        <Info k={T('الكاشير')} v={sh.user_name} />
+        <Info k={T('الجهاز')} v={sh.device_name} />
+        <Info k={T('فُتحت')} v={dateTime(sh.opened_at)} />
+        {closed && <Info k={T('أُغلقت')} v={dateTime(sh.closed_at)} />}
+        <Info k={T('المدة')} v={<span className="num">{duration}</span>} />
+      </div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label={T('المبيعات')} icon={TrendingUp} value={money(r.sales_minor)} sub={T('{0} طلب', [r.orders])} tone="success" />
         <Stat label={T('النقدية المتوقعة في الدرج')} icon={Wallet} value={money(r.expected_cash_minor)} tone="warning" />
-        <Stat label={T('المرتجعات')} icon={Undo2} value={money(r.refunds_minor)} tone={r.refunds_minor ? 'bad' : 'default'} />
-        <Stat label={T('الخصومات')} icon={Percent} value={money(r.discounts_minor)} sub={T('{0} طلب ملغي', [r.voided_orders])} />
+        {closed ? (
+          <Stat label={diff < 0 ? T('عجز الدرج') : diff > 0 ? T('زيادة الدرج') : T('الدرج مطابق')} icon={Scale}
+            value={money(Math.abs(diff || 0))} sub={T('المعدود: {0}', [money(sh.counted_cash_minor)])} tone={diff < 0 ? 'danger' : diff > 0 ? 'warning' : 'success'} />
+        ) : (
+          <Stat label={T('المرتجعات')} icon={Undo2} value={money(r.refunds_minor)} tone={r.refunds_minor ? 'danger' : 'gray'} />
+        )}
+        <Stat label={T('الخصومات')} icon={Percent} value={money(r.discounts_minor)} sub={T('{0} طلب ملغي', [r.voided_orders])} tone="gray" />
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <Card title={T('حسب طريقة الدفع')}>
           {r.by_method.map((m) => <div key={m.method} className="flex justify-between py-1"><span>{name[m.method] || m.name} ({m.count})</span><span className="num font-semibold">{money(m.amount_minor)}</span></div>)}
-          {!r.by_method.length && <div className="text-muted/70">{T('لا توجد مدفوعات')}</div>}
+          {!r.by_method.length && <div className="text-muted">{T('لا توجد مدفوعات')}</div>}
+          {closed && r.refunds_minor > 0 && <div className="mt-2 flex justify-between border-t pt-2 text-danger"><span>{T('المرتجعات')}</span><span className="num">{money(r.refunds_minor)}</span></div>}
         </Card>
         <Card title={T('الدرج')}>
-          <Row k={T('رصيد الافتتاح')} v={r.shift.opening_float_minor} />
+          <Row k={T('رصيد الافتتاح')} v={sh.opening_float_minor} />
           <Row k={T('مبيعات نقدية (بعد المرتجع)')} v={r.cash_sales_minor} />
           <Row k={T('إيداعات')} v={r.cash_in_minor} />
           <Row k={T('مصروفات')} v={-r.cash_out_minor} />
           <div className="mt-1 flex justify-between border-t pt-1 font-bold"><span>{T('المتوقع')}</span><span className="num">{money(r.expected_cash_minor)}</span></div>
+          {closed && (
+            <>
+              <Row k={T('المعدود فعلياً')} v={sh.counted_cash_minor} />
+              <div className={`flex justify-between rounded-lg px-2 py-1 font-bold ${diff < 0 ? 'bg-danger-soft text-danger' : diff > 0 ? 'bg-warning-soft text-warning' : 'bg-success-soft text-success'}`}>
+                <span>{diff < 0 ? T('عجز') : diff > 0 ? T('زيادة') : T('الدرج مطابق')}</span><span className="num">{money(diff || 0)}</span>
+              </div>
+            </>
+          )}
+          {r.recounts?.length > 0 && (
+            <div className="mt-2 border-t pt-2">
+              <div className="mb-1 text-xs font-bold text-muted">{T('تصحيحات العد')}</div>
+              {r.recounts.map((c, i) => (
+                <div key={i} className="text-sm text-muted">
+                  {T('من {0} إلى {1}', [money(c.previous_minor), money(c.counted_minor)])} · {c.reason} · {c.user_name} · {dateTime(c.created_at)}
+                </div>
+              ))}
+            </div>
+          )}
           {r.cash_movements.map((m) => (
-            <div key={m.id} className="flex justify-between text-sm text-muted"><span>{m.kind === 'in' ? T('إيداع') : T('صرف')}: {m.reason}</span><span className="num">{money(m.amount_minor)}</span></div>
+            <div key={m.id} className="flex justify-between text-sm text-muted"><span>{m.kind === 'in' ? T('إيداع') : T('صرف')}: {m.reason} · {m.user_name}</span><span className="num">{money(m.amount_minor)}</span></div>
           ))}
         </Card>
       </div>
@@ -93,6 +130,7 @@ function ShiftSummary({ r }) {
   );
 }
 
+const Info = ({ k, v }) => <span><span className="text-muted">{k}: </span><span className="font-semibold">{v}</span></span>;
 const Row = ({ k, v }) => <div className="flex justify-between py-0.5"><span>{k}</span><span className="num">{money(v)}</span></div>;
 
 function CashDialog({ kind, onClose, onDone }) {
@@ -142,12 +180,16 @@ function CloseDialog({ report, onClose, onDone }) {
 
 function ShiftView({ id, onClose, canManage, onChanged }) {
   const r = useLoad(() => api.get(`/shifts/${id}/report`), [id]);
+  const [recount, setRecount] = useState(false);
   const [counted, setCounted] = useState('');
   const [busy, run] = useAction();
   return (
     <Modal open onClose={onClose} title={T('تفاصيل الوردية')} size="xl"
       footer={<>
         {r.data && <Button variant="secondary" onClick={() => printShift(r.data, r.data.shift.status === 'closed' ? 'Z' : 'X')}><Printer className="size-4" />{T('طباعة')}</Button>}
+        {canManage && r.data?.shift.status === 'closed' && (
+          <Button variant="soft" icon={Calculator} onClick={() => setRecount(true)}>{T('تصحيح العد')}</Button>
+        )}
         {canManage && r.data?.shift.status === 'open' && (
           <>
             <Input className="num w-32" placeholder={T('المعدود')} value={counted} onChange={(e) => setCounted(e.target.value)} />
@@ -159,6 +201,42 @@ function ShiftView({ id, onClose, canManage, onChanged }) {
         )}
       </>}>
       {r.data ? <ShiftSummary r={r.data} /> : <Spinner />}
+      {recount && r.data && (
+        <RecountDialog report={r.data} onClose={() => setRecount(false)} onDone={() => { setRecount(false); r.reload(); onChanged(); }} />
+      )}
+    </Modal>
+  );
+}
+
+// Correct the counted cash of a closed shift. The earlier figure is kept.
+function RecountDialog({ report, onClose, onDone }) {
+  const [counted, setCounted] = useState('');
+  const [reason, setReason] = useState('');
+  const [busy, run] = useAction();
+  const c = toMinor(counted);
+  const diff = c != null ? c - report.expected_cash_minor : null;
+  const save = () => run(async () => {
+    await api.post(`/shifts/${report.shift.id}/recount`, { counted_cash_minor: c, reason });
+    toast(T('تم تصحيح العد'));
+    onDone();
+  });
+  return (
+    <Modal open onClose={onClose} title={T('تصحيح العد')} icon={Calculator} size="sm"
+      footer={<Button busy={busy} disabled={c == null || !reason.trim()} onClick={save}>{T('حفظ التصحيح')}</Button>}>
+      <div className="grid gap-3">
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="rounded-lg bg-surface-2 p-2"><div className="text-muted">{T('المتوقع')}</div><div className="num font-bold">{money(report.expected_cash_minor)}</div></div>
+          <div className="rounded-lg bg-surface-2 p-2"><div className="text-muted">{T('المعدود حالياً')}</div><div className="num font-bold">{money(report.shift.counted_cash_minor)}</div></div>
+        </div>
+        <Field label={T('المبلغ الصحيح بعد إعادة العد')}><Input autoFocus className="num text-lg" value={counted} onChange={(e) => setCounted(e.target.value)} /></Field>
+        <Field label={T('السبب')}><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={T('خطأ في العد، مبلغ وُجد بعد الإغلاق…')} /></Field>
+        {diff != null && (
+          <div className={`rounded-lg p-2 font-bold ${diff === 0 ? 'bg-success-soft text-success' : diff < 0 ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'}`}>
+            {diff === 0 ? T('الدرج مطابق') : diff < 0 ? T('عجز {0}', [money(-diff)]) : T('زيادة {0}', [money(diff)])}
+          </div>
+        )}
+        <p className="text-xs text-muted">{T('يُحفظ المبلغ السابق في سجل التصحيحات وسجل النشاط ولا يُحذف.')}</p>
+      </div>
     </Modal>
   );
 }
