@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Plus, Trash2, ImagePlus, Utensils, UtensilsCrossed } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useTab } from '@/lib/useTab';
-import { toast } from '@/lib/store';
+import { toast, toastError } from '@/lib/store';
+import { confirm } from '@/components/Confirm';
 import { money, minorInput, toMinor, toMilli, milliInput, units, pct } from '@/lib/format';
-import { Button, Badge, Checkbox, Field, Input, Modal, PageHeader, Select, Table, Td, Tabs, Textarea, useLoad, useAction } from '@/components/ui';
+import { Button, Checkbox, Field, Input, Modal, PageHeader, Select, Switch, Table, Td, Tabs, Textarea, useLoad, useAction } from '@/components/ui';
 import { T, lang } from '@/lib/i18n';
 
 export default function Menu() {
@@ -22,6 +23,33 @@ export default function Menu() {
   );
 }
 
+// ---- show/hide and delete, shared by every tab --------------------------------
+
+function useCatalogActions(kind, reload) {
+  const toggle = async (row, active) => {
+    try {
+      await api.post(`/${kind}/${row.id}/active`, { active });
+      reload(true);
+    } catch (e) { toastError(e); }
+  };
+  // Returns true when the record is gone (deleted or archived).
+  const remove = async (row) => {
+    const ok = await confirm({ title: T('حذف «{0}»', [row.name]), message: T('هل أنت متأكد؟ لا يمكن التراجع عن الحذف.') });
+    if (!ok) return false;
+    try {
+      const r = await api.del(`/${kind}/${row.id}`);
+      toast(r?.archived ? T('تمت الأرشفة — مستخدم في طلبات سابقة فتم إخفاؤه مع الاحتفاظ بالسجل') : T('تم الحذف'));
+      reload(true);
+      return true;
+    } catch (e) { toastError(e); return false; }
+  };
+  return { toggle, remove };
+}
+
+function DeleteButton({ onClick }) {
+  return <Button variant="danger-soft" icon={Trash2} className="me-auto" onClick={onClick}>{T('حذف')}</Button>;
+}
+
 // ---- items -------------------------------------------------------------------
 
 function Items() {
@@ -33,6 +61,7 @@ function Items() {
   });
   const [edit, setEdit] = useState(null);
   const [cat, setCat] = useState('');
+  const { toggle, remove } = useCatalogActions('items', data.reload);
   const d = data.data;
   const catName = Object.fromEntries((d?.categories || []).map((c) => [c.id, c.name]));
   const rows = (d?.items || []).filter((i) => !cat || i.category_id === cat);
@@ -46,7 +75,7 @@ function Items() {
           <Plus className="size-4" />{T('صنف جديد')}
         </Button>
       </div>
-      <Table head={['', T('الكود'), T('الصنف'), T('القسم'), T('السعر'), T('تكلفة الوصفة'), T('هامش الربح'), T('الحالة')]}>
+      <Table head={['', T('الكود'), T('الصنف'), T('القسم'), T('السعر'), T('تكلفة الوصفة'), T('هامش الربح'), T('يظهر في المنيو')]}>
         {rows.map((i) => {
           const margin = i.price_minor ? Math.round(((i.price_minor - i.cost_minor) / i.price_minor) * 10000) : 0;
           return (
@@ -56,17 +85,18 @@ function Items() {
               <Td className="num">{money(i.price_minor)}</Td>
               <Td className="num">{i.recipe.length ? money(i.cost_minor) : <span className="text-warning">{T('بدون وصفة')}</span>}</Td>
               <Td className={`num ${margin < 5000 ? 'text-danger' : 'text-primary'}`}>{i.recipe.length ? pct(margin) : '—'}</Td>
-              <Td>{i.active ? <Badge tone="green">{T('متاح')}</Badge> : <Badge>{T('موقوف')}</Badge>}</Td>
+              <Td><Switch checked={i.active} onChange={(v) => toggle(i, v)} label={T('يظهر في المنيو')} /></Td>
             </tr>
           );
         })}
       </Table>
-      {edit && <ItemDialog item={edit} data={d} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); data.reload(true); }} />}
+      {edit && <ItemDialog item={edit} data={d} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); data.reload(true); }}
+        onDelete={async () => { if (await remove(edit)) setEdit(null); }} />}
     </>
   );
 }
 
-function ItemDialog({ item, data, onClose, onSaved }) {
+function ItemDialog({ item, data, onClose, onSaved, onDelete }) {
   const [f, setF] = useState({ ...item, price: minorInput(item.price_minor) });
   const [image, setImage] = useState('');
   const [busy, run] = useAction();
@@ -91,7 +121,7 @@ function ItemDialog({ item, data, onClose, onSaved }) {
 
   return (
     <Modal open onClose={onClose} title={item.id ? item.name : T('صنف جديد')} size="xl"
-      footer={<><Button variant="secondary" onClick={onClose}>{T('إلغاء')}</Button><Button busy={busy} onClick={save}>{T('حفظ')}</Button></>}>
+      footer={<>{item.id && <DeleteButton onClick={onDelete} />}<Button variant="secondary" onClick={onClose}>{T('إلغاء')}</Button><Button busy={busy} onClick={save}>{T('حفظ')}</Button></>}>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="grid content-start gap-3">
           <div className="grid grid-cols-2 gap-3">
@@ -111,7 +141,7 @@ function ItemDialog({ item, data, onClose, onSaved }) {
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-line px-3 py-2">
               <ImagePlus className="size-4" />{T('صورة')}<input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={pickImage} />
             </label>
-            <Checkbox label={T('متاح للبيع')} checked={f.active} onChange={(v) => setF({ ...f, active: v })} />
+            <Checkbox label={T('يظهر في المنيو')} checked={f.active} onChange={(v) => setF({ ...f, active: v })} />
           </div>
           <Field label={T('مجموعات الإضافات')}>
             <div className="flex flex-wrap gap-2">
@@ -170,6 +200,7 @@ export function RecipeEditor({ title, recipe, ingredients, onChange, footer }) {
 
 function Categories() {
   const data = useLoad(async () => ({ cats: await api.get('/categories'), stations: await api.get('/stations') }));
+  const { toggle, remove } = useCatalogActions('categories', data.reload);
   const [edit, setEdit] = useState(null);
   const [busy, run] = useAction();
   const st = Object.fromEntries((data.data?.stations || []).map((s) => [s.id, s.name]));
@@ -185,12 +216,12 @@ function Categories() {
         {(data.data?.cats || []).map((c) => (
           <tr key={c.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setEdit(c)}>
             <Td className="font-semibold">{c.name}</Td><Td>{st[c.kitchen_station_id] || '—'}</Td><Td>{c.sort}</Td>
-            <Td>{c.active ? <Badge tone="green">{T('ظاهر')}</Badge> : <Badge>{T('مخفي')}</Badge>}</Td>
+            <Td><Switch checked={c.active} onChange={(v) => toggle(c, v)} label={T('مفعّل')} /></Td>
           </tr>
         ))}
       </Table>
       {edit && (
-        <Modal open onClose={() => setEdit(null)} title={T('القسم')} size="sm" footer={<Button busy={busy} onClick={save}>{T('حفظ')}</Button>}>
+        <Modal open onClose={() => setEdit(null)} title={T('القسم')} size="sm" footer={<>{edit.id && <DeleteButton onClick={async () => { if (await remove(edit)) setEdit(null); }} />}<Button busy={busy} onClick={save}>{T('حفظ')}</Button></>}>
           <div className="grid gap-3">
             <Field label={T('الاسم')}><Input autoFocus value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
             <Field label={T('محطة المطبخ')} hint={T('تحدد أي شاشة مطبخ تستقبل أصناف هذا القسم')}>
@@ -211,6 +242,7 @@ function Categories() {
 
 function ModifierGroups() {
   const data = useLoad(async () => ({ groups: await api.get('/modifier-groups'), ingredients: await api.get('/ingredients').catch(() => []) }));
+  const { toggle, remove } = useCatalogActions('modifier-groups', data.reload);
   const [edit, setEdit] = useState(null);
   const [busy, run] = useAction();
   const save = () => run(async () => {
@@ -230,12 +262,12 @@ function ModifierGroups() {
             <Td className="font-semibold">{g.name}</Td>
             <Td>{g.min_select > 0 ? T('إجباري {0}', [g.min_select]) : T('اختياري')}{g.max_select ? ` ${T('— حتى {0}', [g.max_select])}` : ''}</Td>
             <Td>{g.modifiers.filter((m) => m.active).map((m) => m.name).join(lang === 'ar' ? '، ' : ', ')}</Td>
-            <Td>{g.active ? <Badge tone="green">{T('مفعّل')}</Badge> : <Badge>{T('موقوف')}</Badge>}</Td>
+            <Td><Switch checked={g.active} onChange={(v) => toggle(g, v)} label={T('مفعّل')} /></Td>
           </tr>
         ))}
       </Table>
       {edit && (
-        <Modal open onClose={() => setEdit(null)} title={T('مجموعة إضافات')} size="lg" footer={<Button busy={busy} onClick={save}>{T('حفظ')}</Button>}>
+        <Modal open onClose={() => setEdit(null)} title={T('مجموعة إضافات')} size="lg" footer={<>{edit.id && <DeleteButton onClick={async () => { if (await remove(edit)) setEdit(null); }} />}<Button busy={busy} onClick={save}>{T('حفظ')}</Button></>}>
           <div className="grid gap-3">
             <div className="grid grid-cols-3 gap-3">
               <Field label={T('الاسم')} className="col-span-3"><Input autoFocus value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder={T('الحجم، الإضافات، درجة الاستواء…')} /></Field>
@@ -269,6 +301,7 @@ function ModifierGroups() {
 
 function Tables() {
   const data = useLoad(() => api.get('/tables'));
+  const { toggle, remove } = useCatalogActions('tables', data.reload);
   const [edit, setEdit] = useState(null);
   const [bulk, setBulk] = useState(null);
   const [busy, run] = useAction();
@@ -294,12 +327,12 @@ function Tables() {
         {(data.data || []).map((t) => (
           <tr key={t.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setEdit(t)}>
             <Td className="font-semibold">{t.name}</Td><Td>{t.area}</Td><Td>{t.seats}</Td>
-            <Td>{t.active ? <Badge tone="green">{T('مفعّلة')}</Badge> : <Badge>{T('موقوفة')}</Badge>}</Td>
+            <Td><Switch checked={t.active} onChange={(v) => toggle(t, v)} label={T('مفعّل')} /></Td>
           </tr>
         ))}
       </Table>
       {edit && (
-        <Modal open onClose={() => setEdit(null)} title={T('طاولة')} size="sm" footer={<Button busy={busy} onClick={save}>{T('حفظ')}</Button>}>
+        <Modal open onClose={() => setEdit(null)} title={T('طاولة')} size="sm" footer={<>{edit.id && <DeleteButton onClick={async () => { if (await remove(edit)) setEdit(null); }} />}<Button busy={busy} onClick={save}>{T('حفظ')}</Button></>}>
           <div className="grid gap-3">
             <Field label={T('الاسم / الرقم')}><Input autoFocus value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
             <Field label={T('المنطقة')}><Input value={edit.area} onChange={(e) => setEdit({ ...edit, area: e.target.value })} placeholder={T('الصالة، التراس، الدور الثاني')} /></Field>
@@ -325,6 +358,7 @@ function Tables() {
 
 function Stations() {
   const data = useLoad(() => api.get('/stations'));
+  const { toggle, remove } = useCatalogActions('stations', data.reload);
   const [edit, setEdit] = useState(null);
   const [busy, run] = useAction();
   const save = () => run(async () => {
@@ -339,12 +373,12 @@ function Stations() {
       <Table head={[T('المحطة'), T('الحالة')]}>
         {(data.data || []).map((s) => (
           <tr key={s.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setEdit(s)}>
-            <Td className="font-semibold">{s.name}</Td><Td>{s.active ? <Badge tone="green">{T('مفعّلة')}</Badge> : <Badge>{T('موقوفة')}</Badge>}</Td>
+            <Td className="font-semibold">{s.name}</Td><Td><Switch checked={s.active} onChange={(v) => toggle(s, v)} label={T('مفعّل')} /></Td>
           </tr>
         ))}
       </Table>
       {edit && (
-        <Modal open onClose={() => setEdit(null)} title={T('محطة مطبخ')} size="sm" footer={<Button busy={busy} onClick={save}>{T('حفظ')}</Button>}>
+        <Modal open onClose={() => setEdit(null)} title={T('محطة مطبخ')} size="sm" footer={<>{edit.id && <DeleteButton onClick={async () => { if (await remove(edit)) setEdit(null); }} />}<Button busy={busy} onClick={save}>{T('حفظ')}</Button></>}>
           <div className="grid gap-3">
             <Field label={T('الاسم')}><Input autoFocus value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
             <Checkbox label={T('مفعّلة')} checked={edit.active} onChange={(v) => setEdit({ ...edit, active: v })} />

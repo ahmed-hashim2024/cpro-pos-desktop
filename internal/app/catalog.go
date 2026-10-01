@@ -194,7 +194,7 @@ func (a *App) SaveStation(ctx context.Context, actor Actor, s Station) (Station,
 // Items returns the full catalog including recipes and costs.
 func (a *App) Items(ctx context.Context, _ Actor) ([]Item, error) {
 	q := a.db.Read
-	rows, err := q.QueryContext(ctx, `SELECT id, code, name, coalesce(category_id,''), price_minor, coalesce(image_path,''), description, sort, active FROM items ORDER BY sort, name`)
+	rows, err := q.QueryContext(ctx, `SELECT id, code, name, coalesce(category_id,''), price_minor, coalesce(image_path,''), description, sort, active FROM items WHERE deleted_at IS NULL ORDER BY sort, name`)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +368,7 @@ func (a *App) ImagePath(name string) (string, bool) {
 
 func (a *App) ModifierGroups(ctx context.Context, _ Actor) ([]ModifierGroup, error) {
 	q := a.db.Read
-	rows, err := q.QueryContext(ctx, `SELECT id, name, min_select, max_select, active FROM modifier_groups ORDER BY name`)
+	rows, err := q.QueryContext(ctx, `SELECT id, name, min_select, max_select, active FROM modifier_groups WHERE deleted_at IS NULL ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -503,7 +503,7 @@ func (a *App) SaveModifierGroup(ctx context.Context, actor Actor, g ModifierGrou
 // ---- tables ----------------------------------------------------------------
 
 func (a *App) Tables(ctx context.Context, _ Actor) ([]Table, error) {
-	rows, err := a.db.Read.QueryContext(ctx, `SELECT id, name, area, seats, sort, active FROM dining_tables ORDER BY area, sort, name`)
+	rows, err := a.db.Read.QueryContext(ctx, `SELECT id, name, area, seats, sort, active FROM dining_tables WHERE deleted_at IS NULL ORDER BY area, sort, name`)
 	if err != nil {
 		return nil, err
 	}
@@ -546,4 +546,176 @@ func (a *App) SaveTable(ctx context.Context, actor Actor, t Table) (Table, error
 		return a.audit(ctx, tx, actor, "table.save", "dining_tables", t.ID, t)
 	})
 	return t, err
+}
+
+// ---- enable / disable, delete ----------------------------------------------
+
+// toggleable maps what the menu screens can switch on and off.
+var toggleable = map[string]struct {
+	table, entity string
+	perm          rbac.Permission
+}{
+	"items":           {"items", "الصنف", rbac.CatalogManage},
+	"categories":      {"categories", "القسم", rbac.CatalogManage},
+	"modifier-groups": {"modifier_groups", "مجموعة الإضافات", rbac.CatalogManage},
+	"tables":          {"dining_tables", "الطاولة", rbac.CatalogManage},
+	"stations":        {"kitchen_stations", "المحطة", rbac.CatalogManage},
+}
+
+// SetActive shows or hides a catalog record (e.g. an item on the POS menu).
+func (a *App) SetActive(ctx context.Context, actor Actor, kind, id string, active bool) error {
+	t, ok := toggleable[kind]
+	if !ok {
+		return notFound("النوع")
+	}
+	if err := actor.require(t.perm); err != nil {
+		return err
+	}
+	return a.tx(ctx, func(tx *sql.Tx) error {
+		if err := mustAffect(tx.ExecContext(ctx, `UPDATE `+t.table+` SET active = ? WHERE id = ?`, sqlite.Int(active), id)); err != nil {
+			return noRows(err, t.entity)
+		}
+		return a.audit(ctx, tx, actor, "catalog.set_active", t.table, id, map[string]bool{"active": active})
+	})
+}
+
+// DeleteResult tells the UI whether the record was removed or archived.
+type DeleteResult struct {
+	Archived bool `json:"archived"`
+}
+
+func used(ctx context.Context, q sqlite.Querier, query string, args ...any) (bool, error) {
+	var n int
+	err := q.QueryRowContext(ctx, query, args...).Scan(&n)
+	return n > 0, err
+}
+
+// DeleteItem removes an item that was never sold. An item that appears in
+// past orders or waste is archived instead: hidden everywhere, history kept.
+func (a *App) DeleteItem(ctx context.Context, actor Actor, id string) (DeleteResult, error) {
+	if err := actor.require(rbac.CatalogManage); err != nil {
+		return DeleteResult{}, err
+	}
+	var res DeleteResult
+	err := a.tx(ctx, func(tx *sql.Tx) error {
+		var name, code string
+		if err := tx.QueryRowContext(ctx, `SELECT name, code FROM items WHERE id = ? AND deleted_at IS NULL`, id).Scan(&name, &code); err != nil {
+			return noRows(err, "الصنف")
+		}
+		inUse, err := used(ctx, tx, `SELECT (SELECT count(*) FROM order_lines WHERE item_id = ?) + (SELECT count(*) FROM waste_entries WHERE item_id = ?)`, id, id)
+		if err != nil {
+			return err
+		}
+		if inUse {
+			// Free the code so a new item can reuse it.
+			if _, err := tx.ExecContext(ctx, `UPDATE items SET deleted_at = ?, active = 0, code = code || '~' || id WHERE id = ?`, a.stamp(), id); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `DELETE FROM item_modifier_groups WHERE item_id = ?`, id); err != nil {
+				return err
+			}
+			res.Archived = true
+		} else if _, err := tx.ExecContext(ctx, `DELETE FROM items WHERE id = ?`, id); err != nil {
+			return err
+		}
+		return a.audit(ctx, tx, actor, "item.delete", "items", id, map[string]any{"name": name, "code": code, "archived": res.Archived})
+	})
+	return res, err
+}
+
+// DeleteCategory removes a category; its items stay, without a category.
+func (a *App) DeleteCategory(ctx context.Context, actor Actor, id string) error {
+	if err := actor.require(rbac.CatalogManage); err != nil {
+		return err
+	}
+	return a.tx(ctx, func(tx *sql.Tx) error {
+		var name string
+		if err := tx.QueryRowContext(ctx, `SELECT name FROM categories WHERE id = ?`, id).Scan(&name); err != nil {
+			return noRows(err, "القسم")
+		}
+		hasItems, err := used(ctx, tx, `SELECT count(*) FROM items WHERE category_id = ? AND deleted_at IS NULL`, id)
+		if err != nil {
+			return err
+		}
+		if hasItems {
+			return conflict("القسم يحتوي على أصناف — انقلها لقسم آخر أو احذفها أولاً")
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE items SET category_id = NULL WHERE category_id = ?`, id); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM categories WHERE id = ?`, id); err != nil {
+			return err
+		}
+		return a.audit(ctx, tx, actor, "category.delete", "categories", id, map[string]string{"name": name})
+	})
+}
+
+// DeleteModifierGroup archives the group (past orders keep their modifier
+// names) and unlinks it from items.
+func (a *App) DeleteModifierGroup(ctx context.Context, actor Actor, id string) error {
+	if err := actor.require(rbac.CatalogManage); err != nil {
+		return err
+	}
+	return a.tx(ctx, func(tx *sql.Tx) error {
+		if err := mustAffect(tx.ExecContext(ctx, `UPDATE modifier_groups SET deleted_at = ?, active = 0 WHERE id = ? AND deleted_at IS NULL`, a.stamp(), id)); err != nil {
+			return noRows(err, "مجموعة الإضافات")
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM item_modifier_groups WHERE group_id = ?`, id); err != nil {
+			return err
+		}
+		return a.audit(ctx, tx, actor, "modifier_group.delete", "modifier_groups", id, nil)
+	})
+}
+
+// DeleteTable removes a table, or archives it if past orders used it. A
+// table with an open order can't be deleted.
+func (a *App) DeleteTable(ctx context.Context, actor Actor, id string) (DeleteResult, error) {
+	if err := actor.require(rbac.CatalogManage); err != nil {
+		return DeleteResult{}, err
+	}
+	var res DeleteResult
+	err := a.tx(ctx, func(tx *sql.Tx) error {
+		var name string
+		if err := tx.QueryRowContext(ctx, `SELECT name FROM dining_tables WHERE id = ? AND deleted_at IS NULL`, id).Scan(&name); err != nil {
+			return noRows(err, "الطاولة")
+		}
+		open, err := used(ctx, tx, `SELECT count(*) FROM orders WHERE table_id = ? AND status IN ('open','held')`, id)
+		if err != nil {
+			return err
+		}
+		if open {
+			return conflict("الطاولة عليها طلب مفتوح")
+		}
+		inUse, err := used(ctx, tx, `SELECT count(*) FROM orders WHERE table_id = ?`, id)
+		if err != nil {
+			return err
+		}
+		if inUse {
+			_, err = tx.ExecContext(ctx, `UPDATE dining_tables SET deleted_at = ?, active = 0 WHERE id = ?`, a.stamp(), id)
+			res.Archived = true
+		} else {
+			_, err = tx.ExecContext(ctx, `DELETE FROM dining_tables WHERE id = ?`, id)
+		}
+		if err != nil {
+			return err
+		}
+		return a.audit(ctx, tx, actor, "table.delete", "dining_tables", id, map[string]any{"name": name, "archived": res.Archived})
+	})
+	return res, err
+}
+
+// DeleteStation removes a kitchen station; its categories go to all screens.
+func (a *App) DeleteStation(ctx context.Context, actor Actor, id string) error {
+	if err := actor.require(rbac.CatalogManage); err != nil {
+		return err
+	}
+	return a.tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `UPDATE categories SET kitchen_station_id = NULL WHERE kitchen_station_id = ?`, id); err != nil {
+			return err
+		}
+		if err := mustAffect(tx.ExecContext(ctx, `DELETE FROM kitchen_stations WHERE id = ?`, id)); err != nil {
+			return noRows(err, "المحطة")
+		}
+		return a.audit(ctx, tx, actor, "station.delete", "kitchen_stations", id, nil)
+	})
 }

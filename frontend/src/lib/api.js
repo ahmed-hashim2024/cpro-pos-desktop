@@ -82,6 +82,7 @@ export const api = {
   get: (path, params) => request('GET', path + qs(params)),
   post: (path, body, opts) => request('POST', path, body ?? {}, opts),
   put: (path, body) => request('PUT', path, body ?? {}),
+  del: (path) => request('DELETE', path),
 
   async download(path, filename, params) {
     const res = await fetch(`/api/v1${path}${qs(params)}`, { headers: { Authorization: `Bearer ${session.token}` } });

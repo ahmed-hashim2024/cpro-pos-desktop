@@ -353,3 +353,57 @@ func TestBackup(t *testing.T) {
 		t.Fatalf("backups = %d", len(list))
 	}
 }
+
+func TestDeleteAndToggleCatalog(t *testing.T) {
+	f := newFixture(t)
+	ctx, a := f.ctx, f.app
+	cat, err := a.SaveCategory(ctx, f.owner, Category{Name: "مشروبات", Active: true})
+	f.must(err)
+	unsold, err := a.SaveItem(ctx, f.owner, ItemInput{Item: Item{Name: "شاي", Code: "TEA", CategoryID: cat.ID, Price: 2000, Active: true}})
+	f.must(err)
+	sold, err := a.SaveItem(ctx, f.owner, ItemInput{Item: Item{Name: "قهوة", Code: "COF", CategoryID: cat.ID, Price: 3000, Active: true}})
+	f.must(err)
+
+	// Disabling hides the item from sale.
+	f.must(a.SetActive(ctx, f.owner, "items", sold, false))
+	o, err := a.CreateOrder(ctx, f.owner, OrderInput{Type: "takeaway"}, "")
+	f.must(err)
+	if _, err := a.AddLine(ctx, f.owner, o.ID, LineInput{ItemID: sold}); code(err) != CodeNotFound {
+		t.Fatalf("sold a disabled item: %v", err)
+	}
+	f.must(a.SetActive(ctx, f.owner, "items", sold, true))
+	_, err = a.AddLine(ctx, f.owner, o.ID, LineInput{ItemID: sold})
+	f.must(err)
+
+	// A never-sold item is removed; a used one is archived and its code freed.
+	res, err := a.DeleteItem(ctx, f.owner, unsold)
+	f.must(err)
+	if res.Archived {
+		t.Fatal("unused item should be deleted, not archived")
+	}
+	res, err = a.DeleteItem(ctx, f.owner, sold)
+	f.must(err)
+	if !res.Archived {
+		t.Fatal("item on an order must be archived")
+	}
+	items, _ := a.Items(ctx, f.owner)
+	if len(items) != 0 {
+		t.Fatalf("deleted items still listed: %d", len(items))
+	}
+	order, _ := a.GetOrder(ctx, f.owner, o.ID)
+	if order.Lines[0].Name != "قهوة" {
+		t.Fatal("past order lost its item")
+	}
+	if _, err := a.SaveItem(ctx, f.owner, ItemInput{Item: Item{Name: "قهوة جديدة", Code: "COF", Price: 3500, Active: true}}); err != nil {
+		t.Fatalf("code of archived item not reusable: %v", err)
+	}
+
+	// A category with live items can't be deleted.
+	if err := a.DeleteCategory(ctx, f.owner, cat.ID); err != nil {
+		t.Fatalf("empty category not deleted: %v", err)
+	}
+	cashier := f.login(rbac.Cashier, "c")
+	if _, err := a.DeleteItem(ctx, cashier, "x"); code(err) != CodeForbidden {
+		t.Fatalf("cashier deleted: %v", err)
+	}
+}

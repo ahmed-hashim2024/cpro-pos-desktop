@@ -115,7 +115,7 @@ func (a *App) importEntities() []importEntity {
 	return []importEntity{
 		{
 			key: "items", label: tr{"الأصناف", "Menu items", "Articles"}, perm: rbac.CatalogManage, match: "code",
-			query: `SELECT i.id, i.code, i.name, coalesce(c.name,''), i.price_minor, i.description, i.sort, i.active FROM items i LEFT JOIN categories c ON c.id = i.category_id ORDER BY i.sort, i.name`,
+			query: `SELECT i.id, i.code, i.name, coalesce(c.name,''), i.price_minor, i.description, i.sort, i.active FROM items i LEFT JOIN categories c ON c.id = i.category_id WHERE i.deleted_at IS NULL ORDER BY i.sort, i.name`,
 			fields: []importField{
 				{key: "code", label: tr{"الكود", "Code", "Code"}, kind: kText, help: tr{"فريد. يُولَّد تلقائياً عند الإضافة إن تُرك فارغاً، ومطلوب للتعديل", "Unique. Auto-generated on insert if empty; required for update", "Unique. Généré à l'ajout si vide ; requis pour la mise à jour"}, example: "BRG-01"},
 				{key: "name", label: tr{"اسم الصنف", "Item name", "Nom de l'article"}, kind: kText, required: true, example: "برجر كلاسيك"},
@@ -226,7 +226,7 @@ func (a *App) importEntities() []importEntity {
 		},
 		{
 			key: "tables", label: tr{"الطاولات", "Tables", "Tables"}, perm: rbac.CatalogManage, match: "name",
-			query: `SELECT id, name, area, seats, sort, active FROM dining_tables ORDER BY area, sort, name`,
+			query: `SELECT id, name, area, seats, sort, active FROM dining_tables WHERE deleted_at IS NULL ORDER BY area, sort, name`,
 			fields: []importField{
 				{key: "name", label: tr{"اسم الطاولة", "Table name", "Nom de la table"}, kind: kText, required: true, example: "T1"},
 				{key: "area", label: tr{"المنطقة", "Area", "Zone"}, kind: kText, example: "الصالة"},

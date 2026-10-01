@@ -293,3 +293,16 @@ export function Empty({ icon: Icon, title, children }) {
     </div>
   );
 }
+
+// On/off switch. stopPropagation so it can sit inside a clickable table row.
+export function Switch({ checked, onChange, label, disabled }) {
+  return (
+    <button type="button" role="switch" aria-checked={!!checked} aria-label={label} title={label} disabled={disabled}
+      onClick={(e) => { e.stopPropagation(); onChange(!checked); }}
+      className={cx('relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition disabled:opacity-50',
+        checked ? 'bg-success' : 'bg-line')}>
+      <span className={cx('inline-block size-5 rounded-full bg-white shadow transition-transform',
+        checked ? 'translate-x-[22px] rtl:-translate-x-[22px]' : 'translate-x-0.5 rtl:-translate-x-0.5')} />
+    </button>
+  );
+}

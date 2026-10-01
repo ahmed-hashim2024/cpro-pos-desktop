@@ -6,6 +6,7 @@ import '@/lib/theme';
 import Layout, { navLeaves, allowed } from '@/components/Layout';
 import { Toasts, Spinner } from '@/components/ui';
 import { ApprovalModal } from '@/components/Approval';
+import { ConfirmModal } from '@/components/Confirm';
 import Login from '@/pages/Login';
 
 const pages = {
@@ -72,6 +73,7 @@ export default function App() {
         </Routes>
       </Suspense>
       <ApprovalModal />
+      <ConfirmModal />
       <Toasts />
     </HashRouter>
   );

@@ -204,6 +204,32 @@ func (s *server) routes(mux *http.ServeMux) {
 		return a.SaveCustomer(r.Context(), actor, in)
 	}))
 
+	// ---- enable/disable and delete catalog records ----
+	mux.HandleFunc("POST /api/v1/{kind}/{id}/active", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		var in struct {
+			Active bool `json:"active"`
+		}
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return nil, a.SetActive(r.Context(), actor, r.PathValue("kind"), r.PathValue("id"), in.Active)
+	}))
+	mux.HandleFunc("DELETE /api/v1/items/{id}", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		return a.DeleteItem(r.Context(), actor, r.PathValue("id"))
+	}))
+	mux.HandleFunc("DELETE /api/v1/tables/{id}", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		return a.DeleteTable(r.Context(), actor, r.PathValue("id"))
+	}))
+	mux.HandleFunc("DELETE /api/v1/categories/{id}", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		return nil, a.DeleteCategory(r.Context(), actor, r.PathValue("id"))
+	}))
+	mux.HandleFunc("DELETE /api/v1/modifier-groups/{id}", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		return nil, a.DeleteModifierGroup(r.Context(), actor, r.PathValue("id"))
+	}))
+	mux.HandleFunc("DELETE /api/v1/stations/{id}", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		return nil, a.DeleteStation(r.Context(), actor, r.PathValue("id"))
+	}))
+
 	// ---- shifts ----
 	mux.HandleFunc("GET /api/v1/shifts/current", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
 		sh, err := a.CurrentShift(r.Context(), actor)

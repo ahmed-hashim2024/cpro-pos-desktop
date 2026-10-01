@@ -15,7 +15,9 @@ const actions = {
   'ingredient.save': T('تعديل خامة'), 'stock.adjust': T('تسوية مخزون'), 'purchase.receive': T('استلام مشتريات'), 'waste.record': T('تسجيل هالك'),
   'count.start': T('بدء جرد'), 'count.post': T('ترحيل جرد'), 'count.cancel': T('إلغاء جرد'),
   'user.create': T('إضافة مستخدم'), 'user.update': T('تعديل مستخدم'), 'user.change_password': T('تغيير كلمة المرور'),
-  'settings.update': T('تعديل الإعدادات'), 'backup.create': T('نسخة احتياطية'), 'device.revoke': T('إيقاف جهاز'), 'customer.save': T('تعديل عميل'),
+  'settings.update': T('تعديل الإعدادات'),
+  'item.delete': T('حذف صنف'), 'category.delete': T('حذف قسم'), 'table.delete': T('حذف طاولة'), 'station.delete': T('حذف محطة'),
+  'modifier_group.delete': T('حذف مجموعة إضافات'), 'catalog.set_active': T('إظهار / إخفاء'), 'import.insert': T('استيراد (إضافة)'), 'import.update': T('استيراد (تحديث)'), 'backup.create': T('نسخة احتياطية'), 'device.revoke': T('إيقاف جهاز'), 'customer.save': T('تعديل عميل'),
 };
 
 const groups = [['', T('الكل')], ['order', T('الطلبات')], ['shift', T('الورديات')], ['auth', T('الدخول')], ['stock', T('المخزون')], ['count', T('الجرد')], ['user', T('المستخدمون')], ['settings', T('الإعدادات')]];
