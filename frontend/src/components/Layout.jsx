@@ -94,7 +94,7 @@ export default function Layout() {
 export function Logo({ compact }) {
   return (
     <div className="flex items-center gap-2.5">
-      <span className="bg-brand flex size-10 items-center justify-center rounded-xl text-lg font-black text-white shadow-md shadow-primary/30">C</span>
+      <span className="bg-brand flex size-9 items-center justify-center rounded-xl text-lg font-black text-white shadow-md shadow-primary/30">C</span>
       {!compact && (
         <div className="leading-tight">
           <div className="text-brand text-xl font-black tracking-tight" dir="ltr">CPro</div>
@@ -115,10 +115,10 @@ function Sidebar({ tree, collapsed, loc }) {
 
   return (
     <aside className={cx('flex shrink-0 flex-col border-e border-line bg-surface transition-[width] duration-200', collapsed ? 'w-[76px]' : 'w-[264px]')}>
-      <div className={cx('flex h-[72px] items-center border-b border-line', collapsed ? 'justify-center' : 'justify-between px-5')}>
+      <div className={cx('flex h-14 shrink-0 items-center border-b border-line', collapsed ? 'justify-center' : 'justify-between px-5')}>
         <Logo compact={collapsed} />
         {!collapsed && can('pos.sell') && (
-          <button onClick={() => navigate('/pos')} className="bg-brand flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-bold text-white shadow-md shadow-primary/30 hover:brightness-110">
+          <button onClick={() => navigate('/pos')} className="bg-brand flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-bold text-white shadow-md shadow-primary/30 hover:brightness-110">
             <ShoppingCart className="size-4" />{T('كاشير')}
           </button>
         )}
@@ -177,7 +177,7 @@ function Header({ collapsed, onToggle }) {
   const initials = (me?.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('');
 
   return (
-    <header className="flex h-[72px] shrink-0 items-center gap-3 border-b border-line bg-surface px-5">
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface px-4">
       <button onClick={onToggle} aria-label={collapsed ? T('توسيع القائمة') : T('طي القائمة')} className="rounded-xl p-2 text-muted hover:bg-surface-2 hover:text-fg">
         {collapsed ? <PanelRightOpen className="size-5" /> : <PanelRightClose className="size-5" />}
       </button>
@@ -196,7 +196,7 @@ function Header({ collapsed, onToggle }) {
             <div className="font-bold">{me?.name}</div>
             <div className="text-xs text-muted">{roles[me?.role]}</div>
           </div>
-          <span className="bg-brand flex size-10 items-center justify-center rounded-full text-sm font-bold text-white">{initials}</span>
+          <span className="bg-brand flex size-8 items-center justify-center rounded-full text-sm font-bold text-white">{initials}</span>
         </div>
       </div>
     </header>
@@ -217,9 +217,9 @@ function QuickSearch() {
       <input value={q} onChange={(e) => setQ(e.target.value)} onFocus={() => setFocus(true)} onBlur={() => setTimeout(() => setFocus(false), 150)}
         onKeyDown={(e) => e.key === 'Enter' && results[0] && go(results[0].to)}
         placeholder={T('اذهب إلى… (المنيو، الجرد، التقارير)')} aria-label={T('بحث سريع في الشاشات')}
-        className="h-11 w-full rounded-xl border border-transparent bg-surface-2 ps-10 pe-3 text-fg outline-none transition placeholder:text-muted/80 focus:border-primary focus:bg-surface focus:ring-4 focus:ring-primary/15" />
+        className="h-9 w-full rounded-xl border border-transparent bg-surface-2 ps-10 pe-3 text-fg outline-none transition placeholder:text-muted/80 focus:border-primary focus:bg-surface focus:ring-4 focus:ring-primary/15" />
       {focus && results.length > 0 && (
-        <div className="absolute inset-x-0 top-12 z-30 overflow-hidden rounded-xl border border-line bg-surface shadow-pop">
+        <div className="absolute inset-x-0 top-10 z-30 overflow-hidden rounded-xl border border-line bg-surface shadow-pop">
           {results.map((r) => (
             <button key={r.to} onMouseDown={() => go(r.to)} className="flex w-full items-center gap-3 px-4 py-2.5 text-start hover:bg-surface-2">
               <r.icon className="size-4 text-primary" aria-hidden /><span className="font-semibold">{r.label}</span>
