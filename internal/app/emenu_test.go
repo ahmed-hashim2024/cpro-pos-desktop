@@ -186,10 +186,10 @@ func TestEMenuOrderingFlow(t *testing.T) {
 	if _, err := a.SubmitOnlineOrder(ctx, OnlineOrderInput{TableToken: m.token, Lines: []OnlineLineInput{{ItemID: m.burger, Qty: 1}}}, "2.2.2.2"); code(err) != CodeConflict {
 		t.Fatalf("second pending order on table: %v", err)
 	}
-	if _, err := a.SubmitOnlineOrder(ctx, OnlineOrderInput{CustomerName: "سارة", Phone: "x", Lines: []OnlineLineInput{{ItemID: m.burger, Qty: 1}}}, "3.3.3.3"); code(err) != CodeInvalid {
+	if _, err := a.SubmitOnlineOrder(ctx, OnlineOrderInput{Type: "delivery", Address: "شارع 9، المعادي", CustomerName: "سارة", Phone: "x", Lines: []OnlineLineInput{{ItemID: m.burger, Qty: 1}}}, "3.3.3.3"); code(err) != CodeInvalid {
 		t.Fatalf("bad phone accepted: %v", err)
 	}
-	if _, err := a.SubmitOnlineOrder(ctx, OnlineOrderInput{CustomerName: "سارة", Phone: "01001234567", Lines: []OnlineLineInput{{ItemID: m.burger, Qty: 999}}}, "3.3.3.3"); code(err) != CodeInvalid {
+	if _, err := a.SubmitOnlineOrder(ctx, OnlineOrderInput{Type: "delivery", Address: "شارع 9، المعادي", CustomerName: "سارة", Phone: "01001234567", Lines: []OnlineLineInput{{ItemID: m.burger, Qty: 999}}}, "3.3.3.3"); code(err) != CodeInvalid {
 		t.Fatalf("huge qty accepted: %v", err)
 	}
 
@@ -215,7 +215,7 @@ func TestEMenuOrderingFlow(t *testing.T) {
 	}
 
 	// Takeaway, rejected with a reason.
-	g2, err := a.SubmitOnlineOrder(ctx, OnlineOrderInput{CustomerName: "سارة", Phone: "01001234567", Lines: []OnlineLineInput{{ItemID: m.burger, Qty: 1}}}, "3.3.3.3")
+	g2, err := a.SubmitOnlineOrder(ctx, OnlineOrderInput{Type: "delivery", Address: "شارع 9، المعادي", CustomerName: "سارة", Phone: "01001234567", Lines: []OnlineLineInput{{ItemID: m.burger, Qty: 1}}}, "3.3.3.3")
 	f.must(err)
 	inbox, _ = a.Inbox(ctx, owner)
 	if err := a.RejectOnlineOrder(ctx, owner, inbox.Orders[0].ID, ""); code(err) != CodeInvalid {
@@ -228,7 +228,7 @@ func TestEMenuOrderingFlow(t *testing.T) {
 	}
 
 	// Unanswered orders expire.
-	g3, err := a.SubmitOnlineOrder(ctx, OnlineOrderInput{CustomerName: "علي", Phone: "01001234567", Lines: []OnlineLineInput{{ItemID: m.burger, Qty: 1}}}, "4.4.4.4")
+	g3, err := a.SubmitOnlineOrder(ctx, OnlineOrderInput{Type: "delivery", Address: "شارع 9، المعادي", CustomerName: "علي", Phone: "01001234567", Lines: []OnlineLineInput{{ItemID: m.burger, Qty: 1}}}, "4.4.4.4")
 	f.must(err)
 	base := a.now()
 	a.now = func() time.Time { return base.Add(onlineOrderTTL + time.Minute) }
@@ -240,7 +240,7 @@ func TestEMenuOrderingFlow(t *testing.T) {
 	// Per-IP rate limit.
 	var last error
 	for i := 0; i < ordersPerIP+1; i++ {
-		_, last = a.SubmitOnlineOrder(ctx, OnlineOrderInput{CustomerName: "x", Phone: "01001234567", Lines: []OnlineLineInput{{ItemID: m.burger, Qty: 1}}}, "9.9.9.9")
+		_, last = a.SubmitOnlineOrder(ctx, OnlineOrderInput{Type: "delivery", Address: "شارع 9، المعادي", CustomerName: "x", Phone: "01001234567", Lines: []OnlineLineInput{{ItemID: m.burger, Qty: 1}}}, "9.9.9.9")
 	}
 	if last != errTooMany {
 		t.Fatalf("rate limit: %v", last)
@@ -270,7 +270,7 @@ func TestEMenuRespectsLicense(t *testing.T) {
 	f.app.syncOnce(f.ctx, false)
 	menu, err := f.app.PublicMenu(f.ctx, m.token)
 	f.must(err)
-	if menu.Ordering.DineIn || menu.Ordering.Takeaway || !menu.Ordering.CallWaiter {
+	if menu.Ordering.DineIn || menu.Ordering.Delivery || !menu.Ordering.CallWaiter {
 		t.Fatalf("ordering flags: %+v", menu.Ordering)
 	}
 	if _, err := f.app.SubmitOnlineOrder(f.ctx, OnlineOrderInput{TableToken: m.token, Lines: []OnlineLineInput{{ItemID: m.burger, Qty: 1}}}, "1.1.1.1"); code(err) != CodeForbidden {

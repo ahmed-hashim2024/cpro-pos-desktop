@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, BellRing, Check, X, Receipt, ShoppingBag, Utensils, Smartphone } from 'lucide-react';
+import { Bell, BellRing, Check, X, Receipt, ShoppingBag, Utensils, Smartphone, Bike, MapPin } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp, toast, toastError } from '@/lib/store';
 import { money, minutesSince } from '@/lib/format';
@@ -130,13 +130,14 @@ export function InboxPanel({ open, onClose, inbox, onAccepted }) {
             {orders.map((o) => (
               <article key={o.id} className="rounded-2xl border border-line bg-surface p-3 shadow-card">
                 <header className="mb-2 flex flex-wrap items-center gap-2">
-                  {o.type === 'dine_in'
-                    ? <Badge tone="blue"><Utensils className="size-3" aria-hidden /> {o.table_name}</Badge>
-                    : <Badge tone="amber"><ShoppingBag className="size-3" aria-hidden /> {T('تيك أواي')}</Badge>}
+                  {o.type === 'dine_in' && <Badge tone="blue"><Utensils className="size-3" aria-hidden /> {o.table_name}</Badge>}
+                  {o.type === 'delivery' && <Badge tone="green"><Bike className="size-3" aria-hidden /> {T('توصيل')}</Badge>}
+                  {o.type === 'takeaway' && <Badge tone="amber"><ShoppingBag className="size-3" aria-hidden /> {T('تيك أواي')}</Badge>}
                   {o.customer_name && <span className="font-bold">{o.customer_name}</span>}
                   {o.phone && <a dir="ltr" className="num text-sm text-primary" href={`tel:${o.phone}`}>{o.phone}</a>}
                   <span className="ms-auto text-xs text-muted">{T('منذ')} {minutesSince(o.created_at)} {T('دقيقة')}</span>
                 </header>
+                {o.address && <p className="mb-2 flex items-start gap-1.5 rounded-xl bg-surface-2 px-3 py-2 text-sm" dir="auto"><MapPin className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />{o.address}</p>}
                 <ul className="divide-y divide-line text-sm">
                   {o.lines.map((l, i) => (
                     <li key={i} className="flex gap-2 py-1.5">

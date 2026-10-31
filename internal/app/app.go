@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"cpro/internal/domain/rbac"
@@ -26,6 +27,11 @@ type App struct {
 	platform     *platformLink       // nil: licensing off (tests, tools)
 	tunnelStatus func() TunnelStatus // set by main
 	limits       *rateLimiter        // public e-menu endpoints
+
+	// E-menu settings saved on this computer, cached (see emenu_admin.go).
+	emenuMu     sync.Mutex
+	emenuLocal  json.RawMessage
+	emenuLoaded bool
 }
 
 func New(db *sqlite.DB, p paths.Paths, log *slog.Logger) *App {

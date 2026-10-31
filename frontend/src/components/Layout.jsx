@@ -4,7 +4,7 @@ import {
   ShoppingCart, LayoutGrid, ChefHat, Receipt, Wallet, BarChart3, LayoutDashboard, UtensilsCrossed,
   Boxes, Users, UserCog, ScrollText, Settings, LogOut, ChevronDown, Search,
   Wheat, Truck, Trash2, ClipboardCheck, ArrowUpDown, Layers, ListPlus, Armchair, Flame, PanelRightClose, PanelRightOpen,
-  TrendingUp, PieChart, FlaskConical, Ban, Store, FileSpreadsheet, Languages, Moon, Sun, ZoomIn,
+  TrendingUp, PieChart, FlaskConical, Ban, Store, FileSpreadsheet, Languages, Moon, Sun, ZoomIn, Smartphone,
 } from 'lucide-react';
 import { useApp } from '@/lib/store';
 import { useTheme, fontScales } from '@/lib/theme';
@@ -29,6 +29,7 @@ export const navTree = [
     { to: '/menu?tab=modifiers', label: T('الإضافات'), icon: ListPlus, perm: 'catalog.manage' },
     { to: '/menu?tab=tables', label: T('إعداد الطاولات'), icon: Armchair, perm: 'catalog.manage' },
     { to: '/menu?tab=stations', label: T('محطات المطبخ'), icon: Flame, perm: 'catalog.manage' },
+    { to: '/menu?tab=emenu', label: T('المنيو الإلكتروني'), icon: Smartphone, perm: 'catalog.manage' },
   ] },
   { label: T('المخزون'), icon: Boxes, children: [
     { to: '/inventory?tab=stock', label: T('المواد الخام'), icon: Wheat, perm: 'inventory.view' },

@@ -7,18 +7,21 @@ import { confirm } from '@/components/Confirm';
 import { money, minorInput, toMinor, toMilli, milliInput, units, pct } from '@/lib/format';
 import { Button, Checkbox, Field, Input, Modal, PageHeader, Select, Switch, Table, Td, Tabs, Textarea, useLoad, useAction } from '@/components/ui';
 import { T, lang } from '@/lib/i18n';
+import EMenuDesigner from './EMenu';
+import { prepareImage } from '@/lib/image';
 
 export default function Menu() {
   const [tab, setTab] = useTab('items');
   return (
     <div>
-      <PageHeader title={T('المنيو')} icon={UtensilsCrossed} subtitle={T('الأصناف والوصفات والإضافات والطاولات')} crumb={T('المنيو')} />
-      <Tabs value={tab} onChange={setTab} tabs={[['items', T('الأصناف')], ['categories', T('الأقسام')], ['modifiers', T('الإضافات')], ['tables', T('الطاولات')], ['stations', T('محطات المطبخ')]]} />
+      <PageHeader title={T('المنيو')} icon={UtensilsCrossed} subtitle={T('الأصناف والوصفات والإضافات والطاولات والمنيو الإلكتروني')} crumb={T('المنيو')} />
+      <Tabs value={tab} onChange={setTab} tabs={[['items', T('الأصناف')], ['categories', T('الأقسام')], ['modifiers', T('الإضافات')], ['tables', T('الطاولات')], ['stations', T('محطات المطبخ')], ['emenu', T('المنيو الإلكتروني')]]} />
       {tab === 'items' && <Items />}
       {tab === 'categories' && <Categories />}
       {tab === 'modifiers' && <ModifierGroups />}
       {tab === 'tables' && <Tables />}
       {tab === 'stations' && <Stations />}
+      {tab === 'emenu' && <EMenuDesigner />}
     </div>
   );
 }
@@ -104,12 +107,11 @@ function ItemDialog({ item, data, onClose, onSaved, onDelete }) {
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const recipeCost = f.recipe.reduce((s, r) => s + Math.round(((ing[r.ingredient_id]?.cost_minor || 0) * (r.qty_milli || 0)) / 1000), 0);
 
-  const pickImage = (e) => {
+  const pickImage = async (e) => {
     const file = e.target.files[0];
+    e.target.value = '';
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setImage(reader.result);
-    reader.readAsDataURL(file);
+    try { setImage(await prepareImage(file, { maxSide: 1600 })); } catch (err) { toastError(err); }
   };
   const save = () => run(async () => {
     const price = toMinor(f.price);
@@ -139,7 +141,7 @@ function ItemDialog({ item, data, onClose, onSaved, onDelete }) {
           <div className="flex items-center gap-3">
             {(image || f.image) && <img src={image || f.image} className="size-20 rounded-lg object-cover" alt="" />}
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-line px-3 py-2">
-              <ImagePlus className="size-4" />{T('صورة')}<input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={pickImage} />
+              <ImagePlus className="size-4" />{T('صورة')} <span className="text-xs font-normal text-muted" dir="auto">(1200 × 900)</span><input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={pickImage} />
             </label>
             <Checkbox label={T('يظهر في المنيو')} checked={f.active} onChange={(v) => setF({ ...f, active: v })} />
           </div>

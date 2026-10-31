@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,7 @@ type Category struct {
 	KitchenStationID string `json:"kitchen_station_id"`
 	Sort             int    `json:"sort"`
 	Active           bool   `json:"active"`
+	Image            string `json:"image"` // e-menu picture (URL path); set with SetCategoryImage
 }
 
 type Station struct {
@@ -87,7 +89,7 @@ func isUnique(err error) bool { return err != nil && strings.Contains(err.Error(
 // ---- categories ------------------------------------------------------------
 
 func (a *App) Categories(ctx context.Context, _ Actor) ([]Category, error) {
-	rows, err := a.db.Read.QueryContext(ctx, `SELECT id, name, coalesce(kitchen_station_id,''), sort, active FROM categories ORDER BY sort, name`)
+	rows, err := a.db.Read.QueryContext(ctx, `SELECT id, name, coalesce(kitchen_station_id,''), sort, active, coalesce(image_path,'') FROM categories ORDER BY sort, name`)
 	if err != nil {
 		return nil, err
 	}
@@ -96,10 +98,11 @@ func (a *App) Categories(ctx context.Context, _ Actor) ([]Category, error) {
 	for rows.Next() {
 		var c Category
 		var active int64
-		if err := rows.Scan(&c.ID, &c.Name, &c.KitchenStationID, &c.Sort, &active); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.KitchenStationID, &c.Sort, &active, &c.Image); err != nil {
 			return nil, err
 		}
 		c.Active = active == 1
+		c.Image = imageURL("/api/v1/images/", c.Image)
 		out = append(out, c)
 	}
 	return out, rows.Err()
@@ -344,16 +347,39 @@ func (a *App) storeImage(dataURL string) (string, error) {
 	if dataURL == "" || dataURL == "-" {
 		return "", nil
 	}
+	mime, b, err := decodeImage(dataURL)
+	if err != nil {
+		return "", err
+	}
+	return a.writeImage(mime, b)
+}
+
+var imageExt = map[string]string{"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
+
+// decodeImage checks a data-URL picture and returns its type and bytes.
+func decodeImage(dataURL string) (string, []byte, error) {
 	meta, payload, ok := strings.Cut(dataURL, ",")
-	ext := map[string]string{"data:image/png;base64": ".png", "data:image/jpeg;base64": ".jpg", "data:image/webp;base64": ".webp"}[meta]
-	if !ok || ext == "" {
-		return "", invalid("الصورة يجب أن تكون PNG أو JPG أو WEBP")
+	mime := strings.TrimSuffix(strings.TrimPrefix(meta, "data:"), ";base64")
+	if !ok || imageExt[mime] == "" || !strings.HasSuffix(meta, ";base64") {
+		return "", nil, invalid("الصورة يجب أن تكون PNG أو JPG أو WEBP")
+	}
+	if len(payload) > 3<<20 { // ~2 MB once decoded
+		return "", nil, invalid("الصورة غير صالحة أو أكبر من 2 ميجا")
 	}
 	b, err := base64.StdEncoding.DecodeString(payload)
 	if err != nil || len(b) > 2<<20 {
-		return "", invalid("الصورة غير صالحة أو أكبر من 2 ميجا")
+		return "", nil, invalid("الصورة غير صالحة أو أكبر من 2 ميجا")
 	}
-	name := sqlite.NewID() + ext
+	// The bytes must really be that kind of picture (not HTML, SVG or
+	// anything else renamed), since these files are served to guests.
+	if http.DetectContentType(b) != mime {
+		return "", nil, invalid("الملف ليس صورة PNG أو JPG أو WEBP صالحة")
+	}
+	return mime, b, nil
+}
+
+func (a *App) writeImage(mime string, b []byte) (string, error) {
+	name := sqlite.NewID() + imageExt[mime]
 	return name, os.WriteFile(filepath.Join(a.paths.Images, name), b, 0o600)
 }
 
@@ -600,29 +626,40 @@ func (a *App) DeleteItem(ctx context.Context, actor Actor, id string) (DeleteRes
 	}
 	var res DeleteResult
 	err := a.tx(ctx, func(tx *sql.Tx) error {
-		var name, code string
-		if err := tx.QueryRowContext(ctx, `SELECT name, code FROM items WHERE id = ? AND deleted_at IS NULL`, id).Scan(&name, &code); err != nil {
-			return noRows(err, "الصنف")
-		}
-		inUse, err := used(ctx, tx, `SELECT (SELECT count(*) FROM order_lines WHERE item_id = ?) + (SELECT count(*) FROM waste_entries WHERE item_id = ?)`, id, id)
-		if err != nil {
-			return err
-		}
-		if inUse {
-			// Free the code so a new item can reuse it.
-			if _, err := tx.ExecContext(ctx, `UPDATE items SET deleted_at = ?, active = 0, code = code || '~' || id WHERE id = ?`, a.stamp(), id); err != nil {
-				return err
-			}
-			if _, err := tx.ExecContext(ctx, `DELETE FROM item_modifier_groups WHERE item_id = ?`, id); err != nil {
-				return err
-			}
-			res.Archived = true
-		} else if _, err := tx.ExecContext(ctx, `DELETE FROM items WHERE id = ?`, id); err != nil {
-			return err
-		}
-		return a.audit(ctx, tx, actor, "item.delete", "items", id, map[string]any{"name": name, "code": code, "archived": res.Archived})
+		var err error
+		res, err = a.deleteItemTx(ctx, tx, actor, id)
+		return err
 	})
 	return res, err
+}
+
+// deleteItemTx deletes an item, or archives it when past orders or waste
+// entries point to it. Its e-menu offer and featured entry go with it.
+func (a *App) deleteItemTx(ctx context.Context, tx *sql.Tx, actor Actor, id string) (DeleteResult, error) {
+	var res DeleteResult
+	var name, code string
+	if err := tx.QueryRowContext(ctx, `SELECT name, code FROM items WHERE id = ? AND deleted_at IS NULL`, id).Scan(&name, &code); err != nil {
+		return res, noRows(err, "الصنف")
+	}
+	inUse, err := used(ctx, tx, `SELECT (SELECT count(*) FROM order_lines WHERE item_id = ?) + (SELECT count(*) FROM waste_entries WHERE item_id = ?)`, id, id)
+	if err != nil {
+		return res, err
+	}
+	if inUse {
+		// Free the code so a new item can reuse it.
+		if _, err := tx.ExecContext(ctx, `UPDATE items SET deleted_at = ?, active = 0, code = code || '~' || id WHERE id = ?`, a.stamp(), id); err != nil {
+			return res, err
+		}
+		for _, q := range []string{`DELETE FROM item_modifier_groups WHERE item_id = ?`, `DELETE FROM emenu_offers WHERE item_id = ?`, `DELETE FROM emenu_featured WHERE item_id = ?`} {
+			if _, err := tx.ExecContext(ctx, q, id); err != nil {
+				return res, err
+			}
+		}
+		res.Archived = true
+	} else if _, err := tx.ExecContext(ctx, `DELETE FROM items WHERE id = ?`, id); err != nil {
+		return res, err
+	}
+	return res, a.audit(ctx, tx, actor, "item.delete", "items", id, map[string]any{"name": name, "code": code, "archived": res.Archived})
 }
 
 // DeleteCategory removes a category; its items stay, without a category.

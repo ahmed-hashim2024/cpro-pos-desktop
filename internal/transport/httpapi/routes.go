@@ -611,6 +611,51 @@ func (s *server) routes(mux *http.ServeMux) {
 		return map[string]string{"qr_token": token}, err
 	}))
 
+	// ---- e-menu designer ----
+	mux.HandleFunc("GET /api/v1/emenu", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		return a.EMenuAdmin(r.Context(), actor)
+	}))
+	mux.HandleFunc("PUT /api/v1/emenu/settings", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		var in app.EMenuSettingsInput
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return a.SaveEMenuSettings(r.Context(), actor, in)
+	}))
+	mux.HandleFunc("POST /api/v1/emenu/preview", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		var in app.EMenuSettings
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return a.PreviewEMenu(r.Context(), actor, in)
+	}))
+	mux.HandleFunc("POST /api/v1/emenu/offers", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		var in app.EMenuOfferInput
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return a.SaveOffer(r.Context(), actor, in)
+	}))
+	mux.HandleFunc("DELETE /api/v1/emenu/offers/{id}", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		return nil, a.DeleteOffer(r.Context(), actor, r.PathValue("id"))
+	}))
+	mux.HandleFunc("PUT /api/v1/emenu/featured", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		var in []app.EMenuFeatured
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return a.SetFeatured(r.Context(), actor, in)
+	}))
+	mux.HandleFunc("PUT /api/v1/categories/{id}/image", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		var in struct {
+			ImageData string `json:"image_data"`
+		}
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return a.SetCategoryImage(r.Context(), actor, r.PathValue("id"), in.ImageData)
+	}))
+
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "غير موجود"})
 	})

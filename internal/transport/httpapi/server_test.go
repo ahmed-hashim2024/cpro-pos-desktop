@@ -114,7 +114,7 @@ func TestPublicHandlerExposesOnlyTheMenu(t *testing.T) {
 	if code, body := get("/assets/menu.js"); code != 200 || body != "js" {
 		t.Fatalf("asset: %d %q", code, body)
 	}
-	for _, p := range []string{"/index.html", "/pos", "/api/v1/status", "/api/v1/items", "/api/v1/backups"} {
+	for _, p := range []string{"/index.html", "/menu.html", "/pos", "/api/v1/status", "/api/v1/items", "/api/v1/backups", "/api/v1/emenu"} {
 		if code, body := get(p); code != 404 || strings.Contains(body, "staff") {
 			t.Fatalf("%s reachable on the public handler: %d %q", p, code, body)
 		}
@@ -128,5 +128,21 @@ func TestPublicHandlerExposesOnlyTheMenu(t *testing.T) {
 	}
 	if code, _ := call(t, pub, "DELETE", "/api/public/v1/menu", "", nil); code != http.StatusMethodNotAllowed {
 		t.Fatalf("delete: %d", code)
+	}
+	// PWA: the service worker is always there; the manifest and icon only
+	// once the owner has uploaded an app icon.
+	if code, body := get("/sw.js"); code != 200 || !strings.Contains(body, "addEventListener('fetch'") {
+		t.Fatalf("sw.js: %d", code)
+	}
+	for _, p := range []string{"/manifest.webmanifest", "/apple-touch-icon.png"} {
+		if code, _ := get(p); code != 404 {
+			t.Fatalf("%s without an icon: %d", p, code)
+		}
+	}
+	// The designer (and its preview) is staff-only, never on the domain.
+	for _, p := range []string{"/api/v1/emenu/preview", "/api/v1/emenu/settings"} {
+		if code, _ := call(t, pub, "POST", p, token, map[string]any{}); code != 404 {
+			t.Fatalf("%s via public handler: %d", p, code)
+		}
 	}
 }

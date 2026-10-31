@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import {
   RefreshCw, Unlink, ExternalLink, Copy, Printer, QrCode, Globe, ShieldCheck, RotateCcw, Link2, MonitorSmartphone,
@@ -125,8 +126,11 @@ function EMenuCard({ platform }) {
             </div>
           </div>
           {platform.tunnel?.state === 'error' && <p className="rounded-xl bg-danger-soft p-2 text-xs text-danger" dir="auto">{platform.tunnel.error}</p>}
-          {!platform.menu_enabled && <p className="rounded-xl bg-warning-soft p-2 text-xs text-warning">{T('المنيو مقفول من إعدادات المنيو الإلكتروني على المنصة')}</p>}
-          <p className="text-xs text-muted">{T('الشكل والألوان والطلب أونلاين ونداء الويتر تتظبط من المنصة ← المنيو الإلكتروني')}</p>
+          {!platform.menu_enabled && <p className="rounded-xl bg-warning-soft p-2 text-xs text-warning">{T('المنيو مقفول للضيوف — افتحه من المنيو ← المنيو الإلكتروني')}</p>}
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="flex-1 text-xs text-muted">{T('الشكل والألوان والعروض والطلب أونلاين ونداء الويتر تتظبط من المنيو ← المنيو الإلكتروني')}</p>
+            <Link to="/menu?tab=emenu" className="text-sm font-bold text-primary hover:underline">{T('تصميم المنيو')}</Link>
+          </div>
         </div>
       )}
     </Card>

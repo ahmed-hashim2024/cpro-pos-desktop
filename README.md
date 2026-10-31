@@ -44,8 +44,16 @@ owner's own domain.
   minute. When offline, a paid license keeps working for its grace days.
 - **E-menu:** the restaurant's domain (a Cloudflare tunnel the Platform
   creates) is served from this computer.
-  - Guests browse a mobile menu in ar/en/fr with themes and colours set on
-    the Platform.
+  - Guests browse a mobile menu in ar/en/fr. The owner designs it from
+    Menu → E-menu, with a live phone preview: name, logo, button and
+    background colours (fixed presets), slider offers and family bundles
+    (each offer is a real item in the «العروض» category, so the POS, kitchen
+    and reports treat it like any item), featured items with badges, and
+    category pictures. The Platform only decides whether the account has the
+    e-menu and online ordering.
+  - Guests can sign in with phone + password (bcrypt; hashed session tokens,
+    separate from staff sessions, rate limited). Orders placed while signed
+    in are attached to that customer.
   - Each table has its own QR code (printable, regenerable).
   - Guests can call the waiter or ask for the bill. When the owner allows it,
     they can order at the table or for takeaway.

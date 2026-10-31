@@ -75,7 +75,7 @@ func (l *rateLimiter) allow(key string, n int, window time.Duration, now time.Ti
 
 var errTooMany = &Error{CodeConflict, "طلبات كثيرة، حاول بعد قليل"}
 
-// ---- configuration from the Platform --------------------------------------------
+// ---- configuration -----------------------------------------------------------------
 
 // flexBool accepts Frappe's 0/1 checks as well as JSON booleans.
 type flexBool bool
@@ -90,67 +90,8 @@ func (b *flexBool) UnmarshalJSON(d []byte) error {
 	return nil
 }
 
-// EMenuConfig mirrors SCP E-Menu Settings on the Platform.
-type EMenuConfig struct {
-	Enabled         flexBool `json:"enabled"`
-	DisplayName     string   `json:"display_name"`
-	Tagline         string   `json:"tagline"`
-	WelcomeMessage  string   `json:"welcome_message"`
-	DefaultLanguage string   `json:"default_language"`
-	LangAR          flexBool `json:"lang_ar"`
-	LangEN          flexBool `json:"lang_en"`
-	LangFR          flexBool `json:"lang_fr"`
-	Theme           string   `json:"theme"`
-	PrimaryColor    string   `json:"primary_color"`
-	AccentColor     string   `json:"accent_color"`
-	CardStyle       string   `json:"card_style"`
-	Logo            string   `json:"logo"`
-	CoverImage      string   `json:"cover_image"`
-	ShowPrices      flexBool `json:"show_prices"`
-	ShowItemCodes   flexBool `json:"show_item_codes"`
-	AllowCallWaiter flexBool `json:"allow_call_waiter"`
-	AllowDineIn     flexBool `json:"allow_dine_in_orders"`
-	AllowTakeaway   flexBool `json:"allow_takeaway_orders"`
-	RequirePhone    flexBool `json:"require_phone"`
-	OrderNote       string   `json:"order_note"`
-	Phone           string   `json:"phone"`
-	WhatsApp        string   `json:"whatsapp"`
-	Address         string   `json:"address"`
-	MapURL          string   `json:"map_url"`
-	Instagram       string   `json:"instagram"`
-	Facebook        string   `json:"facebook"`
-	TikTok          string   `json:"tiktok"`
-	CustomHTML      string   `json:"custom_html"`
-	FooterText      string   `json:"footer_text"`
-}
-
-func defaultEMenuConfig() EMenuConfig {
-	return EMenuConfig{
-		Enabled: true, DefaultLanguage: "ar", LangAR: true, LangEN: true, Theme: "Midnight",
-		PrimaryColor: "#D4A24C", AccentColor: "#E8604C", CardStyle: "Photo Cards", ShowPrices: true,
-		AllowCallWaiter: true, RequirePhone: true,
-	}
-}
-
-func (a *App) emenuConfig() EMenuConfig {
-	c := defaultEMenuConfig()
-	p := a.platform
-	if p == nil {
-		c.AllowDineIn, c.AllowTakeaway = true, true // licensing off: tests and tools
-		return c
-	}
-	p.mu.RLock()
-	raw := p.st.EMenu
-	p.mu.RUnlock()
-	if len(raw) > 0 {
-		if err := json.Unmarshal(raw, &c); err != nil {
-			a.log.Warn("e-menu settings unreadable", "err", err)
-		}
-	}
-	return c
-}
-
-// menuOpen reports whether guests may see the menu at all.
+// menuOpen reports whether guests may see the menu at all: the account has
+// the e-menu and the owner hasn't switched it off (emenu_admin.go).
 func (a *App) menuOpen() bool {
 	return a.features().EMenu() && bool(a.emenuConfig().Enabled)
 }
@@ -175,7 +116,7 @@ type PublicModifierGroup struct {
 
 type PublicItem struct {
 	ID          string                `json:"id"`
-	Code        string                `json:"code,omitempty"`
+	CategoryID  string                `json:"category_id"`
 	Name        string                `json:"name"`
 	Description string                `json:"description"`
 	Price       money.Minor           `json:"price_minor"`
@@ -186,60 +127,85 @@ type PublicItem struct {
 type PublicCategory struct {
 	ID    string       `json:"id"`
 	Name  string       `json:"name"`
+	Image string       `json:"image"`
 	Items []PublicItem `json:"items"`
 }
 
+// PublicOffer is an offer card; ordering it orders Item.
+type PublicOffer struct {
+	ID        string     `json:"id"`
+	Kind      string     `json:"kind"` // single | family
+	Badge     string     `json:"badge"`
+	Highlight string     `json:"highlight"`
+	Item      PublicItem `json:"item"`
+}
+
+type PublicFeatured struct {
+	Badge string     `json:"badge"` // '' | bestseller | hot_deal | new
+	Item  PublicItem `json:"item"`
+}
+
+// PublicOrdering says how a guest may order: in the hall (from the table's
+// QR code, or by typing the table number) and/or delivery to an address.
 type PublicOrdering struct {
-	CallWaiter   bool   `json:"call_waiter"`
-	DineIn       bool   `json:"dine_in"`
-	Takeaway     bool   `json:"takeaway"`
-	RequirePhone bool   `json:"require_phone"`
-	Note         string `json:"note"`
+	CallWaiter  bool        `json:"call_waiter"` // table QR only
+	DineIn      bool        `json:"dine_in"`
+	Delivery    bool        `json:"delivery"`
+	DeliveryFee money.Minor `json:"delivery_fee_minor"`
+	Note        string      `json:"note"`
 }
 
 type PublicMenu struct {
 	Restaurant struct {
-		Name       string `json:"name"`
-		Tagline    string `json:"tagline"`
-		Welcome    string `json:"welcome"`
-		Logo       string `json:"logo"`
-		Cover      string `json:"cover"`
-		Phone      string `json:"phone"`
-		WhatsApp   string `json:"whatsapp"`
-		Address    string `json:"address"`
-		MapURL     string `json:"map_url"`
-		Instagram  string `json:"instagram"`
-		Facebook   string `json:"facebook"`
-		TikTok     string `json:"tiktok"`
-		CustomHTML string `json:"custom_html"`
-		Footer     string `json:"footer"`
-		Currency   string `json:"currency"`
+		Name      string `json:"name"`
+		Tagline   string `json:"tagline"`
+		Logo      string `json:"logo"`
+		Phone     string `json:"phone"`
+		WhatsApp  string `json:"whatsapp"`
+		Address   string `json:"address"`
+		MapURL    string `json:"map_url"`
+		Instagram string `json:"instagram"`
+		Facebook  string `json:"facebook"`
+		TikTok    string `json:"tiktok"`
+		Footer    string `json:"footer"`
+		Currency  string `json:"currency"`
 	} `json:"restaurant"`
 	Theme struct {
-		Name      string `json:"name"`
-		Primary   string `json:"primary"`
-		Accent    string `json:"accent"`
-		CardStyle string `json:"card_style"`
+		Background string `json:"background"` // preset id = guest page theme
+		Primary    string `json:"primary"`    // button colour (#rrggbb)
 	} `json:"theme"`
 	Languages       []string         `json:"languages"`
 	DefaultLanguage string           `json:"default_language"`
 	ShowPrices      bool             `json:"show_prices"`
-	ShowCodes       bool             `json:"show_codes"`
 	Ordering        PublicOrdering   `json:"ordering"`
 	Table           *string          `json:"table"` // table name when opened from a table QR
 	Categories      []PublicCategory `json:"categories"`
-	Offers          []any            `json:"offers"` // next phase
+	Offers          []PublicOffer    `json:"offers"`
+	Featured        []PublicFeatured `json:"featured"`
+	Preview         bool             `json:"preview,omitempty"` // built for the designer's phone preview
+	App             PublicApp        `json:"app"`
 }
 
-func (a *App) ordering(cfg EMenuConfig, atTable bool) PublicOrdering {
+// PublicApp tells the guest page whether to offer installing the menu as
+// an app (the manifest at /manifest.webmanifest is served only then).
+type PublicApp struct {
+	Installable bool   `json:"installable"`
+	Name        string `json:"name"`
+	Icon        string `json:"icon"`
+}
+
+func (a *App) ordering(cfg EMenuSettings, atTable bool, deliveryFee money.Minor) PublicOrdering {
 	f := a.features()
-	return PublicOrdering{
-		CallWaiter:   atTable && bool(cfg.AllowCallWaiter),
-		DineIn:       atTable && f.EMenuOrdering() && bool(cfg.AllowDineIn),
-		Takeaway:     f.EMenuOrdering() && bool(cfg.AllowTakeaway),
-		RequirePhone: bool(cfg.RequirePhone),
-		Note:         cfg.OrderNote,
+	o := PublicOrdering{
+		CallWaiter: atTable && bool(cfg.AllowCallWaiter),
+		DineIn:     f.EMenuOrdering() && bool(cfg.AllowDineIn),
+		Delivery:   f.EMenuOrdering() && bool(cfg.AllowDelivery),
+		Note:       cfg.OrderNote,
 	}
+	if o.Delivery {
+		o.DeliveryFee = deliveryFee
+	}
+	return o
 }
 
 func tableByToken(ctx context.Context, q sqlite.Querier, token string) (id, name string, err error) {
@@ -252,28 +218,41 @@ func tableByToken(ctx context.Context, q sqlite.Querier, token string) (id, name
 
 // PublicMenu is what a guest's phone loads. tableToken is optional.
 func (a *App) PublicMenu(ctx context.Context, tableToken string) (PublicMenu, error) {
-	var m PublicMenu
 	if !a.menuOpen() {
-		return m, errMenuClosed
+		return PublicMenu{}, errMenuClosed
 	}
 	cfg := a.emenuConfig()
+	var table *string
+	if tableToken != "" {
+		_, name, err := tableByToken(ctx, a.db.Read, tableToken)
+		if err != nil {
+			return PublicMenu{}, err
+		}
+		table = &name
+	}
+	m, err := a.buildMenu(ctx, cfg, table, "/api/public/v1/images/")
+	if err != nil {
+		return m, err
+	}
+	s, err := loadSettings(ctx, a.db.Read)
+	m.Ordering = a.ordering(cfg, table != nil, s.DeliveryFee)
+	return m, err
+}
+
+// buildMenu assembles the guest menu from settings and the catalogue.
+// img is the URL prefix pictures are served under on the calling channel.
+func (a *App) buildMenu(ctx context.Context, cfg EMenuSettings, table *string, img string) (PublicMenu, error) {
+	var m PublicMenu
 	s, err := loadSettings(ctx, a.db.Read)
 	if err != nil {
 		return m, err
 	}
-	if tableToken != "" {
-		_, name, err := tableByToken(ctx, a.db.Read, tableToken)
-		if err != nil {
-			return m, err
-		}
-		m.Table = &name
-	}
+	m.Table = table
 	r := &m.Restaurant
-	r.Name = cfg.DisplayName
+	r.Name, r.Tagline, r.Logo = cfg.DisplayName, cfg.Tagline, imageURL(img, cfg.Logo)
 	if r.Name == "" {
 		r.Name = s.RestaurantName
 	}
-	r.Tagline, r.Welcome, r.Logo, r.Cover = cfg.Tagline, cfg.WelcomeMessage, cfg.Logo, cfg.CoverImage
 	r.Phone, r.WhatsApp, r.Address, r.MapURL = cfg.Phone, cfg.WhatsApp, cfg.Address, cfg.MapURL
 	if r.Phone == "" {
 		r.Phone = s.Phone
@@ -281,9 +260,9 @@ func (a *App) PublicMenu(ctx context.Context, tableToken string) (PublicMenu, er
 	if r.Address == "" {
 		r.Address = s.Address
 	}
-	r.Instagram, r.Facebook, r.TikTok = cfg.Instagram, cfg.Facebook, cfg.TikTok
-	r.CustomHTML, r.Footer, r.Currency = cfg.CustomHTML, cfg.FooterText, s.Currency
-	m.Theme.Name, m.Theme.Primary, m.Theme.Accent, m.Theme.CardStyle = cfg.Theme, cfg.PrimaryColor, cfg.AccentColor, cfg.CardStyle
+	r.Instagram, r.Facebook, r.TikTok, r.Footer, r.Currency = cfg.Instagram, cfg.Facebook, cfg.TikTok, cfg.FooterText, s.Currency
+	m.Theme.Background = cfg.Background
+	m.Theme.Primary, _ = presetHex(buttonColors, cfg.ButtonColor)
 	for code, on := range map[string]flexBool{"ar": cfg.LangAR, "en": cfg.LangEN, "fr": cfg.LangFR} {
 		if on {
 			m.Languages = append(m.Languages, code)
@@ -294,10 +273,9 @@ func (a *App) PublicMenu(ctx context.Context, tableToken string) (PublicMenu, er
 	}
 	sortLangs(m.Languages)
 	m.DefaultLanguage = cfg.DefaultLanguage
-	m.ShowPrices, m.ShowCodes = bool(cfg.ShowPrices), bool(cfg.ShowItemCodes)
-	m.Ordering = a.ordering(cfg, m.Table != nil)
-	m.Offers = []any{}
-	m.Categories, err = publicCatalog(ctx, a.db.Read, m.ShowCodes)
+	m.ShowPrices = bool(cfg.ShowPrices)
+	m.App = PublicApp{Installable: cfg.installable(), Name: r.Name, Icon: imageURL(img, cfg.AppIcon192)}
+	m.Categories, m.Offers, m.Featured, err = publicCatalog(ctx, a.db.Read, img)
 	return m, err
 }
 
@@ -310,7 +288,9 @@ func sortLangs(l []string) {
 	}
 }
 
-func publicCatalog(ctx context.Context, q sqlite.Querier, codes bool) ([]PublicCategory, error) {
+// publicCatalog returns what guests may order: visible items by category,
+// the offers and the featured row. Offer items appear only as offers.
+func publicCatalog(ctx context.Context, q sqlite.Querier, img string) ([]PublicCategory, []PublicOffer, []PublicFeatured, error) {
 	// Modifier groups per item, in one pass.
 	groups := map[string][]PublicModifierGroup{}
 	rows, err := q.QueryContext(ctx, `
@@ -320,7 +300,7 @@ func publicCatalog(ctx context.Context, q sqlite.Querier, codes bool) ([]PublicC
 		  JOIN modifiers m ON m.group_id = g.id AND m.active = 1
 		 ORDER BY ig.item_id, ig.sort, g.name, m.sort, m.name`)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	for rows.Next() {
 		var itemID string
@@ -328,7 +308,7 @@ func publicCatalog(ctx context.Context, q sqlite.Querier, codes bool) ([]PublicC
 		var mod PublicModifier
 		if err := rows.Scan(&itemID, &g.ID, &g.Name, &g.Min, &g.Max, &mod.ID, &mod.Name, &mod.Price); err != nil {
 			rows.Close()
-			return nil, err
+			return nil, nil, nil, err
 		}
 		list := groups[itemID]
 		if n := len(list); n > 0 && list[n-1].ID == g.ID {
@@ -341,41 +321,100 @@ func publicCatalog(ctx context.Context, q sqlite.Querier, codes bool) ([]PublicC
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 
+	// Every orderable item, in menu order.
+	type row struct {
+		cat  PublicCategory
+		item PublicItem
+	}
+	var all []row
+	byID := map[string]PublicItem{}
 	rows, err = q.QueryContext(ctx, `
-		SELECT c.id, c.name, i.id, i.code, i.name, i.description, i.price_minor, coalesce(i.image_path,'')
+		SELECT c.id, c.name, coalesce(c.image_path,''), i.id, i.name, i.description, i.price_minor, coalesce(i.image_path,'')
 		  FROM items i JOIN categories c ON c.id = i.category_id AND c.active = 1
 		 WHERE i.active = 1 AND i.deleted_at IS NULL
 		 ORDER BY c.sort, c.name, i.sort, i.name`)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
-	defer rows.Close()
-	out := []PublicCategory{}
 	for rows.Next() {
-		var cid, cname string
-		var it PublicItem
-		if err := rows.Scan(&cid, &cname, &it.ID, &it.Code, &it.Name, &it.Description, &it.Price, &it.Image); err != nil {
-			return nil, err
+		var r row
+		if err := rows.Scan(&r.cat.ID, &r.cat.Name, &r.cat.Image, &r.item.ID, &r.item.Name, &r.item.Description, &r.item.Price, &r.item.Image); err != nil {
+			rows.Close()
+			return nil, nil, nil, err
 		}
-		if !codes {
-			it.Code = ""
+		r.cat.Image, r.item.Image, r.item.CategoryID = imageURL(img, r.cat.Image), imageURL(img, r.item.Image), r.cat.ID
+		r.item.Groups = groups[r.item.ID]
+		if r.item.Groups == nil {
+			r.item.Groups = []PublicModifierGroup{}
 		}
-		if it.Image != "" {
-			it.Image = "/api/public/v1/images/" + it.Image
-		}
-		it.Groups = groups[it.ID]
-		if it.Groups == nil {
-			it.Groups = []PublicModifierGroup{}
-		}
-		if n := len(out); n == 0 || out[n-1].ID != cid {
-			out = append(out, PublicCategory{ID: cid, Name: cname})
-		}
-		out[len(out)-1].Items = append(out[len(out)-1].Items, it)
+		all = append(all, r)
+		byID[r.item.ID] = r.item
 	}
-	return out, rows.Err()
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, nil, nil, err
+	}
+
+	offers := []PublicOffer{}
+	isOffer := map[string]bool{}
+	rows, err = q.QueryContext(ctx, `SELECT id, kind, item_id, badge, highlight FROM emenu_offers ORDER BY kind, sort, created_at`)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for rows.Next() {
+		var o PublicOffer
+		var itemID string
+		if err := rows.Scan(&o.ID, &o.Kind, &itemID, &o.Badge, &o.Highlight); err != nil {
+			rows.Close()
+			return nil, nil, nil, err
+		}
+		isOffer[itemID] = true
+		if it, ok := byID[itemID]; ok {
+			o.Item = it
+			offers = append(offers, o)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, nil, nil, err
+	}
+
+	featured := []PublicFeatured{}
+	rows, err = q.QueryContext(ctx, `SELECT item_id, badge FROM emenu_featured ORDER BY sort`)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for rows.Next() {
+		var f PublicFeatured
+		var itemID string
+		if err := rows.Scan(&itemID, &f.Badge); err != nil {
+			rows.Close()
+			return nil, nil, nil, err
+		}
+		if it, ok := byID[itemID]; ok {
+			f.Item = it
+			featured = append(featured, f)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, nil, nil, err
+	}
+
+	cats := []PublicCategory{}
+	for _, r := range all {
+		if isOffer[r.item.ID] {
+			continue
+		}
+		if n := len(cats); n == 0 || cats[n-1].ID != r.cat.ID {
+			cats = append(cats, r.cat)
+		}
+		cats[len(cats)-1].Items = append(cats[len(cats)-1].Items, r.item)
+	}
+	return cats, offers, featured, nil
 }
 
 // ---- call the waiter -------------------------------------------------------------
@@ -389,7 +428,7 @@ func (a *App) CallWaiter(ctx context.Context, tableToken, kind, ip string) error
 	if kind != "waiter" && kind != "bill" {
 		return invalid("نوع الطلب غير صحيح")
 	}
-	if !a.ordering(a.emenuConfig(), true).CallWaiter {
+	if !a.ordering(a.emenuConfig(), true, 0).CallWaiter {
 		return &Error{CodeForbidden, "نداء الويتر غير متاح"}
 	}
 	if !a.limits.allow("call:"+ip, callsPerIP, publicRateBurst, a.now()) {
@@ -420,10 +459,16 @@ type OnlineLineInput struct {
 	Notes       string   `json:"notes"`
 }
 
+// OnlineOrderInput is a guest's order. In the hall the table comes from the
+// QR code (TableToken) or the number the guest typed (TableNumber);
+// delivery needs a name, phone and address.
 type OnlineOrderInput struct {
-	TableToken   string            `json:"table_token"` // set: dine-in at that table
+	Type         string            `json:"type"`        // dine_in | delivery (a TableToken implies dine_in)
+	TableToken   string            `json:"table_token"` // opened from the table's QR code
+	TableNumber  string            `json:"table_number"`
 	CustomerName string            `json:"customer_name"`
 	Phone        string            `json:"phone"`
+	Address      string            `json:"address"`
 	Notes        string            `json:"notes"`
 	Lines        []OnlineLineInput `json:"lines"`
 }
@@ -447,8 +492,10 @@ type OnlineOrder struct {
 	Type         string       `json:"type"`
 	TableID      string       `json:"table_id"`
 	TableName    string       `json:"table_name"`
+	CustomerID   string       `json:"customer_id"`
 	CustomerName string       `json:"customer_name"`
 	Phone        string       `json:"phone"`
+	Address      string       `json:"address"`
 	Notes        string       `json:"notes"`
 	Lines        []OnlineLine `json:"lines"`
 	Total        money.Minor  `json:"total_minor"`
@@ -494,25 +541,40 @@ func (a *App) SubmitOnlineOrder(ctx context.Context, in OnlineOrderInput, ip str
 		return GuestOrder{}, errMenuClosed
 	}
 	cfg := a.emenuConfig()
-	atTable := in.TableToken != ""
-	ord := a.ordering(cfg, atTable)
-	typ := "takeaway"
-	if atTable {
+	ord := a.ordering(cfg, in.TableToken != "", 0)
+	typ := in.Type
+	if in.TableToken != "" {
 		typ = "dine_in"
-		if !ord.DineIn {
-			return GuestOrder{}, &Error{CodeForbidden, "الطلب من الطاولة غير متاح، نادِ الويتر"}
-		}
-	} else if !ord.Takeaway {
-		return GuestOrder{}, &Error{CodeForbidden, "الطلب أونلاين غير متاح حالياً"}
 	}
-	in.CustomerName, in.Phone, in.Notes = clip(in.CustomerName, 60), clip(in.Phone, 20), clip(in.Notes, 300)
-	if !atTable {
+	in.CustomerName, in.Phone, in.Address = clip(in.CustomerName, 60), clip(in.Phone, 20), clip(in.Address, 200)
+	in.Notes, in.TableNumber = clip(in.Notes, 300), clip(in.TableNumber, 20)
+	switch typ {
+	case "dine_in":
+		if !ord.DineIn {
+			return GuestOrder{}, &Error{CodeForbidden, "الطلب من الصالة غير متاح، نادِ الويتر"}
+		}
+		if in.TableToken == "" && in.TableNumber == "" {
+			return GuestOrder{}, invalid("اكتب رقم الترابيزة")
+		}
+		in.Address = ""
+		if in.Phone != "" && !validPhone(in.Phone) {
+			return GuestOrder{}, invalid("اكتب رقم تليفون صحيح")
+		}
+	case "delivery":
+		if !ord.Delivery {
+			return GuestOrder{}, &Error{CodeForbidden, "التوصيل غير متاح حالياً"}
+		}
 		if in.CustomerName == "" {
 			return GuestOrder{}, invalid("اكتب الاسم")
 		}
-		if ord.RequirePhone && !validPhone(in.Phone) {
+		if !validPhone(in.Phone) {
 			return GuestOrder{}, invalid("اكتب رقم تليفون صحيح")
 		}
+		if in.Address == "" {
+			return GuestOrder{}, invalid("اكتب العنوان")
+		}
+	default:
+		return GuestOrder{}, invalid("اختار: في الصالة أو توصيل")
 	}
 	if len(in.Lines) == 0 {
 		return GuestOrder{}, invalid("السلة فارغة")
@@ -529,9 +591,14 @@ func (a *App) SubmitOnlineOrder(ctx context.Context, in OnlineOrderInput, ip str
 			return err
 		}
 		var tableID string
-		if atTable {
+		if typ == "dine_in" {
 			var err error
-			if tableID, _, err = tableByToken(ctx, tx, in.TableToken); err != nil {
+			if in.TableToken != "" {
+				tableID, _, err = tableByToken(ctx, tx, in.TableToken)
+			} else {
+				tableID, err = tableByNumber(ctx, tx, in.TableNumber)
+			}
+			if err != nil {
 				return err
 			}
 			var pending int
@@ -570,8 +637,8 @@ func (a *App) SubmitOnlineOrder(ctx context.Context, in OnlineOrderInput, ip str
 		}
 		b, _ := json.Marshal(lines)
 		token = newPublicToken() + newPublicToken()
-		_, err := tx.ExecContext(ctx, `INSERT INTO online_orders(id, public_token, type, table_id, customer_name, phone, notes, lines_json, total_minor, ip, created_at)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?)`, sqlite.NewID(), token, typ, sqlite.NullString(tableID), in.CustomerName, in.Phone, in.Notes,
+		_, err := tx.ExecContext(ctx, `INSERT INTO online_orders(id, public_token, type, table_id, customer_name, phone, address, notes, lines_json, total_minor, ip, created_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, sqlite.NewID(), token, typ, sqlite.NullString(tableID), in.CustomerName, in.Phone, in.Address, in.Notes,
 			string(b), total, clip(ip, 64), a.stamp())
 		return err
 	})
@@ -595,7 +662,7 @@ func validPhone(p string) bool {
 	return digits >= 7 && digits <= 15
 }
 
-const onlineCols = `o.id, o.public_token, o.type, coalesce(o.table_id,''), coalesce(t.name,''), o.customer_name, o.phone, o.notes,
+const onlineCols = `o.id, o.public_token, o.type, coalesce(o.table_id,''), coalesce(t.name,''), coalesce(o.customer_id,''), o.customer_name, o.phone, o.address, o.notes,
 	o.lines_json, o.total_minor, o.status, coalesce(o.order_id,''), coalesce(r.number,0), o.reject_reason, o.created_at, coalesce(o.decided_at,'')`
 
 const onlineFrom = ` FROM online_orders o LEFT JOIN dining_tables t ON t.id = o.table_id LEFT JOIN orders r ON r.id = o.order_id`
@@ -603,7 +670,7 @@ const onlineFrom = ` FROM online_orders o LEFT JOIN dining_tables t ON t.id = o.
 func scanOnline(row interface{ Scan(...any) error }) (OnlineOrder, error) {
 	var o OnlineOrder
 	var lines string
-	err := row.Scan(&o.ID, &o.Token, &o.Type, &o.TableID, &o.TableName, &o.CustomerName, &o.Phone, &o.Notes,
+	err := row.Scan(&o.ID, &o.Token, &o.Type, &o.TableID, &o.TableName, &o.CustomerID, &o.CustomerName, &o.Phone, &o.Address, &o.Notes,
 		&lines, &o.Total, &o.Status, &o.OrderID, &o.OrderNumber, &o.RejectReason, &o.CreatedAt, &o.DecidedAt)
 	if err != nil {
 		return o, err
@@ -728,10 +795,17 @@ func (a *App) AcceptOnlineOrder(ctx context.Context, actor Actor, id string) (Or
 		if o.Phone != "" {
 			note += " — " + o.Phone
 		}
+		if o.Address != "" {
+			note += "\nالعنوان: " + o.Address
+		}
+		customerID, err := a.customerForOrder(ctx, tx, o)
+		if err != nil {
+			return err
+		}
 		if o.Notes != "" {
 			note += "\n" + o.Notes
 		}
-		orderID, err = a.createOrderTx(ctx, tx, actor, OrderInput{Type: o.Type, TableID: o.TableID, Notes: note}, "online:"+o.ID)
+		orderID, err = a.createOrderTx(ctx, tx, actor, OrderInput{Type: o.Type, TableID: o.TableID, CustomerID: customerID, Notes: note}, "online:"+o.ID)
 		if err != nil {
 			return err
 		}
@@ -754,8 +828,8 @@ func (a *App) AcceptOnlineOrder(ctx context.Context, actor Actor, id string) (Or
 		if err := recalc(ctx, tx, orderID, a.stamp()); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE online_orders SET status = 'accepted', order_id = ?, decided_at = ?, decided_by = ? WHERE id = ?`,
-			orderID, a.stamp(), actor.UserID, id); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE online_orders SET status = 'accepted', order_id = ?, customer_id = ?, decided_at = ?, decided_by = ? WHERE id = ?`,
+			orderID, sqlite.NullString(customerID), a.stamp(), actor.UserID, id); err != nil {
 			return err
 		}
 		return a.audit(ctx, tx, actor, "online_order.accept", "online_orders", id, map[string]string{"order_id": orderID})
@@ -799,4 +873,110 @@ func (a *App) RegenerateTableToken(ctx context.Context, actor Actor, tableID str
 		return a.audit(ctx, tx, actor, "table.qr_regenerate", "dining_tables", tableID, nil)
 	})
 	return token, err
+}
+
+// ---- tables by number and customers by phone ----------------------------------------
+
+// tableByNumber finds the table a guest typed: its exact name, or, for a
+// plain number, the one table whose name has those digits («5» → «T5»).
+func tableByNumber(ctx context.Context, tx *sql.Tx, typed string) (string, error) {
+	want := strings.ToLower(strings.TrimSpace(typed))
+	wantDigits, _ := normalizePhone(want) // digits only (Arabic digits too)
+	rows, err := tx.QueryContext(ctx, `SELECT id, name FROM dining_tables WHERE active = 1 AND deleted_at IS NULL`)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	var byDigits []string
+	for rows.Next() {
+		var id, name string
+		if err := rows.Scan(&id, &name); err != nil {
+			return "", err
+		}
+		if strings.ToLower(strings.TrimSpace(name)) == want {
+			return id, nil
+		}
+		if d := digitsOf(name); wantDigits != "" && d == strings.TrimLeft(wantDigits, "0") {
+			byDigits = append(byDigits, id)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	switch len(byDigits) {
+	case 1:
+		return byDigits[0], nil
+	case 0:
+		return "", &Error{CodeNotFound, "رقم الترابيزة ده مش موجود، اكتبه زي ما هو مكتوب على الترابيزة"}
+	default:
+		return "", conflict("فيه أكتر من ترابيزة بالرقم ده، اكتب اسمها زي ما هو مكتوب على الترابيزة")
+	}
+}
+
+func digitsOf(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r >= '٠' && r <= '٩':
+			b.WriteRune('0' + (r - '٠'))
+		}
+	}
+	return strings.TrimLeft(b.String(), "0")
+}
+
+// normalizePhone keeps digits (Arabic and Persian digits become ASCII) and a
+// leading +, dropping spaces and dashes.
+func normalizePhone(p string) (string, bool) {
+	var b strings.Builder
+	for i, r := range strings.TrimSpace(p) {
+		switch {
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r >= '٠' && r <= '٩':
+			b.WriteRune('0' + (r - '٠'))
+		case r >= '۰' && r <= '۹':
+			b.WriteRune('0' + (r - '۰'))
+		case r == '+' && i == 0:
+			b.WriteRune(r)
+		case r == ' ' || r == '-':
+		default:
+			return "", false
+		}
+	}
+	n := b.String()
+	digits := len(strings.TrimPrefix(n, "+"))
+	return n, digits >= 7 && digits <= 15
+}
+
+// customerForOrder links an accepted online order to the customer with the
+// same phone, creating one for a delivery order (staff accepting is the
+// check that the details are real). An empty address on file is filled in.
+func (a *App) customerForOrder(ctx context.Context, tx *sql.Tx, o OnlineOrder) (string, error) {
+	phone, ok := normalizePhone(o.Phone)
+	if !ok {
+		return "", nil
+	}
+	var id, address string
+	err := tx.QueryRowContext(ctx, `SELECT id, address FROM customers WHERE replace(replace(phone,' ',''),'-','') = ? ORDER BY created_at LIMIT 1`, phone).
+		Scan(&id, &address)
+	switch {
+	case err == nil:
+		if address == "" && o.Address != "" {
+			_, err = tx.ExecContext(ctx, `UPDATE customers SET address = ?, updated_at = ? WHERE id = ?`, o.Address, a.stamp(), id)
+		}
+		return id, err
+	case !errors.Is(err, sql.ErrNoRows):
+		return "", err
+	case o.Type != "delivery" || o.CustomerName == "":
+		return "", nil
+	}
+	id = sqlite.NewID()
+	_, err = tx.ExecContext(ctx, `INSERT INTO customers(id, name, phone, address, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`,
+		id, o.CustomerName, phone, o.Address, "من المنيو الإلكتروني", a.stamp(), a.stamp())
+	if isUnique(err) {
+		return "", nil // a differently written copy of the number exists; leave the order unlinked
+	}
+	return id, err
 }

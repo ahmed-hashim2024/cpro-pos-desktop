@@ -2,8 +2,24 @@
 // the menu bundle small; item names come from the restaurant as written.
 const dict = {
   ar: {
-    menu: 'المنيو', table: 'طاولة', search: 'ابحث في المنيو', add: 'إضافة', addToCart: 'أضف للطلب', cart: 'طلبك',
-    viewCart: 'عرض الطلب', items: 'صنف', total: 'الإجمالي', estTotal: 'الإجمالي قبل الضريبة والخدمة', notes: 'ملاحظات',
+    installTitle: 'نزّل تطبيق {0}', installSub: 'اطلب أسرع من الشاشة الرئيسية لموبايلك، من غير ما تدوّر على اللينك.', install: 'تثبيت التطبيق', notNow: 'مش دلوقتي',
+    iosStep1: 'دوس على زرار المشاركة تحت في سفاري', iosStep2: 'اختار «إضافة إلى الشاشة الرئيسية»', gotIt: 'تمام',
+    myDetails: 'بياناتي', detailsSub: 'هتتبعت مع طلبك عشان يوصلك صح', inHall: 'في الصالة', delivery: 'توصيل', tableNumber: 'رقم الترابيزة',
+    tableNumberPh: 'مكتوب على الترابيزة', address: 'العنوان', addressPh: 'المنطقة، الشارع، رقم العمارة والشقة، علامة مميزة', detailsSaved: 'تم حفظ بياناتك',
+    detailsNote: 'بياناتك متخزنة على موبايلك بس، وبتتبعت للمطعم مع الطلب.', deliverTo: 'توصيل إلى', needTable: 'اكتب رقم الترابيزة', needAddress: 'اكتب اسمك وتليفونك وعنوانك',
+    edit: 'تعديل', addDetails: 'أكمل بياناتك', subtotal: 'الطلبات', deliveryFee: 'رسوم التوصيل',
+    home: 'الرئيسية', menuTab: 'المنيو', cartTab: 'السلة', offers: 'العروض', profile: 'بياناتي', popular: 'الأكثر طلباً', viewAll: 'عرض الكل',
+    familyOffers: 'عروض العيلة', orderNow: 'اطلب الآن', filter: 'فلتر', category: 'القسم', allCats: 'الكل', priceRange: 'السعر', from: 'من', to: 'إلى',
+    apply: 'تطبيق', reset: 'مسح الفلتر', searchMeal: 'ابحث عن وجبتك…', badge_bestseller: 'الأكثر مبيعاً', badge_hot_deal: 'عرض ساخن', badge_new: 'جديد',
+    noOffers: 'لا توجد عروض حالياً', cartEmpty: 'سلتك فاضية', cartEmptySub: 'اختار اللي يعجبك من المنيو وضيفه للسلة', browseMenu: 'تصفح المنيو',
+    confirmOrder: 'تأكيد الطلب',
+    previewOnly: 'دي معاينة — مفيش حاجة هتتبعت', previewBanner: 'معاينة المنيو',
+   
+   
+    save: 'حفظ',
+   
+    menu: 'المنيو', table: 'طاولة', search: 'ابحث في المنيو', add: 'إضافة', addToCart: 'أضف للطلب', cart: 'سلتك',
+    viewCart: 'عرض الطلب', items: 'صنف', total: 'الإجمالي', estTotal: 'الإجمالي (قبل الضريبة والخدمة)', notes: 'ملاحظات',
     notesPh: 'مثلاً: بدون بصل', orderNotesPh: 'ملاحظة للمطعم', name: 'الاسم', phone: 'رقم الموبايل', send: 'إرسال الطلب',
     required: 'إجباري', optional: 'اختياري', chooseUpTo: 'اختر حتى {0}', chooseAtLeast: 'اختر {0} على الأقل', chooseOne: 'اختر واحد',
     callWaiter: 'نداء الويتر', askBill: 'طلب الحساب', waiterComing: 'تم إبلاغ الويتر، جاي حالاً', billComing: 'الحساب جاي حالاً',
@@ -16,7 +32,23 @@ const dict = {
     currency: { EGP: 'ج.م', SAR: 'ر.س', AED: 'د.إ', USD: '$' },
   },
   en: {
-    menu: 'Menu', table: 'Table', search: 'Search the menu', add: 'Add', addToCart: 'Add to order', cart: 'Your order',
+    installTitle: 'Get the {0} app', installSub: 'Order faster from your home screen, without looking for the link.', install: 'Install app', notNow: 'Not now',
+    iosStep1: 'Tap the Share button in Safari', iosStep2: 'Choose “Add to Home Screen”', gotIt: 'Got it',
+    myDetails: 'My details', detailsSub: 'Sent with your order so it reaches you', inHall: 'In the hall', delivery: 'Delivery', tableNumber: 'Table number',
+    tableNumberPh: 'Written on your table', address: 'Address', addressPh: 'Area, street, building and flat, landmark', detailsSaved: 'Details saved',
+    detailsNote: 'Your details stay on this phone and are sent to the restaurant with your order.', deliverTo: 'Deliver to', needTable: 'Enter your table number', needAddress: 'Enter your name, phone and address',
+    edit: 'Edit', addDetails: 'Add your details', subtotal: 'Items', deliveryFee: 'Delivery fee',
+    home: 'Home', menuTab: 'Menu', cartTab: 'Cart', offers: 'Offers', profile: 'My details', popular: 'Popular picks', viewAll: 'View all',
+    familyOffers: 'Family deals', orderNow: 'Order now', filter: 'Filter', category: 'Category', allCats: 'All', priceRange: 'Price', from: 'From', to: 'To',
+    apply: 'Apply', reset: 'Clear filter', searchMeal: 'Search your favourite meal…', badge_bestseller: 'Bestseller', badge_hot_deal: 'Hot deal', badge_new: 'New',
+    noOffers: 'No offers right now', cartEmpty: 'Your cart is empty', cartEmptySub: 'Pick something from the menu and add it to your cart', browseMenu: 'Browse the menu',
+    confirmOrder: 'Confirm order',
+    previewOnly: 'Preview only — nothing is sent', previewBanner: 'Menu preview',
+   
+   
+    save: 'Save',
+   
+    menu: 'Menu', table: 'Table', search: 'Search the menu', add: 'Add', addToCart: 'Add to order', cart: 'Your cart',
     viewCart: 'View order', items: 'items', total: 'Total', estTotal: 'Total before tax and service', notes: 'Notes',
     notesPh: 'e.g. no onions', orderNotesPh: 'Note for the restaurant', name: 'Name', phone: 'Mobile number', send: 'Send order',
     required: 'Required', optional: 'Optional', chooseUpTo: 'Choose up to {0}', chooseAtLeast: 'Choose at least {0}', chooseOne: 'Choose one',
@@ -30,7 +62,23 @@ const dict = {
     currency: { EGP: 'EGP', SAR: 'SAR', AED: 'AED', USD: '$' },
   },
   fr: {
-    menu: 'Menu', table: 'Table', search: 'Rechercher', add: 'Ajouter', addToCart: 'Ajouter à la commande', cart: 'Votre commande',
+    installTitle: 'Installez l’app {0}', installSub: 'Commandez plus vite depuis votre écran d’accueil.', install: 'Installer l’app', notNow: 'Plus tard',
+    iosStep1: 'Touchez le bouton Partager dans Safari', iosStep2: 'Choisissez « Sur l’écran d’accueil »', gotIt: 'Compris',
+    myDetails: 'Mes infos', detailsSub: 'Envoyées avec votre commande', inHall: 'En salle', delivery: 'Livraison', tableNumber: 'Numéro de table',
+    tableNumberPh: 'Indiqué sur la table', address: 'Adresse', addressPh: 'Quartier, rue, immeuble et appartement, repère', detailsSaved: 'Infos enregistrées',
+    detailsNote: 'Vos infos restent sur ce téléphone et sont envoyées au restaurant avec la commande.', deliverTo: 'Livrer à', needTable: 'Indiquez le numéro de table', needAddress: 'Indiquez nom, téléphone et adresse',
+    edit: 'Modifier', addDetails: 'Compléter mes infos', subtotal: 'Articles', deliveryFee: 'Frais de livraison',
+    home: 'Accueil', menuTab: 'Menu', cartTab: 'Panier', offers: 'Offres', profile: 'Mes infos', popular: 'Les plus demandés', viewAll: 'Tout voir',
+    familyOffers: 'Offres famille', orderNow: 'Commander', filter: 'Filtrer', category: 'Catégorie', allCats: 'Tout', priceRange: 'Prix', from: 'De', to: 'À',
+    apply: 'Appliquer', reset: 'Effacer le filtre', searchMeal: 'Rechercher un plat…', badge_bestseller: 'Best-seller', badge_hot_deal: 'Bon plan', badge_new: 'Nouveau',
+    noOffers: 'Aucune offre pour le moment', cartEmpty: 'Votre panier est vide', cartEmptySub: 'Choisissez un plat du menu et ajoutez-le au panier', browseMenu: 'Voir le menu',
+    confirmOrder: 'Confirmer la commande',
+    previewOnly: 'Aperçu uniquement — rien n’est envoyé', previewBanner: 'Aperçu du menu',
+   
+   
+    save: 'Enregistrer',
+   
+    menu: 'Menu', table: 'Table', search: 'Rechercher', add: 'Ajouter', addToCart: 'Ajouter à la commande', cart: 'Votre panier',
     viewCart: 'Voir la commande', items: 'articles', total: 'Total', estTotal: 'Total hors taxes et service', notes: 'Remarques',
     notesPh: 'ex. sans oignons', orderNotesPh: 'Remarque pour le restaurant', name: 'Nom', phone: 'Numéro de mobile', send: 'Envoyer la commande',
     required: 'Obligatoire', optional: 'Facultatif', chooseUpTo: "Jusqu'à {0}", chooseAtLeast: 'Au moins {0}', chooseOne: 'Choisissez-en un',

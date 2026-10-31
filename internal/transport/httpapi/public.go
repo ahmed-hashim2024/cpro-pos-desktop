@@ -56,6 +56,33 @@ func NewPublic(a *app.App, log *slog.Logger, static fs.FS) http.Handler {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "غير موجود"})
 	})
 
+	// Installable app (PWA): manifest, iOS icon and service worker. They
+	// 404 unless the owner offers the app (and the menu is open).
+	mux.HandleFunc("GET /manifest.webmanifest", func(w http.ResponseWriter, r *http.Request) {
+		b, err := a.AppManifest(r.Context())
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/manifest+json")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Write(b)
+	})
+	mux.HandleFunc("GET /apple-touch-icon.png", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := a.AppleTouchIcon()
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-cache")
+		http.ServeFile(w, r, p)
+	})
+	mux.HandleFunc("GET /sw.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Write([]byte(app.ServiceWorker))
+	})
+
 	page := func(w http.ResponseWriter, r *http.Request) {
 		if static == nil {
 			http.NotFound(w, r)
