@@ -7,6 +7,8 @@ import Layout, { navLeaves, allowed } from '@/components/Layout';
 import { Toasts, Spinner } from '@/components/ui';
 import { ApprovalModal } from '@/components/Approval';
 import { ConfirmModal } from '@/components/Confirm';
+import { ActivationAlert } from '@/components/License';
+import { UpdateAlert } from '@/components/Update';
 import Login from '@/pages/Login';
 
 const pages = {
@@ -72,6 +74,8 @@ export default function App() {
           )}
         </Routes>
       </Suspense>
+      <ActivationAlert />
+      <UpdateAlert />
       <ApprovalModal />
       <ConfirmModal />
       <Toasts />

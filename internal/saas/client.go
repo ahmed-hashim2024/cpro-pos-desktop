@@ -2,9 +2,20 @@
 // activation, license refresh and the config the owner edits on the
 // Platform (domain, e-menu settings).
 //
-// Every call is signed with this device's Ed25519 key. The signed message is
-// the exact text "device_id\nts\nnonce\nbody" where body is the JSON string
-// sent, so neither side depends on how the other serialises JSON.
+// Both directions are signed, so the app only ever trusts the real Platform,
+// whatever address it is pointed at:
+//
+//   - Requests are signed with this device's Ed25519 key. The signed message
+//     is the exact text "device_id\nts\nnonce\nbody" where body is the JSON
+//     string sent, so neither side depends on how the other serialises JSON.
+//   - Replies are signed with the Platform key (its public half is built into
+//     the binary, see package license) over "cpro-resp\ndevice_id\nnonce\ndata",
+//     where nonce is the request's: a reply can't be forged, altered or
+//     replayed. An unsigned or wrongly signed reply is rejected.
+//
+// Before the activation key leaves the computer, Activate first checks the
+// server proves it holds the Platform key (Hello), so a wrong or hostile
+// address never sees it.
 package saas
 
 import (
@@ -29,12 +40,13 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-// DefaultURL is the Platform address, set at build time:
+// DefaultURL is the Platform address. A build may change it:
 //
 //	-ldflags "-X cpro/internal/saas.DefaultURL=https://cpro.example.com"
 //
-// The owner can override it in Settings → Account.
-var DefaultURL = ""
+// and the owner can override it in Settings → Subscription → Advanced. Any
+// address works only if it answers with the Platform's signature.
+var DefaultURL = "https://cacherpro.ahmedhashim.site"
 
 var b64 = base64.RawURLEncoding
 
@@ -45,12 +57,28 @@ var b64 = base64.RawURLEncoding
 // another computer doesn't clone the device.
 type Identity struct {
 	DeviceID string
-	key      ed25519.PrivateKey
+	// Created is when this installation first ran: the free trial counts
+	// from here.
+	Created time.Time
+	key     ed25519.PrivateKey
 }
 
 type identityFile struct {
 	DeviceID string `json:"device_id"`
 	Seed     string `json:"seed"`
+	Created  int64  `json:"created,omitempty"`
+}
+
+func writeIdentity(path string, f identityFile) error {
+	data, _ := json.Marshal(f)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // LoadIdentity reads the identity at path, creating it on first run.
@@ -61,19 +89,11 @@ func LoadIdentity(path string) (Identity, error) {
 		if _, err := rand.Read(seed); err != nil {
 			return Identity{}, err
 		}
-		f := identityFile{DeviceID: ulid.Make().String(), Seed: b64.EncodeToString(seed)}
-		data, _ := json.Marshal(f)
-		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		f := identityFile{DeviceID: ulid.Make().String(), Seed: b64.EncodeToString(seed), Created: time.Now().Unix()}
+		if err := writeIdentity(path, f); err != nil {
 			return Identity{}, err
 		}
-		tmp := path + ".tmp"
-		if err := os.WriteFile(tmp, data, 0o600); err != nil {
-			return Identity{}, err
-		}
-		if err := os.Rename(tmp, path); err != nil {
-			return Identity{}, err
-		}
-		return Identity{DeviceID: f.DeviceID, key: ed25519.NewKeyFromSeed(seed)}, nil
+		return Identity{DeviceID: f.DeviceID, Created: time.Unix(f.Created, 0), key: ed25519.NewKeyFromSeed(seed)}, nil
 	}
 	if err != nil {
 		return Identity{}, err
@@ -86,12 +106,19 @@ func LoadIdentity(path string) (Identity, error) {
 	if err != nil || len(seed) != ed25519.SeedSize || f.DeviceID == "" {
 		return Identity{}, errors.New("device identity: corrupt file")
 	}
-	return Identity{DeviceID: f.DeviceID, key: ed25519.NewKeyFromSeed(seed)}, nil
+	if f.Created == 0 {
+		// Installed before the trial existed: the trial starts now.
+		f.Created = time.Now().Unix()
+		if err := writeIdentity(path, f); err != nil {
+			return Identity{}, err
+		}
+	}
+	return Identity{DeviceID: f.DeviceID, Created: time.Unix(f.Created, 0), key: ed25519.NewKeyFromSeed(seed)}, nil
 }
 
 // NewIdentity builds an identity from a raw seed (tests).
 func NewIdentity(deviceID string, seed []byte) Identity {
-	return Identity{DeviceID: deviceID, key: ed25519.NewKeyFromSeed(seed)}
+	return Identity{DeviceID: deviceID, Created: time.Now(), key: ed25519.NewKeyFromSeed(seed)}
 }
 
 // PublicKey is the device key as unpadded base64url.
@@ -106,6 +133,25 @@ func Message(deviceID string, ts int64, nonce, body string) []byte {
 
 func (i Identity) Sign(ts int64, nonce, body string) string {
 	return b64.EncodeToString(ed25519.Sign(i.key, Message(i.DeviceID, ts, nonce, body)))
+}
+
+// ReplyMessage is the exact byte string the Platform signs for a reply.
+func ReplyMessage(deviceID, nonce, data string) []byte {
+	return []byte("cpro-resp\n" + deviceID + "\n" + nonce + "\n" + data)
+}
+
+// VerifyReply checks a reply signature against the Platform public key
+// (unpadded base64url).
+func VerifyReply(platformKey, deviceID, nonce, data, sig string) bool {
+	key, err := b64.DecodeString(platformKey)
+	if err != nil || len(key) != ed25519.PublicKeySize {
+		return false
+	}
+	s, err := b64.DecodeString(sig)
+	if err != nil {
+		return false
+	}
+	return ed25519.Verify(ed25519.PublicKey(key), ReplyMessage(deviceID, nonce, data), s)
 }
 
 // ---- wire types --------------------------------------------------------------
@@ -151,16 +197,26 @@ func (e *Error) Error() string { return e.Message }
 // ErrUnreachable wraps network failures (offline, DNS, TLS, timeouts).
 var ErrUnreachable = errors.New("platform unreachable")
 
+// ErrNotPlatform means the server answered without the Platform signature:
+// the address is wrong, or something is impersonating the Platform.
+var ErrNotPlatform = errors.New("the server is not the CPro platform")
+
 // ---- client --------------------------------------------------------------------
 
 type Client struct {
-	ID   Identity
-	HTTP *http.Client
-	Now  func() time.Time
+	ID Identity
+	// PlatformKey verifies every reply (unpadded base64url Ed25519).
+	PlatformKey string
+	HTTP        *http.Client
+	Now         func() time.Time
 }
 
-func NewClient(id Identity) *Client {
-	return &Client{ID: id, HTTP: &http.Client{Timeout: 20 * time.Second}, Now: time.Now}
+func NewClient(id Identity, platformKey string) *Client {
+	return &Client{ID: id, PlatformKey: platformKey, HTTP: &http.Client{
+		Timeout: 20 * time.Second,
+		// The API never redirects; following one could leave the Platform.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}, Now: time.Now}
 }
 
 // NormalizeURL validates a Platform base URL. Plain http is accepted only
@@ -179,7 +235,17 @@ func NormalizeURL(raw string) (string, error) {
 	return raw, nil
 }
 
+// Hello proves the server at base holds the Platform key: the reply is
+// signed over this call's fresh nonce.
+func (c *Client) Hello(ctx context.Context, base string) error {
+	return c.call(ctx, base, "hello", map[string]any{}, nil)
+}
+
 func (c *Client) Activate(ctx context.Context, base, code string, info DeviceInfo) (Reply, error) {
+	// Never send the activation key to a server that isn't the Platform.
+	if err := c.Hello(ctx, base); err != nil {
+		return Reply{}, err
+	}
 	body := map[string]any{
 		"activation_code": strings.ToUpper(strings.TrimSpace(code)),
 		"public_key":      c.ID.PublicKey(),
@@ -192,40 +258,22 @@ func (c *Client) Activate(ctx context.Context, base, code string, info DeviceInf
 	return r, c.call(ctx, base, "activate", body, &r)
 }
 
-// LinkStart is a pending browser link: show Code, open URL, poll every
-// Interval seconds until approved or ExpiresIn runs out.
-type LinkStart struct {
-	Code      string `json:"code"`
+// Release is the latest app version for this platform. It arrives in a
+// signed reply, so URL and SHA256 can be trusted: the download is checked
+// against SHA256 before it runs.
+type Release struct {
+	Version   string `json:"version"`
+	Mandatory bool   `json:"mandatory"`
 	URL       string `json:"url"`
-	ExpiresIn int    `json:"expires_in"`
-	Interval  int    `json:"interval"`
+	SHA256    string `json:"sha256"`
+	Notes     string `json:"notes"`
 }
 
-// LinkPoll is pending | approved | denied | expired; approved carries the
-// same license and sync as Activate.
-type LinkPoll struct {
-	Status string `json:"status"`
-	Reply
-}
-
-// StartLink begins linking this device from the browser (the owner signs in
-// on the Platform and approves). The request is signed with the key the
-// license will be bound to.
-func (c *Client) StartLink(ctx context.Context, base string, info DeviceInfo) (LinkStart, error) {
-	body := map[string]any{
-		"public_key":  c.ID.PublicKey(),
-		"device_name": info.Name,
-		"os":          info.OS,
-		"app_version": info.AppVersion,
-		"fingerprint": info.Fingerprint,
-	}
-	var r LinkStart
-	return r, c.call(ctx, base, "start_link", body, &r)
-}
-
-func (c *Client) PollLink(ctx context.Context, base string) (LinkPoll, error) {
-	var r LinkPoll
-	return r, c.call(ctx, base, "poll_link", map[string]any{}, &r)
+// Update asks for the latest release. It needs no activation, so trial
+// installations get updates too.
+func (c *Client) Update(ctx context.Context, base, platform, version string) (Release, error) {
+	var r Release
+	return r, c.call(ctx, base, "update", map[string]any{"platform": platform, "version": version}, &r)
 }
 
 func (c *Client) Refresh(ctx context.Context, base string) (Reply, error) {
@@ -256,7 +304,7 @@ func (c *Client) call(ctx context.Context, base, method string, payload any, out
 	if err != nil {
 		return err
 	}
-	nb := make([]byte, 12)
+	nb := make([]byte, 16)
 	rand.Read(nb)
 	nonce := hex.EncodeToString(nb)
 	ts := c.Now().Unix()
@@ -287,20 +335,34 @@ func (c *Client) call(ctx context.Context, base, method string, payload any, out
 		return &Error{Status: resp.StatusCode, Message: frappeMessage(raw, resp.StatusCode)}
 	}
 	var env struct {
-		Message json.RawMessage `json:"message"`
+		Message struct {
+			Data string `json:"data"`
+			Sig  string `json:"sig"`
+		} `json:"message"`
 	}
-	if err := json.Unmarshal(raw, &env); err != nil {
-		return &Error{Status: resp.StatusCode, Message: "unexpected response from the platform"}
+	if err := json.Unmarshal(raw, &env); err != nil || env.Message.Sig == "" {
+		return ErrNotPlatform
+	}
+	if !VerifyReply(c.PlatformKey, c.ID.DeviceID, nonce, env.Message.Data, env.Message.Sig) {
+		return ErrNotPlatform
 	}
 	if out == nil {
 		return nil
 	}
-	return json.Unmarshal(env.Message, out)
+	return json.Unmarshal([]byte(env.Message.Data), out)
 }
 
 // frappeMessage extracts the user-facing text from a Frappe error response:
 // _server_messages is a JSON list of JSON-encoded {"message": ...} objects.
 func frappeMessage(raw []byte, status int) string {
+	m := frappeText(raw, status)
+	if r := []rune(m); len(r) > 200 {
+		m = string(r[:200])
+	}
+	return m
+}
+
+func frappeText(raw []byte, status int) string {
 	var e struct {
 		ServerMessages string `json:"_server_messages"`
 		Exception      string `json:"exception"`

@@ -3,12 +3,9 @@
 // its own, so every rule is unit-testable.
 //
 // The license is a compact JWS (alg EdDSA) signed with the Platform key.
-// The matching public key is built into the binary:
-//
-//	-ldflags "-X cpro/internal/license.PublicKey=<base64url>"
-//
-// Development builds without it may use CPRO_LICENSE_PUBKEY instead; a
-// release build ignores that variable, so it can't be pointed at a fake.
+// The matching public key is fixed in the code below; the private half is
+// set on the Platform (SCP Settings → License Private Key). Changing the
+// pair means releasing an update with the new public key.
 package license
 
 import (
@@ -16,21 +13,16 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"os"
 	"strings"
 	"time"
 )
 
 // PublicKey is the Platform's Ed25519 license key (unpadded base64url).
-var PublicKey = ""
+// Tests and the dev server swap it for a fake Platform's key.
+var PublicKey = "1vZ4LsJYMsXQ4Sq9v2UmNQsVm7N2UrdCJMFwUDp9yDI"
 
-// Key returns the key licenses are checked against.
-func Key() string {
-	if PublicKey != "" {
-		return PublicKey
-	}
-	return os.Getenv("CPRO_LICENSE_PUBKEY")
-}
+// Key returns the key licenses and Platform replies are checked against.
+func Key() string { return PublicKey }
 
 // Features are the modules the account has, keyed by name. The set is open:
 // an add-on enabled on the Platform (e.g. "whatsapp_ai") shows up here with
@@ -119,7 +111,6 @@ func Verify(token, pub string) (Claims, error) {
 type State string
 
 const (
-	Unlicensed State = "unlicensed" // never activated (or unlinked): selling is blocked
 	Active     State = "active"
 	Trial      State = "trial"
 	Grace      State = "grace"      // expired while offline, still within the grace days
@@ -139,6 +130,23 @@ type Status struct {
 	Reason     string    `json:"reason,omitempty"`
 	ExpiresAt  time.Time `json:"expires_at"`
 	GraceUntil time.Time `json:"grace_until"`
+}
+
+// TrialDays is the free trial every new installation gets before it needs
+// an activation key. It counts from the first run, offline.
+const TrialDays = 3
+
+// LocalTrial is the state of a device that isn't activated: Trial for
+// TrialDays from start, then Restricted until an activation key is entered.
+func LocalTrial(start, now, highWater time.Time) Status {
+	if now.Before(highWater) {
+		now = highWater
+	}
+	end := start.AddDate(0, 0, TrialDays)
+	if now.Before(end) {
+		return Status{State: Trial, ExpiresAt: end}
+	}
+	return Status{State: Restricted, Reason: ReasonTrialEnded, ExpiresAt: end}
 }
 
 // CanSell reports whether sales are allowed.

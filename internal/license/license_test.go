@@ -93,3 +93,18 @@ func TestEvaluate(t *testing.T) {
 		}
 	}
 }
+
+func TestLocalTrial(t *testing.T) {
+	start := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	if st := LocalTrial(start, start.Add(71*time.Hour), time.Time{}); st.State != Trial || !st.CanSell() {
+		t.Fatalf("day 3: %+v", st)
+	}
+	st := LocalTrial(start, start.Add(72*time.Hour), time.Time{})
+	if st.State != Restricted || st.Reason != ReasonTrialEnded || st.CanSell() {
+		t.Fatalf("after 3 days: %+v", st)
+	}
+	// Turning the clock back doesn't bring the trial back.
+	if st := LocalTrial(start, start, start.Add(80*time.Hour)); st.State != Restricted {
+		t.Fatalf("clock rollback: %+v", st)
+	}
+}

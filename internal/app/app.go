@@ -27,6 +27,7 @@ type App struct {
 	platform     *platformLink       // nil: licensing off (tests, tools)
 	tunnelStatus func() TunnelStatus // set by main
 	limits       *rateLimiter        // public e-menu endpoints
+	upd          updater             // app updates (update.go)
 
 	// E-menu settings saved on this computer, cached (see emenu_admin.go).
 	emenuMu     sync.Mutex

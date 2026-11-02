@@ -12,6 +12,7 @@ import { roles } from '@/lib/format';
 import { cx } from './ui';
 import { T, lang, languages, setLang } from '@/lib/i18n';
 import { LicenseBanner } from '@/components/License';
+import { UpdateBanner } from '@/components/Update';
 
 // One navigation tree drives the sidebar, the header search and the routes.
 export const navTree = [
@@ -87,6 +88,7 @@ export default function Layout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <Header collapsed={collapsed} onToggle={toggleCollapsed} />
         <LicenseBanner />
+        <UpdateBanner />
         <main className="min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-[1600px] p-4"><Outlet /></div>
         </main>

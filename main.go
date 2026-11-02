@@ -77,14 +77,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	if license.Key() != "" {
-		if err := a.EnablePlatform(ctx, saas.NewClient(id)); err != nil {
-			return err
-		}
-	} else {
-		// Development build (wails dev). Release builds always embed the
-		// key: scripts/build.sh refuses to build without it.
-		log.Warn("no license key built in: licensing is OFF (development build)")
+	if err := a.EnablePlatform(ctx, saas.NewClient(id, license.Key())); err != nil {
+		return err
 	}
 	tun := tunnel.New(p.Data, log)
 	a.SetTunnelStatusFunc(func() app.TunnelStatus {
@@ -127,6 +121,8 @@ func run() error {
 		title = settings.RestaurantName + " — CPro POS"
 	}
 	nat := native.New()
+	a.SetUpdateLauncher(native.UpdateLauncher(nat))
+	go a.RunUpdateChecks(ctx)
 	return wails.Run(&options.App{
 		Title:     title,
 		Width:     1366,

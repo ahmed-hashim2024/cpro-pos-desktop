@@ -12,11 +12,10 @@ import { Button, Badge, Modal, Select, Spinner, Empty, IconButton, SearchInput, 
 import { withApproval } from '@/components/Approval';
 import { ModifierDialog, LineDialog, VoidDialog, DiscountDialog, CustomerDialog, OpenShiftDialog, PayDialog } from './dialogs';
 import { T } from '@/lib/i18n';
-import { ActivationGate } from '@/components/License';
 import { useInbox, InboxButton, InboxPanel } from '@/components/Inbox';
 
 export default function POS() {
-  const { settings, shift, can, canSell } = useApp();
+  const { settings, shift, can } = useApp();
   const inbox = useInbox();
   const [inboxOpen, setInboxOpen] = useState(false);
   const [params, setParams] = useSearchParams();
@@ -152,7 +151,6 @@ export default function POS() {
     return menu.data.items.filter((i) => (s ? i.name.toLowerCase().includes(s) || i.code.toLowerCase().includes(s) : !cat || i.category_id === cat));
   }, [menu.data, cat, search]);
 
-  if (!canSell()) return <ActivationGate onBack={() => navigate('/')} />;
   if (menu.loading && !menu.data) return <Spinner />;
   // Anyone who takes cash must open a shift before selling.
   if (can('shift.cash') && !shift) return <ShiftGate onBack={() => navigate('/')} />;

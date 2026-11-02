@@ -25,5 +25,11 @@
   "nonce": "a1b2c3",
   "body": "{\"activation_code\": \"ACT-ABCDEFGHIJ\", \"device_name\": \"الكاشير\"}",
   "sig": "KT-abh0taQswHa_txs8hvnQOwhVUYv_S50-m3g7crJqe1s2ZrUCvc5bi6X0KUYeBJWMPI-7MFNE1yibB1jznAQ"
+ },
+ "response": {
+  "device_id": "01JDEVICE0000000000000000A",
+  "nonce": "a1b2c3",
+  "data": "{\"ok\":true}",
+  "sig": "kEH-gJpCwXzY0pl-m0RsTBH3IoaXFmysBeUcFCXnOHEzUvQ8TJji4_TJRZmLeGDfNQV0jUuDnRL0yaiAWf5IAA"
  }
 }

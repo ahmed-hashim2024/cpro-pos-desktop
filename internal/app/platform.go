@@ -2,9 +2,7 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -15,6 +13,7 @@ import (
 
 	"cpro/internal/domain/rbac"
 	"cpro/internal/license"
+	"cpro/internal/platform/machine"
 	"cpro/internal/saas"
 	"cpro/internal/store/sqlite"
 )
@@ -26,8 +25,10 @@ var Version = "dev"
 // Linking to the Platform: activation, license checks and the config the
 // owner edits on the Platform (restaurant domain, e-menu settings).
 //
-// Without a linked, valid license the app still opens, reports and backups
-// keep working, but selling is blocked (requireLicensed).
+// A new installation works offline for license.TrialDays with no account.
+// After that, selling is blocked (requireLicensed) until the owner enters
+// the activation key from their account on the Platform; the app still
+// opens, and reports and backups keep working.
 
 const (
 	platformKey     = "platform"
@@ -39,6 +40,7 @@ const (
 // configured while offline.
 type platformState struct {
 	URL         string          `json:"url"` // override of saas.DefaultURL
+	TrialStart  int64           `json:"trial_start"`
 	License     string          `json:"license"`
 	Tunnel      *saas.Tunnel    `json:"tunnel"`
 	EMenu       json.RawMessage `json:"emenu"`
@@ -50,6 +52,9 @@ type platformState struct {
 	LastError   string          `json:"last_error"`
 	// Add-on settings by feature key, as sent by the Platform.
 	Integrations map[string]json.RawMessage `json:"integrations"`
+	// Latest release seen (update.go) and when it was checked.
+	Update        *saas.Release `json:"update"`
+	UpdateChecked int64         `json:"update_checked"`
 }
 
 type platformLink struct {
@@ -59,15 +64,6 @@ type platformLink struct {
 	claims   *license.Claims // verified and bound to this device
 	wake     chan struct{}
 	onChange []func()
-	link     *pendingLink // browser link in progress (memory only)
-}
-
-type pendingLink struct {
-	code, url string
-	expires   time.Time
-	interval  time.Duration
-	lastPoll  time.Time
-	status    string
 }
 
 // EnablePlatform turns licensing on. Tests and tools that never call it run
@@ -87,6 +83,17 @@ func (a *App) EnablePlatform(ctx context.Context, c *saas.Client) error {
 	}
 	p.claims = verifyFor(p.st.License, c.ID)
 	a.platform = p
+	// The trial counts from the earliest first run this computer remembers
+	// (the identity file or the database), so neither alone resets it.
+	start := c.ID.Created.Unix()
+	if p.st.TrialStart > 0 && p.st.TrialStart < start {
+		start = p.st.TrialStart
+	}
+	if start != p.st.TrialStart {
+		p.st.TrialStart = start
+		p.st.HighWater = max(p.st.HighWater, a.now().Unix())
+		return a.savePlatformLocked(ctx)
+	}
 	return nil
 }
 
@@ -131,17 +138,31 @@ func (a *App) licenseStatus() license.Status {
 	return p.statusLocked(a.now())
 }
 
+func (p *platformLink) trialLocked(now time.Time) license.Status {
+	return license.LocalTrial(time.Unix(p.st.TrialStart, 0), now, time.Unix(p.st.HighWater, 0))
+}
+
 func (p *platformLink) statusLocked(now time.Time) license.Status {
+	trial := p.trialLocked(now)
 	if p.claims == nil {
-		return license.Status{State: license.Unlicensed}
+		return trial
 	}
 	if p.st.Revoked {
 		return license.Status{State: license.Restricted, Reason: license.ReasonRevoked}
 	}
-	return license.Evaluate(*p.claims, now, time.Unix(p.st.HighWater, 0))
+	st := license.Evaluate(*p.claims, now, time.Unix(p.st.HighWater, 0))
+	// Activating early never shortens this computer's own trial, but a
+	// suspended account stops at once.
+	if !st.CanSell() && st.Reason != license.ReasonSuspended && trial.CanSell() {
+		return trial
+	}
+	return st
 }
 
-// features are what the license grants; all on when licensing is off.
+// features are what the license grants; all on when licensing is off. The
+// features are Platform services (e-menu on the restaurant's domain, remote
+// access), so a computer that isn't activated has none of them, even during
+// its trial.
 func (a *App) features() license.Features {
 	p := a.platform
 	if p == nil {
@@ -152,15 +173,21 @@ func (a *App) features() license.Features {
 	}
 	p.mu.RLock()
 	defer p.mu.RUnlock()
+	if p.claims == nil {
+		return license.Features{}
+	}
 	return p.claims.Features
 }
 
-var errUnlicensed = &Error{CodeForbidden, "البرنامج غير مفعّل أو انتهى الاشتراك. فعّل البرنامج من الإعدادات ← الحساب"}
+var errUnlicensed = &Error{CodeForbidden, "البيع متوقف: انتهت الفترة التجريبية أو الاشتراك. أدخل كود التفعيل من الإعدادات ← الاشتراك"}
 
 // requireLicensed blocks selling without a valid license.
 func (a *App) requireLicensed() error {
 	if !a.licenseStatus().CanSell() {
 		return errUnlicensed
+	}
+	if a.updateRequired() {
+		return errUpdateRequired
 	}
 	return nil
 }
@@ -249,6 +276,22 @@ func (a *App) recordPlatformError(ctx context.Context, err error) {
 	p.mu.Unlock()
 }
 
+// touchHighWater records the current time now and then while the app runs
+// unlinked, so setting the clock back can't stretch the trial.
+func (a *App) touchHighWater(ctx context.Context) {
+	p := a.platform
+	now := a.now().Unix()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if now-p.st.HighWater < 5*60 {
+		return
+	}
+	p.st.HighWater = now
+	if err := a.savePlatformLocked(ctx); err != nil {
+		a.log.Warn("save platform state", "err", err)
+	}
+}
+
 // ---- sync loop -------------------------------------------------------------------
 
 // RunPlatformSync keeps the license and config fresh until ctx ends: a
@@ -285,6 +328,7 @@ func (a *App) syncOnce(ctx context.Context, force bool) {
 	due := a.now().Unix()-p.st.LastRefresh >= int64(refreshInterval/time.Second)
 	p.mu.RUnlock()
 	if !linked || base == "" {
+		a.touchHighWater(ctx)
 		return
 	}
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -320,6 +364,7 @@ type PlatformInfo struct {
 	Reason      string           `json:"reason"`
 	TenantName  string           `json:"tenant_name"`
 	Plan        string           `json:"plan"` // trial | active | ...
+	TrialEndsAt string           `json:"trial_ends_at"`
 	Features    license.Features `json:"features"`
 	ExpiresAt   string           `json:"expires_at"`
 	GraceUntil  string           `json:"grace_until"`
@@ -333,6 +378,7 @@ type PlatformInfo struct {
 	MenuEnabled bool             `json:"menu_enabled"`
 	Tunnel      TunnelStatus     `json:"tunnel"`
 	Version     string           `json:"app_version"`
+	Update      UpdateInfo       `json:"update"`
 }
 
 // TunnelStatus is reported by the tunnel supervisor.
@@ -347,7 +393,7 @@ func (a *App) SetTunnelStatusFunc(fn func() TunnelStatus) { a.tunnelStatus = fn 
 // PlatformInfo is readable by every signed-in user: the POS shows the
 // activation screen from it.
 func (a *App) PlatformInfo(ctx context.Context, actor Actor) (PlatformInfo, error) {
-	info := PlatformInfo{Version: Version, DefaultURL: saas.DefaultURL}
+	info := PlatformInfo{Version: Version, DefaultURL: saas.DefaultURL, Update: a.updateInfo()}
 	p := a.platform
 	if p == nil {
 		info.State = license.Active
@@ -366,6 +412,10 @@ func (a *App) PlatformInfo(ctx context.Context, actor Actor) (PlatformInfo, erro
 		if st.GraceUntil.After(st.ExpiresAt) {
 			info.GraceUntil = sqlite.FormatTime(st.GraceUntil)
 		}
+	}
+	info.TrialEndsAt = sqlite.FormatTime(p.trialLocked(a.now()).ExpiresAt)
+	if p.claims == nil {
+		info.ExpiresAt = info.TrialEndsAt
 	}
 	info.Features = f
 	info.DeviceID = p.client.ID.DeviceID
@@ -390,7 +440,6 @@ func (a *App) PlatformInfo(ctx context.Context, actor Actor) (PlatformInfo, erro
 
 func deviceInfo(name string) saas.DeviceInfo {
 	host, _ := os.Hostname()
-	sum := sha256.Sum256([]byte(host + "|" + runtime.GOOS + "|" + runtime.GOARCH))
 	if name == "" {
 		name = host
 	}
@@ -398,7 +447,7 @@ func deviceInfo(name string) saas.DeviceInfo {
 		Name:        name,
 		OS:          runtime.GOOS + "/" + runtime.GOARCH,
 		AppVersion:  Version,
-		Fingerprint: hex.EncodeToString(sum[:8]),
+		Fingerprint: machine.Fingerprint(),
 	}
 }
 
@@ -410,6 +459,8 @@ func platformErr(err error) error {
 		return &Error{CodeConflict, "رد المنصة: " + se.Message}
 	case errors.Is(err, saas.ErrUnreachable):
 		return &Error{CodeConflict, "تعذر الاتصال بالمنصة. تأكد من الإنترنت وحاول مرة أخرى"}
+	case errors.Is(err, saas.ErrNotPlatform):
+		return &Error{CodeConflict, "العنوان المضبوط ليس منصة CPro الرسمية. راجع عنوان المنصة من الإعدادات ← الاشتراك ← متقدم"}
 	}
 	return err
 }
@@ -496,8 +547,7 @@ func (a *App) UnlinkDevice(ctx context.Context, actor Actor, force bool) error {
 		return platformErr(err)
 	}
 	p.mu.Lock()
-	url, hw := p.st.URL, p.st.HighWater
-	p.st = platformState{URL: url, HighWater: hw}
+	p.st = platformState{URL: p.st.URL, TrialStart: p.st.TrialStart, HighWater: p.st.HighWater, Update: p.st.Update, UpdateChecked: p.st.UpdateChecked}
 	p.claims = nil
 	err = a.savePlatformLocked(ctx)
 	p.mu.Unlock()
@@ -550,164 +600,4 @@ func (a *App) IntegrationConfig(key string) (json.RawMessage, bool) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.st.Integrations[key], true // config may be empty for add-ons without settings
-}
-
-// ---- browser linking -------------------------------------------------------------
-
-// LinkStatus is what the app shows while the owner signs in on the Platform.
-type LinkStatus struct {
-	State     string `json:"state"` // idle | pending | approved | denied | expired
-	Code      string `json:"code"`
-	URL       string `json:"url"`
-	ExpiresAt string `json:"expires_at"`
-}
-
-// StartLink asks the Platform for a link code; the UI opens URL in the
-// browser, where the owner signs in or signs up and approves this device.
-func (a *App) StartLink(ctx context.Context, actor Actor, deviceName string) (LinkStatus, error) {
-	if err := actor.require(rbac.SettingsManage); err != nil {
-		return LinkStatus{}, err
-	}
-	return a.startLink(ctx, deviceName)
-}
-
-// PollLink checks whether the owner approved; on approval the license is
-// stored exactly as with an activation code.
-func (a *App) PollLink(ctx context.Context, actor Actor) (LinkStatus, error) {
-	if err := actor.require(rbac.SettingsManage); err != nil {
-		return LinkStatus{}, err
-	}
-	return a.pollLink(ctx)
-}
-
-// First run: linking happens before any local user exists, so these are
-// open only while the app still needs setup, and only inside the desktop
-// window.
-var errNotLinked = &Error{CodeForbidden, "سجّل على المنصة واربط البرنامج بحسابك أولاً"}
-
-var errNotFirstRun = &Error{CodeForbidden, "متاح فقط أثناء الإعداد الأول"}
-
-func (a *App) setupOnly(ctx context.Context, ch Channel) error {
-	needs, err := a.NeedsSetup(ctx)
-	if err != nil {
-		return err
-	}
-	if !needs || ch != ChannelApp {
-		return errNotFirstRun
-	}
-	return nil
-}
-
-func (a *App) StartSetupLink(ctx context.Context, ch Channel, deviceName string) (LinkStatus, error) {
-	if err := a.setupOnly(ctx, ch); err != nil {
-		return LinkStatus{}, err
-	}
-	return a.startLink(ctx, deviceName)
-}
-
-func (a *App) PollSetupLink(ctx context.Context, ch Channel) (LinkStatus, error) {
-	if err := a.setupOnly(ctx, ch); err != nil {
-		return LinkStatus{}, err
-	}
-	return a.pollLink(ctx)
-}
-
-// SetupPlatform tells the first-run screen whether to link first, and the
-// restaurant name to prefill once linked.
-type SetupPlatform struct {
-	Enabled    bool   `json:"enabled"`
-	Linked     bool   `json:"linked"`
-	TenantName string `json:"tenant_name"`
-}
-
-func (a *App) SetupPlatformInfo() SetupPlatform {
-	p := a.platform
-	if p == nil {
-		return SetupPlatform{}
-	}
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	out := SetupPlatform{Enabled: true, Linked: p.claims != nil}
-	if p.claims != nil {
-		out.TenantName = p.claims.TenantName
-	}
-	return out
-}
-
-func (a *App) startLink(ctx context.Context, deviceName string) (LinkStatus, error) {
-	p, err := a.platformRequired()
-	if err != nil {
-		return LinkStatus{}, err
-	}
-	p.mu.RLock()
-	base := p.baseURL()
-	p.mu.RUnlock()
-	if base == "" {
-		return LinkStatus{}, invalid("عنوان المنصة غير مضبوط")
-	}
-	r, err := p.client.StartLink(ctx, base, deviceInfo(strings.TrimSpace(deviceName)))
-	if err != nil {
-		return LinkStatus{}, platformErr(err)
-	}
-	if !strings.HasPrefix(r.URL, base+"/") {
-		// Only ever open pages of the Platform we talk to.
-		return LinkStatus{}, conflict("رد غير متوقع من المنصة")
-	}
-	interval := time.Duration(max(r.Interval, 1)) * time.Second
-	l := &pendingLink{code: r.Code, url: r.URL, expires: a.now().Add(time.Duration(r.ExpiresIn) * time.Second), interval: interval, status: "pending"}
-	p.mu.Lock()
-	p.link = l
-	p.mu.Unlock()
-	return l.view(), nil
-}
-
-func (l *pendingLink) view() LinkStatus {
-	return LinkStatus{State: l.status, Code: l.code, URL: l.url, ExpiresAt: sqlite.FormatTime(l.expires)}
-}
-
-func (a *App) pollLink(ctx context.Context) (LinkStatus, error) {
-	p, err := a.platformRequired()
-	if err != nil {
-		return LinkStatus{}, err
-	}
-	p.mu.Lock()
-	l := p.link
-	if l == nil {
-		p.mu.Unlock()
-		return LinkStatus{State: "idle"}, nil
-	}
-	now := a.now()
-	if l.status == "pending" && now.After(l.expires) {
-		l.status = "expired"
-	}
-	if l.status != "pending" || now.Sub(l.lastPoll) < l.interval {
-		v := l.view()
-		p.mu.Unlock()
-		return v, nil
-	}
-	l.lastPoll = now
-	base := p.baseURL()
-	p.mu.Unlock()
-
-	r, err := p.client.PollLink(ctx, base)
-	if err != nil {
-		return LinkStatus{}, platformErr(err)
-	}
-	switch r.Status {
-	case "approved":
-		if err := a.applyReply(ctx, r.Reply); err != nil {
-			return LinkStatus{}, err
-		}
-	case "pending", "denied", "expired":
-	default:
-		return LinkStatus{}, conflict("رد غير متوقع من المنصة")
-	}
-	p.mu.Lock()
-	l.status = r.Status
-	v := l.view()
-	if r.Status != "pending" {
-		p.link = nil
-	}
-	p.mu.Unlock()
-	return v, nil
 }

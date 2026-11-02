@@ -10,7 +10,8 @@ import { printTableQRs } from '@/lib/print';
 import { qrSVG } from '@/lib/qr';
 import { openExternal, copyText } from '@/lib/open';
 import { confirm } from '@/components/Confirm';
-import { ActivationForm, licenseReason } from '@/components/License';
+import { ActivationForm, licenseReason, openAccount } from '@/components/License';
+import { CheckUpdateButton } from '@/components/Update';
 import { Badge, Button, Card, Field, Input, Spinner, Table, Td, useLoad } from '@/components/ui';
 import { T } from '@/lib/i18n';
 
@@ -19,7 +20,6 @@ const stateBadge = {
   trial: ['blue', T('فترة تجريبية')],
   grace: ['amber', T('مهلة بدون اتصال')],
   restricted: ['red', T('متوقف')],
-  unlicensed: ['gray', T('غير مفعّل')],
 };
 const tunnelBadge = {
   connected: ['green', T('متصل')],
@@ -46,7 +46,7 @@ export default function Platform() {
   if (!platform.enabled) {
     return <Card title={T('الاشتراك')}><p className="text-muted">{T('نسخة تطوير: الربط بالمنصة غير مفعّل في هذه النسخة')}</p></Card>;
   }
-  const [tone, label] = stateBadge[platform.state] || stateBadge.unlicensed;
+  const [tone, label] = stateBadge[platform.state] || stateBadge.restricted;
   const sync = () => act('sync', async () => { await api.post('/platform/sync'); toast(T('تمت المزامنة')); });
   const unlink = async () => {
     if (!await confirm({ title: T('فك ربط الجهاز'), message: T('سيتوقف البيع على هذا الجهاز حتى تفعيله مرة أخرى. بياناتك تبقى كما هي.'), action: T('فك الربط') })) return;
@@ -66,7 +66,12 @@ export default function Platform() {
       <Card title={T('الاشتراك والتفعيل')} icon={ShieldCheck} actions={<Badge tone={tone} dot>{label}</Badge>}>
         {!platform.linked ? (
           <div className="grid gap-3">
-            <p className="text-sm text-muted">{licenseReason(platform)}</p>
+            <p className="text-sm text-muted">
+              {platform.state === 'trial'
+                ? T('نسخة تجريبية تنتهي {0}. ادخل على المنصة، سجّل حسابك وخد كود التفعيل واكتبه هنا.', [dateTime(platform.trial_ends_at)])
+                : licenseReason(platform)}
+            </p>
+            {platform.url && <div><Button variant="secondary" icon={ExternalLink} onClick={() => openAccount(platform)}>{T('افتح المنصة وخد كود التفعيل')}</Button></div>}
             <ActivationForm />
           </div>
         ) : (
@@ -84,7 +89,7 @@ export default function Platform() {
             {platform.last_error && <p className="rounded-xl bg-warning-soft p-2 text-xs text-warning" dir="auto">{T('آخر خطأ')}: {platform.last_error}</p>}
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" icon={RefreshCw} busy={busy === 'sync'} onClick={sync}>{T('مزامنة الآن')}</Button>
-              {platform.url && <Button variant="ghost" icon={ExternalLink} onClick={() => openExternal(`${platform.url}/portal`)}>{T('حسابي على المنصة')}</Button>}
+              {platform.url && <Button variant="ghost" icon={ExternalLink} onClick={() => openAccount(platform)}>{T('حسابي على المنصة')}</Button>}
               <Button variant="danger-soft" icon={Unlink} busy={busy === 'unlink'} onClick={unlink} className="ms-auto">{T('فك الربط')}</Button>
             </div>
           </div>
@@ -104,11 +109,13 @@ function EMenuCard({ platform }) {
   const copy = async () => { if (await copyText(url)) toast(T('تم نسخ الرابط')); };
   return (
     <Card title={T('المنيو الإلكتروني')} icon={Globe} actions={url && <Badge tone={tone} dot>{label}</Badge>}>
-      {!platform.features?.emenu ? (
+      {!platform.linked ? (
+        <p className="text-sm text-muted">{T('المنيو الإلكتروني يحتاج تفعيل البرنامج بحسابك على المنصة، ثم إنشاء دومين المطعم من هناك.')}</p>
+      ) : !platform.features?.emenu ? (
         <p className="text-sm text-muted">{T('المنيو الإلكتروني غير متاح في اشتراكك الحالي')}</p>
       ) : !url ? (
         <div className="grid gap-2 text-sm text-muted">
-          <p>{T('اختر دومين مطعمك من حسابك على المنصة (حسابي ← الدومين). سيتصل البرنامج به تلقائياً خلال دقيقة.')}</p>
+          <p>{T('لتفعيل المنيو: ادخل على حسابك في المنصة ← الدومين، واختار اسم الدومين واضغط إنشاء. البرنامج هيتصل بيه تلقائياً خلال دقيقة.')}</p>
           {platform.url && <div><Button variant="secondary" icon={ExternalLink} onClick={() => openExternal(`${platform.url}/portal/site`)}>{T('اختيار الدومين')}</Button></div>}
         </div>
       ) : (
@@ -199,12 +206,16 @@ function AdvancedCard({ platform, onSaved }) {
   return (
     <Card title={T('متقدم')} icon={Link2}>
       <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-        <Field label={T('عنوان المنصة')} hint={T('اتركه فارغاً لاستخدام العنوان الافتراضي: {0}', [platform.default_url || '—'])}>
+        <Field label={T('عنوان المنصة')} hint={T('اتركه فارغاً لاستخدام العنوان الافتراضي: {0}. البرنامج يرفض أي عنوان لا يحمل توقيع المنصة.', [platform.default_url || '—'])}>
           <Input dir="ltr" placeholder="https://" value={url} onChange={(e) => setUrl(e.target.value)} />
         </Field>
         <Button variant="secondary" busy={busy} onClick={save}>{T('حفظ')}</Button>
       </div>
-      <p className="mt-2 text-xs text-muted">{T('إصدار البرنامج')}: <span className="num">{platform.app_version}</span></p>
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted">
+        <span>{T('إصدار البرنامج')}: <span className="num">{platform.app_version}</span></span>
+        {platform.update?.checked_at && <span>{T('آخر بحث عن تحديث')}: <span className="num">{dateTime(platform.update.checked_at)}</span></span>}
+        <span className="ms-auto"><CheckUpdateButton /></span>
+      </div>
     </Card>
   );
 }

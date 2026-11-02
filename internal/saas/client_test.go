@@ -5,8 +5,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"cpro/internal/license"
@@ -43,6 +46,65 @@ func TestRequestSignatureMatchesPlatformVector(t *testing.T) {
 	}
 }
 
+func TestReplySignatureMatchesPlatformVector(t *testing.T) {
+	b, err := os.ReadFile("testdata/license_vector.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v struct {
+		PlatformPublic string `json:"platform_public"`
+		Response       struct {
+			DeviceID string `json:"device_id"`
+			Nonce    string `json:"nonce"`
+			Data     string `json:"data"`
+			Sig      string `json:"sig"`
+		} `json:"response"`
+	}
+	if err := json.Unmarshal(b, &v); err != nil {
+		t.Fatal(err)
+	}
+	r := v.Response
+	if !saas.VerifyReply(v.PlatformPublic, r.DeviceID, r.Nonce, r.Data, r.Sig) {
+		t.Fatal("vector reply rejected")
+	}
+	if saas.VerifyReply(v.PlatformPublic, r.DeviceID, "other-nonce", r.Data, r.Sig) {
+		t.Fatal("replayed reply accepted")
+	}
+	if saas.VerifyReply(v.PlatformPublic, r.DeviceID, r.Nonce, `{"ok":false}`, r.Sig) {
+		t.Fatal("altered reply accepted")
+	}
+}
+
+// A server without the Platform key never sees the activation key and its
+// replies are rejected.
+func TestImpostorPlatformRejected(t *testing.T) {
+	var sawCode bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, ".activate") {
+			sawCode = true
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"message":{"data":"{\"ok\":true}","sig":"AAAA"}}`))
+	}))
+	defer srv.Close()
+	real := saastest.New("ACT-TEST")
+	defer real.Close()
+	id, _ := saas.LoadIdentity(filepath.Join(t.TempDir(), "d.json"))
+	c := saas.NewClient(id, real.Public)
+	if _, err := c.Activate(context.Background(), srv.URL, "ACT-TEST", saas.DeviceInfo{}); !errors.Is(err, saas.ErrNotPlatform) {
+		t.Fatalf("impostor: %v", err)
+	}
+	if sawCode {
+		t.Fatal("activation key sent to an impostor")
+	}
+	// The real Platform, but the app expects a different key.
+	other := saastest.New("ACT-TEST")
+	defer other.Close()
+	if _, err := c.Activate(context.Background(), other.URL, "ACT-TEST", saas.DeviceInfo{}); !errors.Is(err, saas.ErrNotPlatform) {
+		t.Fatalf("wrong key: %v", err)
+	}
+}
+
 func TestIdentityPersists(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "device.json")
 	a, err := saas.LoadIdentity(p)
@@ -53,7 +115,7 @@ func TestIdentityPersists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.DeviceID != b.DeviceID || a.PublicKey() != b.PublicKey() {
+	if a.DeviceID != b.DeviceID || a.PublicKey() != b.PublicKey() || !a.Created.Equal(b.Created) || a.Created.IsZero() {
 		t.Fatal("identity changed between loads")
 	}
 	if st, _ := os.Stat(p); st.Mode().Perm() != 0o600 {
@@ -66,7 +128,7 @@ func TestClientAgainstFakePlatform(t *testing.T) {
 	f := saastest.New("ACT-TEST")
 	defer f.Close()
 	id, _ := saas.LoadIdentity(filepath.Join(t.TempDir(), "d.json"))
-	c := saas.NewClient(id)
+	c := saas.NewClient(id, f.Public)
 
 	_, err := c.Activate(ctx, f.URL, "act-wrong", saas.DeviceInfo{Name: "x"})
 	var se *saas.Error
@@ -101,7 +163,7 @@ func TestClientAgainstFakePlatform(t *testing.T) {
 
 	// A second device exceeds the limit of one.
 	id2, _ := saas.LoadIdentity(filepath.Join(t.TempDir(), "d2.json"))
-	if _, err := saas.NewClient(id2).Activate(ctx, f.URL, "ACT-TEST", saas.DeviceInfo{}); !errors.As(err, &se) || se.Status != 403 {
+	if _, err := saas.NewClient(id2, f.Public).Activate(ctx, f.URL, "ACT-TEST", saas.DeviceInfo{}); !errors.As(err, &se) || se.Status != 403 {
 		t.Fatalf("device limit: %v", err)
 	}
 

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { LangMenu } from '@/components/Layout';
-import { Delete, KeyRound, UserRound, ShoppingCart, ChefHat, FlaskConical, ShieldCheck, Globe } from 'lucide-react';
-import { BrowserLink } from '@/components/BrowserLink';
+import { Delete, KeyRound, UserRound, ShoppingCart, ChefHat, FlaskConical, ShieldCheck } from 'lucide-react';
 import { api, deviceId } from '@/lib/api';
 import { useApp, toastError } from '@/lib/store';
 import { roles } from '@/lib/format';
@@ -17,8 +16,6 @@ export default function Login() {
   const load = () => api.get('/status').then(setStatus).catch(toastError);
   useEffect(() => { load(); }, []);
   if (!status) return <Spinner />;
-  // First run of a licensed build: link to the owner's account first.
-  const linkFirst = status.needs_setup && status.platform?.enabled && !status.platform.linked;
   return (
     <div className="flex min-h-full bg-bg">
       <aside className="bg-brand relative hidden w-[42%] flex-col justify-between overflow-hidden p-12 text-white lg:flex">
@@ -45,31 +42,19 @@ export default function Login() {
           <div className="mb-8">
             <h2 className="text-3xl font-bold">{status.needs_setup ? T('مرحباً بك في CPro') : T('تسجيل الدخول')}</h2>
             <p className="mt-1 text-muted">
-              {linkFirst ? T('اربط البرنامج بحسابك للبدء') : status.needs_setup ? T('أنشئ حساب المالك لبدء استخدام النظام') : T('اختر حسابك وأدخل الرقم السري')}
+              {status.needs_setup ? T('أنشئ حساب المالك وابدأ فترتك التجريبية') : T('اختر حسابك وأدخل الرقم السري')}
             </p>
           </div>
-          {linkFirst ? <LinkFirst onLinked={load} />
-            : status.needs_setup ? <Setup restaurant={status.platform?.tenant_name} /> : <SignIn channel={status.channel} />}
+          {status.needs_setup ? <Setup /> : <SignIn channel={status.channel} />}
         </div>
       </main>
     </div>
   );
 }
 
-function LinkFirst({ onLinked }) {
-  return (
-    <div className="grid max-w-md gap-4 rounded-card border border-line bg-surface p-6 shadow-card">
-      <h3 className="flex items-center gap-2 text-lg font-bold"><Globe className="size-5 text-primary" aria-hidden />{T('ربط البرنامج بحسابك')}</h3>
-      <p className="text-sm text-muted">{T('سجّل حساب جديد أو ادخل بحسابك في المتصفح، والبرنامج هيتفعّل لوحده.')}</p>
-      <BrowserLink setup auto onDone={onLinked} />
-      <p className="text-center text-xs text-muted">{T('التفعيل يحتاج اتصال بالإنترنت مرة واحدة. بعدها البرنامج يشتغل بدون إنترنت.')}</p>
-    </div>
-  );
-}
-
-function Setup({ restaurant = '' }) {
+function Setup() {
   const signedIn = useApp((s) => s.signedIn);
-  const [f, setF] = useState({ restaurant_name: restaurant, owner_name: '', username: '', password: '', pin: '' });
+  const [f, setF] = useState({ restaurant_name: '', owner_name: '', username: '', password: '', pin: '' });
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const submit = async (e) => {
@@ -97,6 +82,7 @@ function Setup({ restaurant = '' }) {
         <Input inputMode="numeric" maxLength={6} value={f.pin} onChange={(e) => setF({ ...f, pin: e.target.value.replace(/\D/g, '') })} />
       </Field>
       <Button busy={busy} size="lg">{T('ابدأ')}</Button>
+      <p className="text-center text-xs text-muted">{T('تقدر تستخدم البرنامج {0} أيام مجاناً بدون إنترنت. بعدها فعّله بكود التفعيل من حسابك على المنصة.', [3])}</p>
     </form>
   );
 }

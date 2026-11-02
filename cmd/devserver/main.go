@@ -98,7 +98,7 @@ func run(addr, ui string, fake bool, public string) error {
 		if err != nil {
 			return err
 		}
-		if err := a.EnablePlatform(ctx, saas.NewClient(id)); err != nil {
+		if err := a.EnablePlatform(ctx, saas.NewClient(id, f.Public)); err != nil {
 			return err
 		}
 		admin := app.Actor{Role: rbac.Owner}

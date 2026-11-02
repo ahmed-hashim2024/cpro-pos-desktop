@@ -35,15 +35,26 @@ owner's own domain.
   validated, and errors are shown by row and column. Nothing is saved unless
   the whole file is valid.
 - **Languages:** Arabic (RTL), English and French (LTR), chosen per device.
-- **Platform link and license:** the app is activated with the owner's code
-  from the CPro Platform. Selling is blocked until it is activated, and when
-  the subscription ends, the trial ends or the device is revoked. Reports,
-  exports and backups always work. The license is signed by the Platform,
-  bound to this computer's key, and refreshed every few hours. A change on the
-  Platform (domain, e-menu settings, suspension) reaches the app within a
-  minute. When offline, a paid license keeps working for its grace days.
-- **E-menu:** the restaurant's domain (a Cloudflare tunnel the Platform
-  creates) is served from this computer.
+- **Trial, activation and license:** a new installation works for 3 days
+  offline with no account (counted from the first run, remembered in both the
+  identity file and the database, and safe against setting the clock back).
+  After that a non-dismissable alert stays on screen until the owner enters
+  the activation key from their account on the CPro Platform
+  (`/portal/pos`). Selling is also blocked when the subscription ends or the
+  device is revoked; reports, exports and backups always work. The license is
+  signed by the Platform, bound to this computer's key, and refreshed every
+  few hours. A change on the Platform (domain, e-menu settings, suspension)
+  reaches the app within a minute. When offline, a paid license keeps working
+  for its grace days.
+- **Only the real Platform is trusted:** the address defaults to
+  `https://cacherpro.ahmedhashim.site` and can be changed (build flag or
+  Settings → Subscription → Advanced), but every reply must carry the
+  Platform's Ed25519 signature over the request's nonce, so a wrong or hostile
+  server is rejected, and the activation key is only sent after the server
+  proves it holds the key. Redirects are never followed.
+- **E-menu:** needs an activated account and a domain the owner creates on
+  the Platform (Domain page); the Cloudflare tunnel is then served from this
+  computer.
   - Guests browse a mobile menu in ar/en/fr. The owner designs it from
     Menu → E-menu, with a live phone preview: name, logo, button and
     background colours (fixed presets), slider offers and family bundles
@@ -121,16 +132,27 @@ cd frontend && CPRO_API=http://127.0.0.1:8787 npm run dev   # hot reload in the 
 
 ### Release builds
 
+1. Bump `info.productVersion` in `wails.json` (that is the app version).
+2. Build:
+
 ```sh
-CPRO_SAAS_URL=https://your-platform.com \
-CPRO_LICENSE_PUBKEY=<SCP Settings → License Public Key> \
-CPRO_VERSION=1.0.0 scripts/build.sh -platform windows/amd64
+scripts/build.sh -platform windows/amd64 -nsis   # Windows installer
+scripts/build.sh -platform darwin/universal      # macOS
+# CPRO_SAAS_URL=https://... overrides the default https://cacherpro.ahmedhashim.site
 ```
 
-The key comes from the Platform:
-`bench --site <site> execute saas_control_platform.licensing.signing.generate_keys`.
-A build without a key (e.g. `wails dev`) runs with licensing **off** and logs a
-warning. `scripts/build.sh` refuses to build a release without one.
+3. Upload the installer, then on the Platform (SCP Settings → Desktop App) set
+   *Latest Desktop Version*, the download URL and its SHA-256
+   (`shasum -a 256 <file>`). With *Update is Mandatory* on, every older app
+   blocks selling until it installs the new version.
+
+The license **public key** is fixed in `internal/license/license.go`; its
+private half goes in SCP Settings → *License Private Key*. Replacing the pair
+means shipping an update with the new public key first.
+
+Apps check for updates at start-up and every night at 00:00 (hourly retries
+when offline). The release info comes in a Platform-signed reply, and the
+download must match its SHA-256 before the installer starts.
 
 Under `wails dev`, Vite must answer 404 for `/api` so Wails hands the request to the Go handler.
 `vite.config.js` does this unless `CPRO_API` is set.

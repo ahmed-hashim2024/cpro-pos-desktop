@@ -30,9 +30,16 @@ func linkedFixture(t *testing.T) (*fixture, *saastest.Fake) {
 	f.app.now = time.Now
 	id, err := saas.LoadIdentity(filepath.Join(t.TempDir(), "device.json"))
 	f.must(err)
-	f.must(f.app.EnablePlatform(f.ctx, saas.NewClient(id)))
+	f.must(f.app.EnablePlatform(f.ctx, saas.NewClient(id, fake.Public)))
 	f.must(f.app.SetPlatformURL(f.ctx, f.owner, fake.URL))
 	return f, fake
+}
+
+// endTrial moves this installation's first run past the free trial.
+func endTrial(a *App) {
+	a.platform.mu.Lock()
+	a.platform.st.TrialStart = time.Now().AddDate(0, 0, -license.TrialDays-1).Unix()
+	a.platform.mu.Unlock()
 }
 
 type menuFixture struct {
@@ -60,12 +67,17 @@ func TestActivationGatesSelling(t *testing.T) {
 	a, ctx, owner := f.app, f.ctx, f.owner
 	m := f.menu()
 
+	// A new installation sells during the trial, without any account.
+	if st := a.licenseStatus(); st.State != license.Trial || !st.CanSell() {
+		t.Fatalf("new install: %+v", st)
+	}
+	endTrial(a)
 	if _, err := a.CreateOrder(ctx, owner, OrderInput{Type: "takeaway"}, ""); code(err) != CodeForbidden {
-		t.Fatalf("sold while unlicensed: %v", err)
+		t.Fatalf("sold after the trial: %v", err)
 	}
 	info, _ := a.PlatformInfo(ctx, owner)
-	if info.State != license.Unlicensed || info.Linked {
-		t.Fatalf("info before activation: %+v", info)
+	if info.State != license.Restricted || info.Reason != license.ReasonTrialEnded || info.Linked {
+		t.Fatalf("info after the trial: %+v", info)
 	}
 	cashier := f.login(rbac.Cashier, "cashier")
 	if _, err := a.ActivateDevice(ctx, cashier, "ACT-TEST", ""); code(err) != CodeForbidden {
@@ -90,15 +102,15 @@ func TestActivationGatesSelling(t *testing.T) {
 	// A license survives a restart (state is persisted).
 	id := a.platform.client.ID
 	a2 := New(a.db, a.paths, a.log)
-	f.must(a2.EnablePlatform(ctx, saas.NewClient(id)))
+	f.must(a2.EnablePlatform(ctx, saas.NewClient(id, fake.Public)))
 	if !a2.licenseStatus().CanSell() {
 		t.Fatal("license lost after restart")
 	}
 	// ...but not on another installation restoring the same database.
 	other, _ := saas.LoadIdentity(filepath.Join(t.TempDir(), "other.json"))
 	a3 := New(a.db, a.paths, a.log)
-	f.must(a3.EnablePlatform(ctx, saas.NewClient(other)))
-	if a3.licenseStatus().State != license.Unlicensed {
+	f.must(a3.EnablePlatform(ctx, saas.NewClient(other, fake.Public)))
+	if a3.platform.claims != nil || a3.licenseStatus().CanSell() {
 		t.Fatal("license accepted on another device")
 	}
 
@@ -135,8 +147,8 @@ func TestActivationGatesSelling(t *testing.T) {
 
 	// Unlinking clears the local license.
 	f.must(a.UnlinkDevice(ctx, owner, true))
-	if a.licenseStatus().State != license.Unlicensed {
-		t.Fatal("still licensed after unlink")
+	if st := a.licenseStatus(); st.CanSell() || st.Reason != license.ReasonTrialEnded {
+		t.Fatalf("after unlink: %+v", st)
 	}
 }
 
@@ -258,7 +270,7 @@ func TestEMenuRespectsLicense(t *testing.T) {
 	f, fake := linkedFixture(t)
 	m := f.menu()
 	if _, err := f.app.PublicMenu(f.ctx, ""); code(err) != CodeNotFound {
-		t.Fatalf("menu open while unlicensed: %v", err)
+		t.Fatalf("menu open before activation: %v", err)
 	}
 	_, err := f.app.ActivateDevice(f.ctx, f.owner, "ACT-TEST", "")
 	f.must(err)
@@ -284,47 +296,7 @@ func TestEMenuRespectsLicense(t *testing.T) {
 	}
 }
 
-func TestBrowserLinking(t *testing.T) {
-	f, fake := linkedFixture(t)
-	a, ctx, owner := f.app, f.ctx, f.owner
-
-	cashier := f.login(rbac.Cashier, "cashier")
-	if _, err := a.StartLink(ctx, cashier, ""); code(err) != CodeForbidden {
-		t.Fatalf("cashier started a link: %v", err)
-	}
-	// The first-run endpoints close once the app is set up.
-	if _, err := a.StartSetupLink(ctx, ChannelApp, ""); code(err) != CodeForbidden {
-		t.Fatalf("setup link after setup: %v", err)
-	}
-
-	st, err := a.StartLink(ctx, owner, "الكاشير")
-	f.must(err)
-	if st.State != "pending" || st.Code == "" || st.URL != fake.URL+"/link?code="+st.Code {
-		t.Fatalf("start: %+v", st)
-	}
-	if st, err = a.PollLink(ctx, owner); err != nil || st.State != "pending" {
-		t.Fatalf("poll before approval: %+v %v", st, err)
-	}
-	if a.licenseStatus().CanSell() {
-		t.Fatal("licensed before approval")
-	}
-	if !fake.ApproveLink(st.Code, "ACT-TEST") {
-		t.Fatal("approve failed")
-	}
-	// Polls are throttled to the Platform's interval.
-	base := time.Now()
-	a.now = func() time.Time { return base.Add(2 * time.Second) }
-	st, err = a.PollLink(ctx, owner)
-	f.must(err)
-	if st.State != "approved" || !a.licenseStatus().CanSell() {
-		t.Fatalf("after approval: %+v %+v", st, a.licenseStatus())
-	}
-	if st, _ = a.PollLink(ctx, owner); st.State != "idle" {
-		t.Fatalf("link not cleared: %+v", st)
-	}
-}
-
-func TestFirstRunLinkBeforeSetup(t *testing.T) {
+func TestSetupWithoutAccount(t *testing.T) {
 	t.Setenv("CPRO_DATA_DIR", t.TempDir())
 	p, _ := paths.Resolve()
 	ctx := context.Background()
@@ -340,31 +312,57 @@ func TestFirstRunLinkBeforeSetup(t *testing.T) {
 	license.PublicKey = fake.Public
 	t.Cleanup(func() { license.PublicKey = old })
 	id, _ := saas.LoadIdentity(filepath.Join(t.TempDir(), "d.json"))
-	if err := a.EnablePlatform(ctx, saas.NewClient(id)); err != nil {
+	if err := a.EnablePlatform(ctx, saas.NewClient(id, fake.Public)); err != nil {
 		t.Fatal(err)
 	}
 	a.platform.st.URL = fake.URL
 
+	// First run needs no account and no internet.
 	setup := SetupInput{RestaurantName: "R", OwnerName: "O", Username: "owner", Password: "owner1234", PIN: "1111"}
-	if _, err := a.Setup(ctx, setup, ChannelApp); code(err) != CodeForbidden {
-		t.Fatalf("set up without linking: %v", err)
-	}
-	if _, err := a.StartSetupLink(ctx, ChannelLAN, ""); code(err) != CodeForbidden {
-		t.Fatalf("setup link from the LAN: %v", err)
-	}
-	st, err := a.StartSetupLink(ctx, ChannelApp, "")
+	s, err := a.Setup(ctx, setup, ChannelApp)
 	if err != nil {
+		t.Fatalf("setup offline: %v", err)
+	}
+	if fake.Calls["activate"]+fake.Calls["hello"] != 0 {
+		t.Fatal("setup called the Platform")
+	}
+	if err := a.requireLicensed(); err != nil {
+		t.Fatalf("trial: %v", err)
+	}
+	owner := Actor{UserID: s.Me.UserID, Role: rbac.Owner, Channel: ChannelApp}
+	info, _ := a.PlatformInfo(ctx, owner)
+	if info.State != license.Trial || info.TrialEndsAt == "" || info.Linked {
+		t.Fatalf("trial info: %+v", info)
+	}
+
+	// The trial survives a restart and can't be reset by a new identity
+	// file alone: the database remembers the first run.
+	endTrial(a)
+	a.savePlatformLocked(ctx)
+	fresh, _ := saas.LoadIdentity(filepath.Join(t.TempDir(), "new.json"))
+	a2 := New(db, p, a.log)
+	if err := a2.EnablePlatform(ctx, saas.NewClient(fresh, fake.Public)); err != nil {
 		t.Fatal(err)
 	}
-	fake.ApproveLink(st.Code, "ACT-TEST")
-	if st, err = a.PollSetupLink(ctx, ChannelApp); err != nil || st.State != "approved" {
-		t.Fatalf("poll: %+v %v", st, err)
+	if a2.requireLicensed() == nil {
+		t.Fatal("trial reset by a new identity")
 	}
-	if info := a.SetupPlatformInfo(); !info.Linked || info.TenantName != "مطعم التجربة" {
-		t.Fatalf("setup info: %+v", info)
+
+	// Activating early keeps the rest of this computer's trial even when the
+	// account itself has no paid plan yet.
+	fake.Update("ACT-TEST", func(t *saastest.Tenant) { t.Status = "expired" })
+	a.platform.mu.Lock()
+	a.platform.st.TrialStart = time.Now().Add(-24 * time.Hour).Unix()
+	a.platform.mu.Unlock()
+	if _, err := a.ActivateDevice(ctx, owner, "ACT-TEST", ""); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := a.Setup(ctx, setup, ChannelApp); err != nil {
-		t.Fatalf("setup after linking: %v", err)
+	if st := a.licenseStatus(); st.State != license.Trial {
+		t.Fatalf("early activation: %+v", st)
+	}
+	endTrial(a)
+	if st := a.licenseStatus(); st.CanSell() || st.Reason != license.ReasonTrialEnded {
+		t.Fatalf("unpaid account after the trial: %+v", st)
 	}
 }
 
