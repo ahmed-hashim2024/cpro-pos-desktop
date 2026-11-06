@@ -47,7 +47,8 @@ type usage struct {
 }
 
 // consumption returns what qty units of an order line use, from the item's
-// recipe plus the recipes of its selected modifiers.
+// recipe, the recipes of what an offer is made of, and the recipes of its
+// selected modifiers.
 func consumption(ctx context.Context, q sqlite.Querier, l OrderLine, qty money.Milli) (map[string]usage, error) {
 	out := map[string]usage{}
 	add := func(rows *sql.Rows, err error) error {
@@ -70,6 +71,12 @@ func consumption(ctx context.Context, q sqlite.Querier, l OrderLine, qty money.M
 		return rows.Err()
 	}
 	if err := add(q.QueryContext(ctx, `SELECT r.ingredient_id, r.qty_milli, g.cost_minor FROM recipe_lines r JOIN ingredients g ON g.id = r.ingredient_id WHERE r.item_id = ?`, l.ItemID)); err != nil {
+		return nil, err
+	}
+	if err := add(q.QueryContext(ctx, `SELECT r.ingredient_id, r.qty_milli * b.qty, g.cost_minor
+		FROM emenu_offers o JOIN emenu_offer_items b ON b.offer_id = o.id
+		JOIN recipe_lines r ON r.item_id = b.item_id JOIN ingredients g ON g.id = r.ingredient_id
+		WHERE o.item_id = ?`, l.ItemID)); err != nil {
 		return nil, err
 	}
 	for _, m := range l.Modifiers {

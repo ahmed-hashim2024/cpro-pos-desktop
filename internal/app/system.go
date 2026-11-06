@@ -149,6 +149,7 @@ func (a *App) BackupNow(ctx context.Context, actor Actor, reason string) (Backup
 	}
 	s, _ := loadSettings(ctx, a.db.Read)
 	a.pruneBackups(s.BackupKeep)
+	a.copyBackup(path, s)
 	st, _ := os.Stat(path)
 	return Backup{Name: name, Size: st.Size(), At: sqlite.FormatTime(now)}, nil
 }

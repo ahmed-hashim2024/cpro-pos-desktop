@@ -43,6 +43,7 @@ type Settings struct {
 	LANPort           int               `json:"lan_port"`
 	AutoBackupHours   int               `json:"auto_backup_hours"`
 	BackupKeep        int               `json:"backup_keep"`
+	BackupDir         string            `json:"backup_dir"` // extra copy of each backup; set with SetBackupDir
 }
 
 func defaultSettings() Settings {
@@ -105,7 +106,13 @@ func (a *App) UpdateSettings(ctx context.Context, actor Actor, s Settings) (Sett
 	if err := validateSettings(&s); err != nil {
 		return s, err
 	}
-	err := a.tx(ctx, func(tx *sql.Tx) error {
+	// The backup folder changes only through SetBackupDir, from the app itself.
+	cur, err := loadSettings(ctx, a.db.Read)
+	if err != nil {
+		return s, err
+	}
+	s.BackupDir = cur.BackupDir
+	err = a.tx(ctx, func(tx *sql.Tx) error {
 		if err := a.saveSettings(ctx, tx, s); err != nil {
 			return err
 		}

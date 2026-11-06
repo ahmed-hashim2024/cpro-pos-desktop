@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, BellRing, Check, X, Receipt, ShoppingBag, Utensils, Smartphone, Bike, MapPin } from 'lucide-react';
+import { Bell, BellRing, Check, X, Receipt, ShoppingBag, Utensils, Smartphone, Bike, MapPin, TriangleAlert } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp, toast, toastError } from '@/lib/store';
 import { money, minutesSince } from '@/lib/format';
@@ -69,6 +69,12 @@ export function InboxButton({ inbox, onClick }) {
   );
 }
 
+const requestKinds = {
+  waiter: { icon: BellRing, label: () => T('ينادي الويتر') },
+  bill: { icon: Receipt, label: () => T('يطلب الحساب') },
+  issue: { icon: TriangleAlert, label: () => T('مشكلة في الأكل') },
+};
+
 const quickReasons = () => [T('الصنف غير متاح الآن'), T('المطبخ مشغول جداً'), T('المطعم مغلق حالياً')];
 
 export function InboxPanel({ open, onClose, inbox, onAccepted }) {
@@ -109,16 +115,21 @@ export function InboxPanel({ open, onClose, inbox, onAccepted }) {
         <section className="mb-4">
           <h3 className="mb-2 text-sm font-bold text-muted">{T('نداءات الطاولات')}</h3>
           <div className="grid gap-2 sm:grid-cols-2">
-            {requests.map((r) => (
-              <div key={r.id} className="flex items-center gap-3 rounded-xl border border-warning/40 bg-warning-soft p-3">
-                {r.kind === 'bill' ? <Receipt className="size-5 text-warning" aria-hidden /> : <BellRing className="size-5 text-warning" aria-hidden />}
-                <div className="flex-1">
-                  <div className="font-bold">{r.table_name}</div>
-                  <div className="text-xs text-muted">{r.kind === 'bill' ? T('يطلب الحساب') : T('ينادي الويتر')} · {T('منذ')} {minutesSince(r.created_at)} {T('دقيقة')}</div>
+            {requests.map((r) => {
+              const kind = requestKinds[r.kind] || requestKinds.waiter;
+              const issue = r.kind === 'issue';
+              return (
+                <div key={r.id} className={cx('flex items-center gap-3 rounded-xl border p-3', issue ? 'border-danger/40 bg-danger-soft' : 'border-warning/40 bg-warning-soft')}>
+                  <kind.icon className={cx('size-5 shrink-0', issue ? 'text-danger' : 'text-warning')} aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold">{r.table_name}</div>
+                    <div className="text-xs text-muted">{kind.label()} · {T('منذ')} {minutesSince(r.created_at)} {T('دقيقة')}</div>
+                    {r.note && <p className="mt-1 text-sm" dir="auto">{r.note}</p>}
+                  </div>
+                  <Button size="sm" variant="secondary" icon={Check} busy={busy === r.id} onClick={() => done(r)}>{T('تم')}</Button>
                 </div>
-                <Button size="sm" variant="secondary" icon={Check} busy={busy === r.id} onClick={() => done(r)}>{T('تم')}</Button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}

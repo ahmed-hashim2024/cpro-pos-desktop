@@ -113,16 +113,17 @@ type State string
 const (
 	Active     State = "active"
 	Trial      State = "trial"
-	Grace      State = "grace"      // expired while offline, still within the grace days
-	Restricted State = "restricted" // expired, suspended or revoked: reports and backups only
+	Grace      State = "grace"      // offline too long, still within the grace days
+	Restricted State = "restricted" // offline, suspended, revoked or not connected: selling stops
 )
 
 // Reasons for Restricted.
 const (
-	ReasonExpired    = "expired"
-	ReasonTrialEnded = "trial_ended"
-	ReasonSuspended  = "suspended"
-	ReasonRevoked    = "revoked"
+	ReasonOffline      = "offline"       // no contact with the Platform for too long
+	ReasonNotConnected = "not_connected" // never connected to an account
+	ReasonTrialEnded   = "trial_ended"
+	ReasonSuspended    = "suspended"
+	ReasonRevoked      = "revoked"
 )
 
 type Status struct {
@@ -132,22 +133,14 @@ type Status struct {
 	GraceUntil time.Time `json:"grace_until"`
 }
 
-// TrialDays is the free trial every new installation gets before it needs
-// an activation key. It counts from the first run, offline.
-const TrialDays = 3
-
-// LocalTrial is the state of a device that isn't activated: Trial for
-// TrialDays from start, then Restricted until an activation key is entered.
-func LocalTrial(start, now, highWater time.Time) Status {
-	if now.Before(highWater) {
-		now = highWater
-	}
-	end := start.AddDate(0, 0, TrialDays)
-	if now.Before(end) {
-		return Status{State: Trial, ExpiresAt: end}
-	}
-	return Status{State: Restricted, Reason: ReasonTrialEnded, ExpiresAt: end}
-}
+// How long a paid device may go without reaching the Platform: a check every
+// two weeks, then OfflineGraceDays with a countdown before the app stops. The
+// app keeps trying every few hours, so a short outage never matters; only
+// the time since the last successful reply counts.
+const (
+	CheckInterval    = 14 * 24 * time.Hour
+	OfflineGraceDays = 7
+)
 
 // CanSell reports whether sales are allowed.
 func (s Status) CanSell() bool { return s.State == Active || s.State == Trial || s.State == Grace }
@@ -159,8 +152,11 @@ func Evaluate(c Claims, now, highWater time.Time) Status {
 	if now.Before(highWater) {
 		now = highWater
 	}
-	exp := time.Unix(c.ExpiresAt, 0)
-	st := Status{ExpiresAt: exp, GraceUntil: exp.AddDate(0, 0, c.GraceDays)}
+	exp, grace := time.Unix(c.ExpiresAt, 0), c.GraceDays
+	if c.Status == "active" && c.IssuedAt > 0 {
+		exp, grace = time.Unix(c.IssuedAt, 0).Add(CheckInterval), OfflineGraceDays
+	}
+	st := Status{ExpiresAt: exp, GraceUntil: exp.AddDate(0, 0, grace)}
 	switch c.Status {
 	case "suspended":
 		st.State, st.Reason = Restricted, ReasonSuspended
@@ -174,12 +170,12 @@ func Evaluate(c Claims, now, highWater time.Time) Status {
 		st.State = Trial
 	case now.Before(exp):
 		st.State = Active
-	case c.GraceDays > 0 && now.Before(st.GraceUntil):
+	case grace > 0 && now.Before(st.GraceUntil):
 		st.State = Grace
 	case c.Status == "trial":
 		st.State, st.Reason = Restricted, ReasonTrialEnded
 	default:
-		st.State, st.Reason = Restricted, ReasonExpired
+		st.State, st.Reason = Restricted, ReasonOffline
 	}
 	return st
 }

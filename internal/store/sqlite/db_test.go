@@ -3,9 +3,12 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"io/fs"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/pressly/goose/v3"
 )
 
 func openTemp(t *testing.T) *DB {
@@ -35,6 +38,56 @@ func TestOpenMigratesAndReopens(t *testing.T) {
 		t.Fatal(err)
 	}
 	db.Close()
+}
+
+// A database from before the e-menu extras keeps its waiter calls and items
+// when service_requests is rebuilt.
+func TestEMenuExtrasMigrationKeepsData(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cpro.db")
+	ctx := context.Background()
+	w, err := sql.Open("sqlite", dsn(path, false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.SetMaxOpenConns(1)
+	dir, err := fs.Sub(migrations, "migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, err := goose.NewProvider(goose.DialectSQLite3, w, dir, goose.WithDisableGlobalRegistry(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 7); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO dining_tables(id, name) VALUES ('t1', 'T1')`,
+		`INSERT INTO items(id, code, name, price_minor, created_at, updated_at) VALUES ('i1', 'I1', 'برجر', 100, 'x', 'x')`,
+		`INSERT INTO service_requests(id, table_id, kind, created_at) VALUES ('r1', 't1', 'bill', 'x')`,
+	} {
+		if _, err := w.ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w.Close()
+
+	db, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var kind, note string
+	var prep int
+	if err := db.Read.QueryRow(`SELECT kind, note FROM service_requests WHERE id = 'r1'`).Scan(&kind, &note); err != nil || kind != "bill" || note != "" {
+		t.Fatalf("request: %q %q %v", kind, note, err)
+	}
+	if err := db.Read.QueryRow(`SELECT prep_minutes FROM items WHERE id = 'i1'`).Scan(&prep); err != nil || prep != 0 {
+		t.Fatalf("item: %d %v", prep, err)
+	}
+	if _, err := db.Write.Exec(`INSERT INTO service_requests(id, table_id, kind, note, created_at) VALUES ('r2', 't1', 'issue', 'بارد', 'x')`); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestPragmas(t *testing.T) {

@@ -38,7 +38,8 @@ type KitchenTicket struct {
 var kitchenStatuses = map[string]bool{"sent": true, "preparing": true, "ready": true, "served": true}
 
 // KitchenBoard returns the tickets still being worked on, oldest first,
-// optionally limited to one station (by the item's category).
+// optionally limited to one station (by the item's category). Categories
+// with no station go to every screen, so a station never misses them.
 func (a *App) KitchenBoard(ctx context.Context, actor Actor, stationID string) ([]KitchenTicket, error) {
 	if err := actor.require(rbac.KitchenView); err != nil {
 		return nil, err
@@ -56,7 +57,7 @@ func (a *App) KitchenBoard(ctx context.Context, actor Actor, stationID string) (
 	       WHERE l.sent_at IS NOT NULL AND l.kitchen_status IN ('sent','preparing','ready') AND o.status <> 'void'`
 	args := []any{}
 	if stationID != "" {
-		q += ` AND cat.kitchen_station_id = ?`
+		q += ` AND (cat.kitchen_station_id = ? OR cat.kitchen_station_id IS NULL)`
 		args = append(args, stationID)
 	}
 	rows, err := a.db.Read.QueryContext(ctx, q+` ORDER BY l.sent_at, l.sort`, args...)

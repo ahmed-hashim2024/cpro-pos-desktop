@@ -35,26 +35,28 @@ owner's own domain.
   validated, and errors are shown by row and column. Nothing is saved unless
   the whole file is valid.
 - **Languages:** Arabic (RTL), English and French (LTR), chosen per device.
-- **Trial, activation and license:** a new installation works for 3 days
-  offline with no account (counted from the first run, remembered in both the
-  identity file and the database, and safe against setting the clock back).
-  After that a non-dismissable alert stays on screen until the owner enters
-  the activation key from their account on the CPro Platform
-  (`/portal/pos`). Selling is also blocked when the subscription ends or the
-  device is revoked; reports, exports and backups always work. The license is
-  signed by the Platform, bound to this computer's key, and refreshed every
-  few hours. A change on the Platform (domain, e-menu settings, suspension)
-  reaches the app within a minute. When offline, a paid license keeps working
-  for its grace days.
-- **Only the real Platform is trusted:** the address defaults to
-  `https://cacherpro.ahmedhashim.site` and can be changed (build flag or
-  Settings → Subscription → Advanced), but every reply must carry the
-  Platform's Ed25519 signature over the request's nonce, so a wrong or hostile
-  server is rejected, and the activation key is only sent after the server
-  proves it holds the key. Redirects are never followed.
-- **E-menu:** needs an activated account and a domain the owner creates on
-  the Platform (Domain page); the Cloudflare tunnel is then served from this
-  computer.
+- **Connecting and license:** the first screen is «Continue with Google».
+  It opens the Platform in the browser (sign up or log in), and once the
+  owner is signed in the app activates by itself: no key to type. It needs
+  the internet once, at that first step. The trial (3 days by default, from
+  the first computer connected) and the subscription live on the Platform.
+  The license is signed by the Platform, bound to this computer's key, and
+  refreshed every few hours; a change on the Platform (domain, e-menu
+  settings, suspension) reaches the app within a minute. A device moves to
+  another computer by removing it from the account on the Platform.
+- **Working offline:** the app sells with no internet. After 14 days without
+  reaching the Platform a banner counts down 7 more days, then selling stops
+  until it's back online, and it recovers by itself within a minute.
+- **Only the real Platform is trusted:** the address is built in, and every
+  reply must carry the Platform's Ed25519 signature over the request's nonce,
+  so a wrong or hostile server is rejected, and nothing secret is sent until
+  the server proves it holds the key. Redirects are never followed.
+- **Backups:** every backup stays on this computer, with a second copy in a
+  folder the owner picks on any drive (Settings → Backups). If the drive is
+  missing, the local backup still happens and the screen says so.
+- **E-menu:** needs a connected account and a menu address. The first-run
+  form suggests one from the restaurant's name and checks it's free; the
+  Platform creates the Cloudflare tunnel and this computer serves it.
   - Guests browse a mobile menu in ar/en/fr. The owner designs it from
     Menu → E-menu, with a live phone preview: name, logo, button and
     background colours (fixed presets), slider offers and family bundles
@@ -62,12 +64,22 @@ owner's own domain.
     and reports treat it like any item), featured items with badges, and
     category pictures. The Platform only decides whether the account has the
     e-menu and online ordering.
+  - An offer can be built from menu items («2 مارجريتا + 2 برجر»): the kitchen
+    sees the contents and stock is deducted from their recipes.
+  - Featured items carry a short note, and a hot deal an e-menu price shown
+    against the normal one struck out. The POS keeps the normal price.
+  - Every picture is framed by the owner when picked (drag and zoom).
+  - Lists have unique positions: saving one in a taken place moves the rest.
   - Guests can sign in with phone + password (bcrypt; hashed session tokens,
     separate from staff sessions, rate limited). Orders placed while signed
     in are attached to that customer.
-  - Each table has its own QR code (printable, regenerable).
-  - Guests can call the waiter or ask for the bill. When the owner allows it,
-    they can order at the table or for takeaway.
+  - Three ways in: the online link (browsing and delivery), each table's QR
+    code (printable, regenerable; the table is known) and one shared hall QR
+    at `/hall` (the guest picks the table from a list).
+  - From the QR codes, a help button calls the waiter, asks for the bill or
+    reports a problem with the food.
+  - After ordering, guests see the estimated time (longest item, plus the
+    delivery time) and a bell that changes when the kitchen finishes.
   - Online orders wait in the POS inbox until staff accept them. Accepted
     orders become normal orders and go to the kitchen. Prices always come
     from the menu.

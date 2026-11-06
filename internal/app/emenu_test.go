@@ -35,13 +35,6 @@ func linkedFixture(t *testing.T) (*fixture, *saastest.Fake) {
 	return f, fake
 }
 
-// endTrial moves this installation's first run past the free trial.
-func endTrial(a *App) {
-	a.platform.mu.Lock()
-	a.platform.st.TrialStart = time.Now().AddDate(0, 0, -license.TrialDays-1).Unix()
-	a.platform.mu.Unlock()
-}
-
 type menuFixture struct {
 	burger, cheese, table, token string
 }
@@ -67,17 +60,13 @@ func TestActivationGatesSelling(t *testing.T) {
 	a, ctx, owner := f.app, f.ctx, f.owner
 	m := f.menu()
 
-	// A new installation sells during the trial, without any account.
-	if st := a.licenseStatus(); st.State != license.Trial || !st.CanSell() {
-		t.Fatalf("new install: %+v", st)
-	}
-	endTrial(a)
+	// A new installation can't sell until it's connected to an account.
 	if _, err := a.CreateOrder(ctx, owner, OrderInput{Type: "takeaway"}, ""); code(err) != CodeForbidden {
-		t.Fatalf("sold after the trial: %v", err)
+		t.Fatalf("sold before connecting: %v", err)
 	}
 	info, _ := a.PlatformInfo(ctx, owner)
-	if info.State != license.Restricted || info.Reason != license.ReasonTrialEnded || info.Linked {
-		t.Fatalf("info after the trial: %+v", info)
+	if info.State != license.Restricted || info.Reason != license.ReasonNotConnected || info.Linked {
+		t.Fatalf("info before connecting: %+v", info)
 	}
 	cashier := f.login(rbac.Cashier, "cashier")
 	if _, err := a.ActivateDevice(ctx, cashier, "ACT-TEST", ""); code(err) != CodeForbidden {
@@ -144,12 +133,6 @@ func TestActivationGatesSelling(t *testing.T) {
 	if st := a.licenseStatus(); st.State != license.Restricted || st.Reason != license.ReasonRevoked {
 		t.Fatalf("after revoke: %+v", st)
 	}
-
-	// Unlinking clears the local license.
-	f.must(a.UnlinkDevice(ctx, owner, true))
-	if st := a.licenseStatus(); st.CanSell() || st.Reason != license.ReasonTrialEnded {
-		t.Fatalf("after unlink: %+v", st)
-	}
 }
 
 func TestPlatformURLValidation(t *testing.T) {
@@ -177,9 +160,9 @@ func TestEMenuOrderingFlow(t *testing.T) {
 	}
 
 	// Waiter call is de-duplicated per table and kind.
-	f.must(a.CallWaiter(ctx, m.token, "waiter", "1.1.1.1"))
-	f.must(a.CallWaiter(ctx, m.token, "waiter", "1.1.1.1"))
-	f.must(a.CallWaiter(ctx, m.token, "bill", "1.1.1.1"))
+	f.must(a.CallWaiter(ctx, ServiceCall{Table: m.token, Kind: "waiter"}, "1.1.1.1"))
+	f.must(a.CallWaiter(ctx, ServiceCall{Table: m.token, Kind: "waiter"}, "1.1.1.1"))
+	f.must(a.CallWaiter(ctx, ServiceCall{Table: m.token, Kind: "bill"}, "1.1.1.1"))
 	inbox, err := a.Inbox(ctx, owner)
 	f.must(err)
 	if len(inbox.Requests) != 2 {
@@ -326,43 +309,18 @@ func TestSetupWithoutAccount(t *testing.T) {
 	if fake.Calls["activate"]+fake.Calls["hello"] != 0 {
 		t.Fatal("setup called the Platform")
 	}
-	if err := a.requireLicensed(); err != nil {
-		t.Fatalf("trial: %v", err)
+	if !a.NeedsConnect() || a.requireLicensed() == nil {
+		t.Fatal("not connected yet, but licensed")
 	}
 	owner := Actor{UserID: s.Me.UserID, Role: rbac.Owner, Channel: ChannelApp}
-	info, _ := a.PlatformInfo(ctx, owner)
-	if info.State != license.Trial || info.TrialEndsAt == "" || info.Linked {
-		t.Fatalf("trial info: %+v", info)
-	}
 
-	// The trial survives a restart and can't be reset by a new identity
-	// file alone: the database remembers the first run.
-	endTrial(a)
-	a.savePlatformLocked(ctx)
-	fresh, _ := saas.LoadIdentity(filepath.Join(t.TempDir(), "new.json"))
-	a2 := New(db, p, a.log)
-	if err := a2.EnablePlatform(ctx, saas.NewClient(fresh, fake.Public)); err != nil {
-		t.Fatal(err)
-	}
-	if a2.requireLicensed() == nil {
-		t.Fatal("trial reset by a new identity")
-	}
-
-	// Activating early keeps the rest of this computer's trial even when the
-	// account itself has no paid plan yet.
+	// An unpaid account gets no time beyond what the Platform grants.
 	fake.Update("ACT-TEST", func(t *saastest.Tenant) { t.Status = "expired" })
-	a.platform.mu.Lock()
-	a.platform.st.TrialStart = time.Now().Add(-24 * time.Hour).Unix()
-	a.platform.mu.Unlock()
 	if _, err := a.ActivateDevice(ctx, owner, "ACT-TEST", ""); err != nil {
 		t.Fatal(err)
 	}
-	if st := a.licenseStatus(); st.State != license.Trial {
-		t.Fatalf("early activation: %+v", st)
-	}
-	endTrial(a)
 	if st := a.licenseStatus(); st.CanSell() || st.Reason != license.ReasonTrialEnded {
-		t.Fatalf("unpaid account after the trial: %+v", st)
+		t.Fatalf("unpaid account: %+v", st)
 	}
 }
 

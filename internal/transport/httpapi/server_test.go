@@ -106,7 +106,7 @@ func TestPublicHandlerExposesOnlyTheMenu(t *testing.T) {
 		pub.ServeHTTP(rec, httptest.NewRequest("GET", p, nil))
 		return rec.Code, rec.Body.String()
 	}
-	for _, p := range []string{"/", "/t/abc"} {
+	for _, p := range []string{"/", "/t/abc", "/hall"} {
 		if code, body := get(p); code != 200 || body != "menu" {
 			t.Fatalf("%s: %d %q", p, code, body)
 		}

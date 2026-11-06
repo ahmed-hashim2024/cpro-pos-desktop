@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Plus, ImagePlus, Trash2, Check, Smartphone, ExternalLink, Copy, Palette, Store, Images, LayoutGrid, Star, Users, ShoppingBag, Languages,
+  Plus, Trash2, Check, Smartphone, ExternalLink, Copy, Palette, Store, Images, LayoutGrid, Star, Users, ShoppingBag, Languages,
   Phone, ArrowUp, ArrowDown, Eye, EyeOff, Save, Undo2, Tag, CircleAlert, Loader2, Download,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast, toastError } from '@/lib/store';
 import { confirm } from '@/components/Confirm';
 import { money, minorInput, toMinor } from '@/lib/format';
-import { Badge, Button, Card, Checkbox, Field, Input, Modal, Segmented, Select, Spinner, Switch, Textarea, cx, useAction, useLoad } from '@/components/ui';
+import { Badge, Button, Card, Checkbox, Field, Input, Modal, PositionSelect, Segmented, Select, Spinner, Switch, Textarea, cx, useAction, useLoad } from '@/components/ui';
+import { ImagePick } from '@/components/ImagePick';
 import { T } from '@/lib/i18n';
 import { openExternal, copyText } from '@/lib/open';
-import { prepareImage, makeAppIcons } from '@/lib/image';
+import { makeAppIcons } from '@/lib/image';
 
 // Recommended picture sizes (they match how the guest page shows them).
 export const SIZES = {
@@ -19,24 +20,6 @@ export const SIZES = {
   logo: { side: 512, hint: '400 × 400 px — مربعة' },
   appIcon: { hint: '512 × 512 px — مربعة، من غير كلام صغير' },
 };
-
-// Picks a picture and prepares it (under 1 MB, high quality) before upload.
-function ImagePick({ onPick, label = T('صورة'), size = 'md', maxSide = 1600, prepare }) {
-  const [busy, setBusy] = useState(false);
-  return (
-    <label className={cx('inline-flex cursor-pointer items-center gap-2 rounded-xl border border-line bg-surface font-semibold transition hover:bg-surface-2',
-      size === 'sm' ? 'h-8 px-2.5 text-sm' : 'h-9 px-3', busy && 'pointer-events-none opacity-60')}>
-      {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <ImagePlus className="size-4" aria-hidden />}{label}
-      <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
-        onChange={async (e) => {
-          const f = e.target.files[0];
-          e.target.value = '';
-          setBusy(true);
-          try { onPick(await (prepare ? prepare(f) : prepareImage(f, { maxSide }))); } catch (err) { toastError(err); } finally { setBusy(false); }
-        }} />
-    </label>
-  );
-}
 
 export default function EMenuDesigner() {
   const data = useLoad(async () => {
@@ -99,7 +82,7 @@ export default function EMenuDesigner() {
             </Field>
             <div className="flex items-center gap-3 md:col-span-2">
               {logoSrc ? <img src={logoSrc} alt="" className="size-14 rounded-xl border border-line object-cover" /> : <span className="flex size-14 items-center justify-center rounded-xl bg-surface-2 text-xs text-muted">{T('بدون')}</span>}
-              <ImagePick label={T('لوجو (اختياري)')} onPick={setLogo} maxSide={SIZES.logo.side} />
+              <ImagePick label={T('لوجو (اختياري)')} onPick={setLogo} maxSide={SIZES.logo.side} shape="square" />
               {logoSrc && <Button variant="ghost" icon={Trash2} onClick={() => setLogo('-')}>{T('إزالة')}</Button>}
               <span className="text-xs text-muted" dir="auto">{T(SIZES.logo.hint)}</span>
             </div>
@@ -111,22 +94,25 @@ export default function EMenuDesigner() {
           <Swatches label={T('لون الخلفية')} list={d.adm.backgrounds} value={draft.background} onChange={set('background')} className="mt-4" big />
         </Card>
 
-        <OffersCard kind="single" offers={d.adm.offers.filter((o) => o.kind === 'single')} onChanged={refresh} />
+        <OffersCard kind="single" offers={d.adm.offers.filter((o) => o.kind === 'single')} allOffers={d.adm.offers} items={d.items} onChanged={refresh} />
         <CategoryImages cats={d.cats} onChanged={refresh} />
         <FeaturedCard featured={d.adm.featured} items={d.items} offers={d.adm.offers} onChanged={refresh} />
-        <OffersCard kind="family" offers={d.adm.offers.filter((o) => o.kind === 'family')} onChanged={refresh} />
+        <OffersCard kind="family" offers={d.adm.offers.filter((o) => o.kind === 'family')} allOffers={d.adm.offers} items={d.items} onChanged={refresh} />
 
         <Card title={T('الطلب من المنيو')} icon={ShoppingBag}>
           {!d.adm.status.ordering && (
             <p className="mb-3 flex items-center gap-2 rounded-xl bg-warning-soft p-2.5 text-sm text-warning"><CircleAlert className="size-4 shrink-0" />{T('الطلب أونلاين مش مفعّل في باقتك على المنصة — الضيوف هيقدروا يتصفحوا بس')}</p>
           )}
           <div className="grid gap-2.5 sm:grid-cols-2">
-            <Toggle label={T('الطلب من الصالة (QR أو رقم الترابيزة)')} checked={draft.allow_dine_in_orders} onChange={set('allow_dine_in_orders')} />
+            <Toggle label={T('الطلب من الصالة (كود الترابيزة أو كود الصالة)')} checked={draft.allow_dine_in_orders} onChange={set('allow_dine_in_orders')} />
             <Toggle label={T('الطلب توصيل (الاسم والتليفون والعنوان)')} checked={draft.allow_takeaway_orders} onChange={set('allow_takeaway_orders')} />
-            <Toggle label={T('زر نداء الويتر وطلب الحساب (QR الطاولة)')} checked={draft.allow_call_waiter} onChange={set('allow_call_waiter')} />
+            <Toggle label={T('زر المساعدة: الويتر والحساب ومشكلة في الأكل (من الأكواد فقط)')} checked={draft.allow_call_waiter} onChange={set('allow_call_waiter')} />
             <Toggle label={T('إظهار الأسعار')} checked={draft.show_prices} onChange={set('show_prices')} />
           </div>
           <p className="mt-3 text-xs text-muted">{T('كل الطلبات بتوصل لصندوق الطلبات الأونلاين في الكاشير ومش بتدخل المطبخ غير لما حد يقبلها. طلب التوصيل بيتسجل على العميل برقم تليفونه.')}</p>
+          <Field label={T('وقت التوصيل التقديري (دقيقة)')} hint={T('بيتضاف لوقت تحضير الطلب في طلبات التوصيل')} className="mt-3 max-w-xs">
+            <Input className="num" type="number" min={0} max={240} value={draft.delivery_minutes || ''} onChange={(e) => set('delivery_minutes')(Math.max(0, Number(e.target.value) || 0))} />
+          </Field>
           <Field label={T('ملاحظة تظهر في السلة')} className="mt-3"><Textarea value={draft.order_note} maxLength={200} onChange={set('order_note')} /></Field>
         </Card>
 
@@ -152,7 +138,7 @@ export default function EMenuDesigner() {
               : <span className="flex size-16 items-center justify-center rounded-[22%] bg-surface-2 text-xs text-muted">{T('بدون')}</span>}
             <div className="grid gap-1">
               <div className="flex flex-wrap gap-2">
-                <ImagePick label={appIconSrc ? T('تغيير الأيقونة') : T('أيقونة التطبيق')} prepare={makeAppIcons} onPick={setAppIcon} />
+                <ImagePick label={appIconSrc ? T('تغيير الأيقونة') : T('أيقونة التطبيق')} prepare={makeAppIcons} onPick={setAppIcon} maxSide={1024} shape="square" />
                 {appIconSrc && <Button variant="ghost" icon={Trash2} onClick={() => setAppIcon('-')}>{T('إزالة')}</Button>}
               </div>
               <span className="text-xs text-muted" dir="auto">{T(SIZES.appIcon.hint)}</span>
@@ -260,27 +246,28 @@ function isLight(hex) {
 
 // ---- offers ---------------------------------------------------------------------------
 
-function OffersCard({ kind, offers, onChanged }) {
+function OffersCard({ kind, offers, allOffers, items, onChanged }) {
   const [edit, setEdit] = useState(null);
+  const open = (o, i) => setEdit({ ...o, price: minorInput(o.price_minor), sort: i + 1, prep: o.prep_minutes || '' });
   const family = kind === 'family';
   const toggle = async (o, active) => {
     try { await api.post('/emenu/offers', { ...o, active }); onChanged(); } catch (e) { toastError(e); }
   };
   return (
     <Card title={family ? T('العروض المجمعة (للعيلة)') : T('عروض السلايدر (للفرد)')} icon={family ? Users : Images}
-      actions={<Button size="sm" icon={Plus} onClick={() => setEdit({ kind, name: '', description: '', price: '', badge: '', highlight: '', sort: offers.length, active: true })}>{T('عرض جديد')}</Button>}>
+      actions={<Button size="sm" icon={Plus} onClick={() => setEdit({ kind, name: '', description: '', price: '', badge: '', highlight: '', sort: offers.length + 1, prep: '', contents: [], active: true })}>{T('عرض جديد')}</Button>}>
       <p className="mb-3 text-sm text-muted">
         {family ? T('بانرات عريضة تحت الأصناف المميزة — للوجبات المجمعة والعروض العائلية.') : T('الصور المتحركة أعلى المنيو. الضيف يدوس «اطلب الآن» فيضاف العرض للسلة بنفس السعر اللي هنا.')}
       </p>
       {!offers.length && <p className="rounded-xl bg-surface-2 p-4 text-center text-sm text-muted">{T('لا توجد عروض بعد')}</p>}
       <div className="grid gap-2">
-        {offers.map((o) => (
-          <div key={o.id} role="button" tabIndex={0} onClick={() => setEdit({ ...o, price: minorInput(o.price_minor) })} onKeyDown={(e) => e.key === 'Enter' && setEdit({ ...o, price: minorInput(o.price_minor) })}
+        {offers.map((o, i) => (
+          <div key={o.id} role="button" tabIndex={0} onClick={() => open(o, i)} onKeyDown={(e) => e.key === 'Enter' && open(o, i)}
             className="flex cursor-pointer items-center gap-3 rounded-xl border border-line p-2 transition hover:bg-surface-2">
             {o.image ? <img src={o.image} alt="" className={cx('rounded-lg object-cover', family ? 'h-12 w-20' : 'size-12')} /> : <span className="size-12 rounded-lg bg-surface-2" />}
             <div className="min-w-0 flex-1">
               <div className="truncate font-bold">{o.name}</div>
-              <div className="truncate text-xs text-muted">{o.description}</div>
+              <div className="truncate text-xs text-muted">{contentsLabel(o.contents) || o.description}</div>
             </div>
             {o.badge && <Badge tone="primary">{o.badge}</Badge>}
             {o.highlight && <Badge tone="amber">{o.highlight}</Badge>}
@@ -289,12 +276,15 @@ function OffersCard({ kind, offers, onChanged }) {
           </div>
         ))}
       </div>
-      {edit && <OfferDialog offer={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); onChanged(); }} />}
+      {edit && <OfferDialog offer={edit} count={offers.length + (edit.id ? 0 : 1)} allOffers={allOffers} items={items} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); onChanged(); }} />}
     </Card>
   );
 }
 
-function OfferDialog({ offer, onClose, onSaved }) {
+// «2 مارجريتا + 2 برجر»
+const contentsLabel = (list) => (list || []).map((c) => `${c.qty} ${c.name}`).join(' + ');
+
+function OfferDialog({ offer, count, allOffers, items, onClose, onSaved }) {
   const [f, setF] = useState(offer);
   const [image, setImage] = useState('');
   const [busy, run] = useAction();
@@ -304,7 +294,7 @@ function OfferDialog({ offer, onClose, onSaved }) {
     const price = toMinor(f.price);
     if (!price || price <= 0) throw new Error(T('سعر العرض يجب أن يكون أكبر من صفر'));
     if (!f.id && !image) throw new Error(T('اختر صورة للعرض'));
-    await api.post('/emenu/offers', { ...f, price_minor: price, sort: Number(f.sort) || 0, image_data: image });
+    await api.post('/emenu/offers', { ...f, price_minor: price, prep_minutes: Number(f.prep) || 0, image_data: image });
     toast(T('تم الحفظ'));
     onSaved();
   });
@@ -322,21 +312,76 @@ function OfferDialog({ offer, onClose, onSaved }) {
           <Field label={T('المكونات / الوصف')} hint={T('يظهر للضيف تحت اسم العرض')}><Textarea value={f.description} maxLength={300} onChange={set('description')} /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label={T('السعر')}><Input className="num" value={f.price} onChange={set('price')} inputMode="decimal" /></Field>
-            <Field label={T('الترتيب')}><Input type="number" value={f.sort} onChange={set('sort')} /></Field>
+            <Field label={T('الترتيب')}><PositionSelect count={count} value={f.sort} onChange={(v) => setF({ ...f, sort: v })} /></Field>
             <Field label={T('شارة صغيرة')} hint={T('مثلاً: ساخن وطازة')}><Input value={f.badge} maxLength={20} onChange={set('badge')} /></Field>
             {family && <Field label={T('ملصق دائري')} hint={T('مثلاً: وفّر 20%')}><Input value={f.highlight} maxLength={16} onChange={set('highlight')} /></Field>}
+            <Field label={T('وقت التحضير التقديري (دقيقة)')} hint={T('لو سبته فاضي هيتحسب من أطول صنف في العرض')}><Input className="num" type="number" min={0} max={240} value={f.prep} onChange={set('prep')} /></Field>
           </div>
+          <OfferContents offer={f} items={items} allOffers={allOffers} onChange={(next) => setF(next)} />
           <Checkbox label={T('ظاهر في المنيو ونقطة البيع')} checked={f.active} onChange={(v) => setF({ ...f, active: v })} />
           <p className="text-xs text-muted">{T('العرض بيتسجل كصنف في قسم «العروض»، فيتباع من نقطة البيع ويطلع في التقارير والمطبخ زي أي صنف.')}</p>
         </div>
         <div className="grid content-start justify-items-center gap-2">
-          {src ? <img src={src} alt="" className={cx('w-full rounded-2xl border border-line object-cover', family ? 'aspect-[2/1]' : 'aspect-[4/3]')} />
-            : <span className={cx('flex w-full items-center justify-center rounded-2xl bg-surface-2 text-sm text-muted', family ? 'aspect-[2/1]' : 'aspect-[4/3]')}>{T('بدون صورة')}</span>}
-          <ImagePick label={src ? T('تغيير الصورة') : T('اختيار صورة')} onPick={setImage} maxSide={SIZES.offer.side} />
+          {src ? <img src={src} alt="" className="aspect-[4/3] w-full rounded-2xl border border-line object-cover" />
+            : <span className="flex aspect-[4/3] w-full items-center justify-center rounded-2xl bg-surface-2 text-sm text-muted">{T('بدون صورة')}</span>}
+          <ImagePick label={src ? T('تغيير الصورة') : T('اختيار صورة')} onPick={setImage} maxSide={SIZES.offer.side} shape="wide" />
           <span className="text-center text-xs text-muted" dir="auto">{T('المقاس المناسب')}: {T(SIZES.offer.hint)}</span>
         </div>
       </div>
     </Modal>
+  );
+}
+
+// What the offer is made of, from items already on the menu. The kitchen gets
+// this list and stock is deducted from these items' recipes.
+function OfferContents({ offer, items, allOffers, onChange }) {
+  const [pick, setPick] = useState('');
+  const [qty, setQty] = useState(1);
+  const contents = offer.contents || [];
+  const offerItems = useMemo(() => new Set(allOffers.map((o) => o.item_id)), [allOffers]);
+  const candidates = items.filter((i) => i.active && !offerItems.has(i.id) && !contents.some((c) => c.item_id === i.id));
+  const worth = contents.reduce((s, c) => s + c.price_minor * c.qty, 0);
+  const price = toMinor(offer.price) || 0;
+
+  // Keep the suggested name in step until the owner writes their own.
+  const update = (next) => onChange({ ...offer, contents: next, name: !offer.name || offer.name === contentsLabel(contents) ? contentsLabel(next) : offer.name });
+  const add = () => {
+    const it = items.find((i) => i.id === pick);
+    if (!it) return;
+    update([...contents, { item_id: it.id, name: it.name, price_minor: it.price_minor, qty: Math.max(1, Number(qty) || 1) }]);
+    setPick('');
+    setQty(1);
+  };
+  return (
+    <div className="rounded-xl bg-surface-2 p-3">
+      <div className="font-bold">{T('مكونات العرض من أصناف المنيو')}</div>
+      <p className="mb-2 text-xs text-muted">{T('اختياري: المكونات بتظهر للمطبخ والضيف، والمخزون بيتخصم من وصفاتها.')}</p>
+      <div className="flex gap-2">
+        <Select className="min-w-0 flex-1" value={pick} aria-label={T('صنف')} onChange={(e) => setPick(e.target.value)}>
+          <option value="">{T('— اختر صنف —')}</option>
+          {candidates.map((i) => <option key={i.id} value={i.id}>{i.name} — {money(i.price_minor)}</option>)}
+        </Select>
+        <Input className="num w-16" type="number" min={1} max={50} aria-label={T('الكمية')} value={qty} onChange={(e) => setQty(e.target.value)} />
+        <Button variant="secondary" icon={Plus} disabled={!pick || contents.length >= 12} onClick={add}>{T('إضافة')}</Button>
+      </div>
+      {contents.length > 0 && (
+        <div className="mt-2 grid gap-1.5">
+          {contents.map((c) => (
+            <div key={c.item_id} className="flex items-center gap-2 rounded-lg bg-surface px-2 py-1.5">
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold">{c.name}</span>
+              <span className="num text-xs text-muted">{money(c.price_minor)}</span>
+              <Input className="num w-16" type="number" min={1} max={50} aria-label={T('الكمية')} value={c.qty}
+                onChange={(e) => update(contents.map((x) => (x === c ? { ...x, qty: Math.min(50, Math.max(1, Number(e.target.value) || 1)) } : x)))} />
+              <button type="button" aria-label={T('إزالة')} onClick={() => update(contents.filter((x) => x !== c))} className="rounded-lg p-1.5 text-danger hover:bg-danger-soft"><Trash2 className="size-4" /></button>
+            </div>
+          ))}
+          <p className="text-sm text-muted">
+            {T('سعرهم منفصلين')}: <span className="num font-bold">{money(worth)}</span>
+            {price > 0 && price < worth && <> · {T('الضيف بيوفر')} <span className="num font-bold text-primary">{money(worth - price)}</span></>}
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -361,7 +406,7 @@ function CategoryImages({ cats, onChanged }) {
             </span>
             <span className="line-clamp-1 text-sm font-semibold">{c.name}</span>
             <div className="flex gap-1">
-              {busyId === c.id ? <Loader2 className="size-5 animate-spin text-primary" /> : <ImagePick size="sm" maxSide={SIZES.category.side} label={c.image ? T('تغيير') : T('صورة')} onPick={(data) => setImage(c, data)} />}
+              {busyId === c.id ? <Loader2 className="size-5 animate-spin text-primary" /> : <ImagePick size="sm" maxSide={SIZES.category.side} shape="round" label={c.image ? T('تغيير') : T('صورة')} onPick={(data) => setImage(c, data)} />}
               {c.image && busyId !== c.id && (
                 <button onClick={() => setImage(c, '-')} aria-label={T('إزالة')} title={T('إزالة')} className="flex size-8 items-center justify-center rounded-lg text-danger hover:bg-danger-soft"><Trash2 className="size-4" /></button>
               )}
@@ -388,7 +433,7 @@ function FeaturedCard({ featured, items, offers, onChanged }) {
 
   const commit = (next) => run(async () => {
     setList(next);
-    await api.put('/emenu/featured', next.map(({ item_id: id, badge }) => ({ item_id: id, badge })));
+    await api.put('/emenu/featured', next.map(({ item_id: id, badge, note, deal_price_minor: deal }) => ({ item_id: id, badge, note, deal_price_minor: deal })));
     await onChanged();
   });
   const move = (i, by) => {
@@ -401,31 +446,52 @@ function FeaturedCard({ featured, items, offers, onChanged }) {
 
   return (
     <Card title={T('الأصناف المميزة')} icon={Star}>
-      <p className="mb-3 text-sm text-muted">{T('تظهر في صف «الأكثر طلباً» مع شارة لكل صنف. «عرض الكل» بيفتح المنيو كامل مترتب بالأقسام.')}</p>
+      <p className="mb-3 text-sm text-muted">{T('تظهر في صف «الأكثر طلباً» مع شارة لكل صنف. «عرض الكل» بيفتح المنيو كامل مترتب بالأقسام.')} {T('سعر «عرض ساخن» بيطبق على الطلب من المنيو الإلكتروني بس، مش على البيع من الكاشير.')}</p>
       <div className="mb-3 flex gap-2">
         <Select className="flex-1" value={pick} onChange={(e) => setPick(e.target.value)}>
           <option value="">{T('— اختر صنف —')}</option>
           {candidates.map((i) => <option key={i.id} value={i.id}>{i.name} — {money(i.price_minor)}</option>)}
         </Select>
-        <Button icon={Plus} disabled={!pick || busy || list.length >= 24} onClick={() => { commit([...list, { item_id: pick, badge: '' }]); setPick(''); }}>{T('إضافة')}</Button>
+        <Button icon={Plus} disabled={!pick || busy || list.length >= 24} onClick={() => { commit([...list, { item_id: pick, badge: '', note: '', deal_price_minor: 0 }]); setPick(''); }}>{T('إضافة')}</Button>
       </div>
       {!list.length && <p className="rounded-xl bg-surface-2 p-4 text-center text-sm text-muted">{T('لا توجد أصناف مميزة بعد')}</p>}
       <div className="grid gap-2">
         {list.map((f, i) => {
           const it = byId[f.item_id] || f;
+          const patch = (p) => commit(list.map((x) => (x === f ? { ...x, ...p } : x)));
+          const setDeal = (e) => {
+            const v = e.target.value.trim() ? toMinor(e.target.value) : 0;
+            if (v == null || v < 0 || (v > 0 && v >= it.price_minor)) {
+              toastError(new Error(T('سعر العرض لازم يكون أقل من سعر الصنف')));
+              e.target.value = f.deal_price_minor ? minorInput(f.deal_price_minor) : '';
+            } else if (v !== f.deal_price_minor) patch({ deal_price_minor: v });
+          };
           return (
-            <div key={f.item_id} className="flex items-center gap-3 rounded-xl border border-line p-2">
-              {it.image ? <img src={it.image} alt="" className="size-11 rounded-lg object-cover" /> : <span className="flex size-11 items-center justify-center rounded-lg bg-surface-2"><Tag className="size-4 text-muted" /></span>}
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-bold">{it.name}</div>
-                <div className="num text-xs text-muted">{money(it.price_minor)}</div>
+            <div key={f.item_id} className="rounded-xl border border-line p-2">
+              <div className="flex items-center gap-3">
+                {it.image ? <img src={it.image} alt="" className="size-11 rounded-lg object-cover" /> : <span className="flex size-11 items-center justify-center rounded-lg bg-surface-2"><Tag className="size-4 text-muted" /></span>}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-bold">{it.name}</div>
+                  <div className="num text-xs text-muted">
+                    {f.deal_price_minor > 0 ? <><span className="font-bold text-primary">{money(f.deal_price_minor)}</span> <s>{money(it.price_minor)}</s></> : money(it.price_minor)}
+                  </div>
+                </div>
+                <Select className="w-40" value={f.badge} aria-label={T('الشارة')} onChange={(e) => patch({ badge: e.target.value, deal_price_minor: e.target.value === 'hot_deal' ? f.deal_price_minor : 0 })}>
+                  {badges.map(([k, l]) => <option key={k} value={k}>{T(l)}</option>)}
+                </Select>
+                <button disabled={i === 0 || busy} onClick={() => move(i, -1)} aria-label={T('لأعلى')} className="rounded-lg p-1.5 text-muted hover:bg-surface-2 disabled:opacity-30"><ArrowUp className="size-4" /></button>
+                <button disabled={i === list.length - 1 || busy} onClick={() => move(i, 1)} aria-label={T('لأسفل')} className="rounded-lg p-1.5 text-muted hover:bg-surface-2 disabled:opacity-30"><ArrowDown className="size-4" /></button>
+                <button disabled={busy} onClick={() => commit(list.filter((x) => x !== f))} aria-label={T('إزالة')} className="rounded-lg p-1.5 text-danger hover:bg-danger-soft"><Trash2 className="size-4" /></button>
               </div>
-              <Select className="w-40" value={f.badge} aria-label={T('الشارة')} onChange={(e) => commit(list.map((x) => (x === f ? { ...x, badge: e.target.value } : x)))}>
-                {badges.map(([k, l]) => <option key={k} value={k}>{T(l)}</option>)}
-              </Select>
-              <button disabled={i === 0 || busy} onClick={() => move(i, -1)} aria-label={T('لأعلى')} className="rounded-lg p-1.5 text-muted hover:bg-surface-2 disabled:opacity-30"><ArrowUp className="size-4" /></button>
-              <button disabled={i === list.length - 1 || busy} onClick={() => move(i, 1)} aria-label={T('لأسفل')} className="rounded-lg p-1.5 text-muted hover:bg-surface-2 disabled:opacity-30"><ArrowDown className="size-4" /></button>
-              <button disabled={busy} onClick={() => commit(list.filter((x) => x !== f))} aria-label={T('إزالة')} className="rounded-lg p-1.5 text-danger hover:bg-danger-soft"><Trash2 className="size-4" /></button>
+              {f.badge && (
+                <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_140px]">
+                  <Input defaultValue={f.note} maxLength={40} placeholder={T('معلومة قصيرة للضيف، مثلاً: لفترة محدودة')} aria-label={T('معلومة قصيرة للضيف')}
+                    onBlur={(e) => { if (e.target.value.trim() !== f.note) patch({ note: e.target.value.trim() }); }} />
+                  {f.badge === 'hot_deal' && (
+                    <Input className="num" inputMode="decimal" defaultValue={f.deal_price_minor ? minorInput(f.deal_price_minor) : ''} placeholder={T('سعر العرض')} aria-label={T('سعر العرض')} onBlur={setDeal} />
+                  )}
+                </div>
+              )}
             </div>
           );
         })}

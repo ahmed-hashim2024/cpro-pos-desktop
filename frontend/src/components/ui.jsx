@@ -57,6 +57,16 @@ export const Input = ({ className, ...p }) => <input {...p} className={sized(cla
 export const Textarea = ({ className, ...p }) => <textarea {...p} className={cx(sized(className), 'h-20 py-2')} />;
 export const Select = ({ className, children, ...p }) => <select {...p} className={sized(className)}>{children}</select>;
 
+// A position in a list (1 = first). Picking from the list means two rows can
+// never share a place; the others move to make room.
+export function PositionSelect({ count, value, onChange, className }) {
+  return (
+    <Select className={className} value={value} onChange={(e) => onChange(Number(e.target.value))}>
+      {Array.from({ length: count }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
+    </Select>
+  );
+}
+
 export function SearchInput({ className, ...p }) {
   return (
     <div className={cx('relative', className)}>

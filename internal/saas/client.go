@@ -258,6 +258,43 @@ func (c *Client) Activate(ctx context.Context, base, code string, info DeviceInf
 	return r, c.call(ctx, base, "activate", body, &r)
 }
 
+// ActivateLink links the device with the one-time token the Platform gave
+// the signed-in owner's browser («Continue with Google»).
+func (c *Client) ActivateLink(ctx context.Context, base, token string, info DeviceInfo) (Reply, error) {
+	if err := c.Hello(ctx, base); err != nil {
+		return Reply{}, err
+	}
+	body := map[string]any{
+		"link_token":  token,
+		"public_key":  c.ID.PublicKey(),
+		"device_name": info.Name,
+		"os":          info.OS,
+		"app_version": info.AppVersion,
+		"fingerprint": info.Fingerprint,
+	}
+	var r Reply
+	return r, c.call(ctx, base, "activate", body, &r)
+}
+
+// Subdomain is the Platform's answer about a menu address.
+type Subdomain struct {
+	Available bool   `json:"available"`
+	Domain    string `json:"domain"`
+	Reason    string `json:"reason"` // invalid | taken
+}
+
+// CheckSubdomain asks whether a menu address is free.
+func (c *Client) CheckSubdomain(ctx context.Context, base, subdomain string) (Subdomain, error) {
+	var r Subdomain
+	return r, c.call(ctx, base, "check_subdomain", map[string]any{"subdomain": subdomain}, &r)
+}
+
+// ClaimSubdomain creates the account's domain if the address is free.
+func (c *Client) ClaimSubdomain(ctx context.Context, base, subdomain string) (Subdomain, error) {
+	var r Subdomain
+	return r, c.call(ctx, base, "claim_subdomain", map[string]any{"subdomain": subdomain}, &r)
+}
+
 // Release is the latest app version for this platform. It arrives in a
 // signed reply, so URL and SHA256 can be trusted: the download is checked
 // against SHA256 before it runs.

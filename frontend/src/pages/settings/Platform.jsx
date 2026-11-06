@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import {
-  RefreshCw, Unlink, ExternalLink, Copy, Printer, QrCode, Globe, ShieldCheck, RotateCcw, Link2, MonitorSmartphone,
+  RefreshCw, ExternalLink, Copy, Printer, QrCode, Globe, ShieldCheck, RotateCcw, Info, MonitorSmartphone,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp, toast, toastError } from '@/lib/store';
@@ -10,9 +10,10 @@ import { printTableQRs } from '@/lib/print';
 import { qrSVG } from '@/lib/qr';
 import { openExternal, copyText } from '@/lib/open';
 import { confirm } from '@/components/Confirm';
-import { ActivationForm, licenseReason, openAccount } from '@/components/License';
+import { ConnectGoogle, licenseReason, openAccount } from '@/components/License';
+import { DomainForm } from '@/components/Domain';
 import { CheckUpdateButton } from '@/components/Update';
-import { Badge, Button, Card, Field, Input, Spinner, Table, Td, useLoad } from '@/components/ui';
+import { Badge, Button, Card, Spinner, Table, Td, useLoad } from '@/components/ui';
 import { T } from '@/lib/i18n';
 
 const stateBadge = {
@@ -48,39 +49,22 @@ export default function Platform() {
   }
   const [tone, label] = stateBadge[platform.state] || stateBadge.restricted;
   const sync = () => act('sync', async () => { await api.post('/platform/sync'); toast(T('تمت المزامنة')); });
-  const unlink = async () => {
-    if (!await confirm({ title: T('فك ربط الجهاز'), message: T('سيتوقف البيع على هذا الجهاز حتى تفعيله مرة أخرى. بياناتك تبقى كما هي.'), action: T('فك الربط') })) return;
-    act('unlink', async () => {
-      try {
-        await api.post('/platform/unlink', { force: false });
-      } catch (e) {
-        if (!await confirm({ title: T('تعذر الوصول للمنصة'), message: T('فك الربط محلياً فقط؟ أوقف الجهاز بعدها من حسابك على المنصة لتحرير مكانه.'), action: T('فك الربط محلياً') })) throw e;
-        await api.post('/platform/unlink', { force: true });
-      }
-      toast(T('تم فك الربط'));
-    });
-  };
 
   return (
     <div className="grid gap-3 xl:grid-cols-2">
       <Card title={T('الاشتراك والتفعيل')} icon={ShieldCheck} actions={<Badge tone={tone} dot>{label}</Badge>}>
         {!platform.linked ? (
           <div className="grid gap-3">
-            <p className="text-sm text-muted">
-              {platform.state === 'trial'
-                ? T('نسخة تجريبية تنتهي {0}. ادخل على المنصة، سجّل حسابك وخد كود التفعيل واكتبه هنا.', [dateTime(platform.trial_ends_at)])
-                : licenseReason(platform)}
-            </p>
-            {platform.url && <div><Button variant="secondary" icon={ExternalLink} onClick={() => openAccount(platform)}>{T('افتح المنصة وخد كود التفعيل')}</Button></div>}
-            <ActivationForm />
+            <p className="text-sm text-muted">{licenseReason(platform)}</p>
+            <ConnectGoogle onDone={loadPlatform} />
           </div>
         ) : (
           <div className="grid gap-3">
             {platform.state === 'restricted' && <p className="rounded-xl bg-danger-soft p-3 text-sm text-danger">{licenseReason(platform)}</p>}
-            {platform.state === 'restricted' && platform.reason === 'revoked' && <ActivationForm />}
+            {platform.state === 'restricted' && platform.reason === 'revoked' && <ConnectGoogle onDone={loadPlatform} />}
             <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
               <dt className="text-muted">{T('المطعم')}</dt><dd className="font-bold">{platform.tenant_name}</dd>
-              <dt className="text-muted">{T('الخطة')}</dt><dd>{platform.plan === 'trial' ? T('فترة تجريبية') : T('اشتراك مدفوع')}</dd>
+              <dt className="text-muted">{T('الخطة')}</dt><dd>{{ active: T('اشتراك مدفوع'), trial: T('فترة تجريبية'), suspended: T('موقوف') }[platform.plan] || T('لم يتم الاشتراك بعد')}</dd>
               <dt className="text-muted">{T('الترخيص صالح حتى')}</dt><dd className="num">{dateTime(platform.expires_at)}</dd>
               {platform.grace_until && <><dt className="text-muted">{T('يعمل بدون إنترنت حتى')}</dt><dd className="num">{dateTime(platform.grace_until)}</dd></>}
               <dt className="text-muted">{T('آخر مزامنة')}</dt><dd className="num">{dateTime(platform.last_sync) || '—'}</dd>
@@ -90,7 +74,6 @@ export default function Platform() {
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" icon={RefreshCw} busy={busy === 'sync'} onClick={sync}>{T('مزامنة الآن')}</Button>
               {platform.url && <Button variant="ghost" icon={ExternalLink} onClick={() => openAccount(platform)}>{T('حسابي على المنصة')}</Button>}
-              <Button variant="danger-soft" icon={Unlink} busy={busy === 'unlink'} onClick={unlink} className="ms-auto">{T('فك الربط')}</Button>
             </div>
           </div>
         )}
@@ -98,26 +81,24 @@ export default function Platform() {
 
       <EMenuCard platform={platform} />
       {platform.linked && <TableQRs platform={platform} />}
-      <AdvancedCard platform={platform} onSaved={loadPlatform} />
+      <AboutCard platform={platform} />
     </div>
   );
 }
 
 function EMenuCard({ platform }) {
+  const settings = useApp((s) => s.settings);
   const [tone, label] = tunnelBadge[platform.tunnel?.state] || tunnelBadge.off;
   const url = platform.menu_url;
   const copy = async () => { if (await copyText(url)) toast(T('تم نسخ الرابط')); };
   return (
     <Card title={T('المنيو الإلكتروني')} icon={Globe} actions={url && <Badge tone={tone} dot>{label}</Badge>}>
       {!platform.linked ? (
-        <p className="text-sm text-muted">{T('المنيو الإلكتروني يحتاج تفعيل البرنامج بحسابك على المنصة، ثم إنشاء دومين المطعم من هناك.')}</p>
+        <p className="text-sm text-muted">{T('المنيو الإلكتروني يحتاج ربط البرنامج بحسابك.')}</p>
       ) : !platform.features?.emenu ? (
         <p className="text-sm text-muted">{T('المنيو الإلكتروني غير متاح في اشتراكك الحالي')}</p>
       ) : !url ? (
-        <div className="grid gap-2 text-sm text-muted">
-          <p>{T('لتفعيل المنيو: ادخل على حسابك في المنصة ← الدومين، واختار اسم الدومين واضغط إنشاء. البرنامج هيتصل بيه تلقائياً خلال دقيقة.')}</p>
-          {platform.url && <div><Button variant="secondary" icon={ExternalLink} onClick={() => openExternal(`${platform.url}/portal/site`)}>{T('اختيار الدومين')}</Button></div>}
-        </div>
+        <DomainForm name={settings?.restaurant_name} />
       ) : (
         <div className="grid gap-3">
           <div className="flex items-center gap-3">
@@ -152,6 +133,8 @@ function TableQRs({ platform }) {
   const list = useMemo(() => (tables.data || []).filter((t) => t.active), [tables.data]);
   if (!platform.features?.emenu || !base) return null;
   const link = (t) => `${base}/t/${t.qr_token}`;
+  const hallLink = `${base}/hall`;
+  const printHall = () => printTableQRs(settings?.restaurant_name || '', [{ title: T('منيو الصالة'), svg: qrSVG(hallLink) }]);
   const printAll = () => printTableQRs(settings?.restaurant_name || '', list.map((t) => ({ title: t.name, svg: qrSVG(link(t)) })));
   const regenerate = async (t) => {
     if (!await confirm({ title: T('تجديد كود {0}', [t.name]), message: T('الكود المطبوع حالياً لن يعمل بعد التجديد. اطبع الكود الجديد.'), action: T('تجديد') })) return;
@@ -169,6 +152,15 @@ function TableQRs({ platform }) {
   return (
     <Card title={T('أكواد الطاولات')} icon={QrCode} className="xl:col-span-2"
       actions={list.length > 0 && <Button size="sm" icon={Printer} onClick={printAll}>{T('طباعة كل الأكواد')}</Button>}>
+      <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl bg-surface-2 p-3">
+        <div className="size-14 shrink-0 rounded-lg bg-white p-0.5 [&_svg]:size-full" dangerouslySetInnerHTML={{ __html: qrSVG(hallLink, { margin: 1 }) }} />
+        <div className="min-w-0 flex-1">
+          <div className="font-bold">{T('كود الصالة (واحد لكل الترابيزات)')}</div>
+          <p className="text-sm text-muted">{T('الضيف بيختار ترابيزته من قايمة. كود الترابيزة بيحددها لوحده، واللينك العادي للتوصيل والتصفح بس.')}</p>
+          <span dir="ltr" className="num block truncate text-xs text-muted">{hallLink}</span>
+        </div>
+        <Button size="sm" variant="secondary" icon={Printer} onClick={printHall}>{T('طباعة')}</Button>
+      </div>
       {tables.loading && !tables.data ? <Spinner /> : (
         <Table head={[T('الطاولة'), T('الكود'), T('الرابط'), '']} empty={T('لا توجد طاولات — أضفها من المنيو ← الطاولات')}>
           {list.map((t) => (
@@ -188,30 +180,10 @@ function TableQRs({ platform }) {
   );
 }
 
-function AdvancedCard({ platform, onSaved }) {
-  const [url, setUrl] = useState(platform.url === platform.default_url ? '' : platform.url);
-  const [busy, setBusy] = useState(false);
-  const save = async () => {
-    setBusy(true);
-    try {
-      await api.put('/platform/url', { url });
-      await onSaved();
-      toast(T('تم الحفظ'));
-    } catch (e) {
-      toastError(e);
-    } finally {
-      setBusy(false);
-    }
-  };
+function AboutCard({ platform }) {
   return (
-    <Card title={T('متقدم')} icon={Link2}>
-      <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-        <Field label={T('عنوان المنصة')} hint={T('اتركه فارغاً لاستخدام العنوان الافتراضي: {0}. البرنامج يرفض أي عنوان لا يحمل توقيع المنصة.', [platform.default_url || '—'])}>
-          <Input dir="ltr" placeholder="https://" value={url} onChange={(e) => setUrl(e.target.value)} />
-        </Field>
-        <Button variant="secondary" busy={busy} onClick={save}>{T('حفظ')}</Button>
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted">
+    <Card title={T('عن البرنامج')} icon={Info}>
+      <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
         <span>{T('إصدار البرنامج')}: <span className="num">{platform.app_version}</span></span>
         {platform.update?.checked_at && <span>{T('آخر بحث عن تحديث')}: <span className="num">{dateTime(platform.update.checked_at)}</span></span>}
         <span className="ms-auto"><CheckUpdateButton /></span>

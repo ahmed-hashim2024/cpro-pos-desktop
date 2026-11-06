@@ -3,8 +3,10 @@ import { Minus, Plus, X } from 'lucide-react';
 
 export const cx = (...c) => c.filter(Boolean).join(' ');
 
-// /t/{token} is a table's QR code; ?preview is the designer's phone preview.
+// /t/{token} is a table's QR code, /hall the shared QR in the hall (the guest
+// picks their table); ?preview is the designer's phone preview.
 export const tableToken = (window.location.pathname.match(/^\/t\/([A-Za-z0-9]+)/) || [])[1] || '';
+export const hallLink = window.location.pathname === '/hall';
 export const PREVIEW = new URLSearchParams(window.location.search).has('preview');
 
 export const store = {
@@ -26,7 +28,7 @@ export function saveContact(c) {
 // Which way this guest orders: from a table QR it's always the hall.
 export function orderModes(menu) {
   if (menu.table) return menu.ordering.dine_in ? ['hall'] : [];
-  return [menu.ordering.dine_in && 'hall', menu.ordering.delivery && 'delivery'].filter(Boolean);
+  return [menu.ordering.dine_in && menu.tables?.length > 0 && 'hall', menu.ordering.delivery && 'delivery'].filter(Boolean);
 }
 export function effectiveMode(menu, contact) {
   const modes = orderModes(menu);
@@ -35,7 +37,7 @@ export function effectiveMode(menu, contact) {
 const phoneOK = (p) => (p.match(/[0-9٠-٩]/g) || []).length >= 7;
 export function contactReady(menu, contact) {
   const mode = effectiveMode(menu, contact);
-  if (mode === 'hall') return !!(menu.table || contact.table.trim());
+  if (mode === 'hall') return !!(menu.table || menu.tables?.includes(contact.table));
   if (mode === 'delivery') return !!(contact.name.trim() && phoneOK(contact.phone) && contact.address.trim());
   return false;
 }
@@ -73,6 +75,16 @@ export function allItems(menu) {
 }
 
 // ---- small pieces ----------------------------------------------------------------
+
+// The price, with the old one struck out next to it when there is a discount.
+export function PriceTag({ item, money, className, wasClassName = 'text-mut' }) {
+  return (
+    <span className="inline-flex flex-wrap items-baseline gap-x-1.5">
+      <span className={cx('num', className)}>{money(item.price_minor)}</span>
+      {item.was_price_minor > item.price_minor && <s className={cx('num text-[0.75em] font-medium', wasClassName)}>{money(item.was_price_minor)}</s>}
+    </span>
+  );
+}
 
 export function Thumb({ item, className }) {
   return item.image

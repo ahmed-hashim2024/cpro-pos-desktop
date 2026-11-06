@@ -16,8 +16,8 @@ async function req(method, path, body) {
 }
 
 export const menuApi = {
-  menu: (table) => req('GET', `/menu${table ? `?table=${encodeURIComponent(table)}` : ''}`),
-  call: (table, kind) => req('POST', '/call', { table, kind }),
+  menu: (table, hall) => req('GET', `/menu${table ? `?table=${encodeURIComponent(table)}` : hall ? '?hall=1' : ''}`),
+  call: (body) => req('POST', '/call', body),
   order: (body) => req('POST', '/orders', body),
   status: (token) => req('GET', `/orders/${encodeURIComponent(token)}`),
 };

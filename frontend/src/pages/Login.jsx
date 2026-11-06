@@ -3,6 +3,8 @@ import { LangMenu } from '@/components/Layout';
 import { Delete, KeyRound, UserRound, ShoppingCart, ChefHat, FlaskConical, ShieldCheck } from 'lucide-react';
 import { api, deviceId } from '@/lib/api';
 import { useApp, toastError } from '@/lib/store';
+import { ConnectGoogle } from '@/components/License';
+import { DomainField, slugify } from '@/components/Domain';
 import { roles } from '@/lib/format';
 import { Button, Field, Input, Select, Spinner, cx } from '@/components/ui';
 import { T } from '@/lib/i18n';
@@ -40,22 +42,28 @@ export default function Login() {
         <div className="absolute end-6 top-6"><LangMenu /></div>
         <div className="w-full max-w-2xl">
           <div className="mb-8">
-            <h2 className="text-3xl font-bold">{status.needs_setup ? T('مرحباً بك في CPro') : T('تسجيل الدخول')}</h2>
+            <h2 className="text-3xl font-bold">{status.needs_connect || status.needs_setup ? T('مرحباً بك في CPro') : T('تسجيل الدخول')}</h2>
             <p className="mt-1 text-muted">
-              {status.needs_setup ? T('أنشئ حساب المالك وابدأ فترتك التجريبية') : T('اختر حسابك وأدخل الرقم السري')}
+              {status.needs_connect ? T('سجّل دخولك بحساب Google علشان تبدأ. لو مالكش حساب هيتعمل لوحده.')
+                : status.needs_setup ? T('خطوة أخيرة: جهّز حساب المالك على الجهاز ده') : T('اختر حسابك وأدخل الرقم السري')}
             </p>
           </div>
-          {status.needs_setup ? <Setup /> : <SignIn channel={status.channel} />}
+          {status.needs_connect
+            ? <div className="max-w-md"><ConnectGoogle onDone={load} /></div>
+            : status.needs_setup ? <Setup account={status.account} /> : <SignIn channel={status.channel} />}
         </div>
       </main>
     </div>
   );
 }
 
-function Setup() {
+function Setup({ account }) {
   const signedIn = useApp((s) => s.signedIn);
-  const [f, setF] = useState({ restaurant_name: '', owner_name: '', username: '', password: '', pin: '' });
+  const [f, setF] = useState({ restaurant_name: '', owner_name: account?.name || '', username: '', password: '', pin: '' });
   const [busy, setBusy] = useState(false);
+  const wantsDomain = !!account?.emenu && !account.has_domain;
+  const [domain, setDomain] = useState({ value: '', touched: false, status: 'idle' });
+  const subdomain = domain.touched ? domain.value : slugify(f.restaurant_name);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const submit = async (e) => {
     e.preventDefault();
@@ -63,6 +71,7 @@ function Setup() {
     try {
       sessionStorage.setItem('cpro.next', '/settings');
       await signedIn(await api.post('/setup', f));
+      if (wantsDomain && domain.status === 'free') await api.post('/platform/domain', { subdomain });
     } catch (err) {
       toastError(err);
     } finally {
@@ -73,6 +82,10 @@ function Setup() {
     <form onSubmit={submit} className="grid max-w-md gap-4 rounded-card border border-line bg-surface p-6 shadow-card">
       <h3 className="text-lg font-bold">{T('إعداد النظام لأول مرة')}</h3>
       <Field label={T('اسم المطعم')}><Input required value={f.restaurant_name} onChange={set('restaurant_name')} /></Field>
+      {wantsDomain && (
+        <DomainField value={subdomain} onChange={(value) => setDomain({ ...domain, value, touched: true })}
+          onStatus={(status) => setDomain((d) => ({ ...d, status }))} />
+      )}
       <Field label={T('اسم المالك')}><Input required value={f.owner_name} onChange={set('owner_name')} /></Field>
       <Field label={T('اسم المستخدم')}><Input required value={f.username} onChange={set('username')} /></Field>
       <Field label={T('كلمة المرور')} hint={T('8 أحرف على الأقل وتحتوي على حرف ورقم')}>
@@ -81,8 +94,7 @@ function Setup() {
       <Field label={T('الرقم السري للدخول السريع وموافقات المدير')} hint={T('من 4 إلى 6 أرقام')}>
         <Input inputMode="numeric" maxLength={6} value={f.pin} onChange={(e) => setF({ ...f, pin: e.target.value.replace(/\D/g, '') })} />
       </Field>
-      <Button busy={busy} size="lg">{T('ابدأ')}</Button>
-      <p className="text-center text-xs text-muted">{T('تقدر تستخدم البرنامج {0} أيام مجاناً بدون إنترنت. بعدها فعّله بكود التفعيل من حسابك على المنصة.', [3])}</p>
+      <Button busy={busy} size="lg" disabled={wantsDomain && !['free', 'error'].includes(domain.status)}>{T('ابدأ')}</Button>
     </form>
   );
 }

@@ -50,17 +50,20 @@ type device struct {
 // or use the helper methods.
 type Fake struct {
 	sync.Mutex
-	URL     string
-	Public  string
-	priv    ed25519.PrivateKey
-	Tenants map[string]*Tenant // by code
-	devices map[string]*device
-	nonces  map[string]bool
-	Calls   map[string]int
-	Release saas.Release // what "update" returns
-	Now     func() time.Time
-	srv     *httptest.Server
-	handler http.Handler
+	URL             string
+	Public          string
+	priv            ed25519.PrivateKey
+	Tenants         map[string]*Tenant // by code
+	devices         map[string]*device
+	nonces          map[string]bool
+	Calls           map[string]int
+	Release         saas.Release      // what "update" returns
+	linkTokens      map[string]string // one-time «Continue with Google» tokens → code
+	takenSubdomains map[string]bool
+	Now             func() time.Time
+	LicenseNow      func() time.Time // issue time of licenses, when it differs from Now
+	srv             *httptest.Server
+	handler         http.Handler
 }
 
 // New starts a fake Platform with one tenant whose activation code is code.
@@ -75,13 +78,15 @@ func New(code string) *Fake {
 func NewHandler(code string) *Fake {
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 	f := &Fake{
-		Public:  b64.EncodeToString(pub),
-		priv:    priv,
-		Tenants: map[string]*Tenant{},
-		devices: map[string]*device{},
-		nonces:  map[string]bool{},
-		Calls:   map[string]int{},
-		Now:     time.Now,
+		Public:          b64.EncodeToString(pub),
+		priv:            priv,
+		Tenants:         map[string]*Tenant{},
+		devices:         map[string]*device{},
+		nonces:          map[string]bool{},
+		Calls:           map[string]int{},
+		Now:             time.Now,
+		linkTokens:      map[string]string{},
+		takenSubdomains: map[string]bool{"taken": true},
 	}
 	f.Tenants[code] = &Tenant{
 		Name: "TEN-00001", DisplayName: "مطعم التجربة", Code: code, Status: "active", MaxDevices: 1,
@@ -95,6 +100,15 @@ func NewHandler(code string) *Fake {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/method/{method}", f.serve)
+	// The portal's connect page, as if the owner had just signed in.
+	mux.HandleFunc("GET /portal/connect", func(w http.ResponseWriter, r *http.Request) {
+		f.Lock()
+		token := fmt.Sprintf("link-%d", len(f.linkTokens)+1)
+		f.linkTokens[token] = code
+		f.Unlock()
+		q := r.URL.Query()
+		http.Redirect(w, r, fmt.Sprintf("http://127.0.0.1:%s/connect?state=%s&token=%s", q.Get("port"), q.Get("state"), token), http.StatusFound)
+	})
 	f.handler = mux
 	return f
 }
@@ -215,6 +229,10 @@ func (f *Fake) handle(method, deviceID string, ts int64, nonce, body, sig string
 			return nil, e
 		}
 		code, _ := data["activation_code"].(string)
+		if token, _ := data["link_token"].(string); token != "" {
+			code = f.linkTokens[token]
+			delete(f.linkTokens, token) // single use
+		}
 		t := f.Tenants[strings.ToUpper(code)]
 		if t == nil {
 			return nil, &frappeErr{401, "Invalid activation code."}
@@ -249,6 +267,23 @@ func (f *Fake) handle(method, deviceID string, ts int64, nonce, body, sig string
 	}
 	t := f.tenantByName(d.tenant)
 	switch method {
+	case "check_subdomain", "claim_subdomain":
+		sub, _ := data["subdomain"].(string)
+		out := map[string]any{"available": false, "domain": "", "reason": ""}
+		switch {
+		case sub == "" || strings.ContainsAny(sub, " _."):
+			out["reason"] = "invalid"
+		case f.takenSubdomains[sub]:
+			out["reason"] = "taken"
+		default:
+			out["available"], out["domain"] = true, sub+".menu.test"
+			if method == "claim_subdomain" {
+				f.takenSubdomains[sub] = true
+				t.Tunnel = &saas.Tunnel{Domain: sub + ".menu.test", ConnectorToken: "tok"}
+				t.Ver++
+			}
+		}
+		return out, nil
 	case "refresh":
 		if d.revoked {
 			return map[string]any{"revoked": true}, nil
@@ -269,6 +304,9 @@ func (f *Fake) handle(method, deviceID string, ts int64, nonce, body, sig string
 
 func (f *Fake) reply(t *Tenant, deviceID, key string) map[string]any {
 	now := f.Now()
+	if f.LicenseNow != nil {
+		now = f.LicenseNow()
+	}
 	exp := now.Add(t.ValidFor)
 	grace := t.GraceDays
 	if t.Status != "active" {

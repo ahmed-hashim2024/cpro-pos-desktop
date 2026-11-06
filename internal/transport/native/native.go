@@ -20,6 +20,11 @@ func OnStartup(n *Native) func(context.Context) {
 	return func(ctx context.Context) { n.ctx = ctx }
 }
 
+// PickFolder asks for a folder on any drive. It returns "" if cancelled.
+func (n *Native) PickFolder(title string) (string, error) {
+	return runtime.OpenDirectoryDialog(n.ctx, runtime.OpenDialogOptions{Title: title, CanCreateDirectories: true})
+}
+
 // SaveFile asks where to save and writes the base64 data there. It returns
 // the chosen path, or "" if the user cancelled.
 func (n *Native) SaveFile(defaultName, dataBase64 string) (string, error) {

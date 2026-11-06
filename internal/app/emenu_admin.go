@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"regexp"
 
@@ -69,6 +70,7 @@ type EMenuSettings struct {
 	AllowCallWaiter flexBool `json:"allow_call_waiter"`
 	AllowDineIn     flexBool `json:"allow_dine_in_orders"`  // in the hall: table QR or table number
 	AllowDelivery   flexBool `json:"allow_takeaway_orders"` // from outside, to an address (key kept from the Platform)
+	DeliveryMinutes int      `json:"delivery_minutes"`      // added to the estimated time of delivery orders
 	OrderNote       string   `json:"order_note"`
 	Phone           string   `json:"phone"`
 	WhatsApp        string   `json:"whatsapp"`
@@ -167,6 +169,9 @@ func (s *EMenuSettings) normalize() error {
 	s.OrderNote, s.FooterText, s.Address = clip(s.OrderNote, 200), clip(s.FooterText, 120), clip(s.Address, 160)
 	s.Phone, s.WhatsApp, s.MapURL = clip(s.Phone, 20), clip(s.WhatsApp, 20), clip(s.MapURL, 500)
 	s.Instagram, s.Facebook, s.TikTok = clip(s.Instagram, 200), clip(s.Facebook, 200), clip(s.TikTok, 200)
+	if s.DeliveryMinutes < 0 || s.DeliveryMinutes > maxPrepMinutes {
+		return invalid("وقت التوصيل غير صحيح")
+	}
 	if _, ok := presetHex(buttonColors, s.ButtonColor); !ok {
 		return invalid("اختر لون الأزرار من الألوان المتاحة")
 	}
@@ -262,23 +267,35 @@ func (a *App) SaveEMenuSettings(ctx context.Context, actor Actor, in EMenuSettin
 
 // ---- designer overview -----------------------------------------------------------------
 
+// EMenuOfferContent is a menu item inside an offer («2 مارجريتا»).
+type EMenuOfferContent struct {
+	ItemID string      `json:"item_id"`
+	Qty    int         `json:"qty"`
+	Name   string      `json:"name,omitempty"`
+	Price  money.Minor `json:"price_minor,omitempty"`
+}
+
 type EMenuOffer struct {
-	ID          string      `json:"id"`
-	Kind        string      `json:"kind"` // single | family
-	ItemID      string      `json:"item_id"`
-	Name        string      `json:"name"`
-	Description string      `json:"description"`
-	Price       money.Minor `json:"price_minor"`
-	Image       string      `json:"image"`
-	Badge       string      `json:"badge"`
-	Highlight   string      `json:"highlight"`
-	Sort        int         `json:"sort"`
-	Active      bool        `json:"active"`
+	ID          string              `json:"id"`
+	Kind        string              `json:"kind"` // single | family
+	ItemID      string              `json:"item_id"`
+	Name        string              `json:"name"`
+	Description string              `json:"description"`
+	Price       money.Minor         `json:"price_minor"`
+	Image       string              `json:"image"`
+	Badge       string              `json:"badge"`
+	Highlight   string              `json:"highlight"`
+	Sort        int                 `json:"sort"`
+	PrepMinutes int                 `json:"prep_minutes"`
+	Active      bool                `json:"active"`
+	Contents    []EMenuOfferContent `json:"contents"`
 }
 
 type EMenuFeatured struct {
 	ItemID string      `json:"item_id"`
-	Badge  string      `json:"badge"` // '' | bestseller | hot_deal | new
+	Badge  string      `json:"badge"`            // '' | bestseller | hot_deal | new
+	Note   string      `json:"note"`             // short line under the name
+	Deal   money.Minor `json:"deal_price_minor"` // hot deal: the e-menu price; 0 = none
 	Name   string      `json:"name,omitempty"`
 	Price  money.Minor `json:"price_minor,omitempty"`
 	Image  string      `json:"image,omitempty"`
@@ -344,27 +361,50 @@ func loadOffers(ctx context.Context, q sqlite.Querier, imgPrefix string, publicO
 		where += ` AND i.active = 1 AND EXISTS (SELECT 1 FROM categories c WHERE c.id = i.category_id AND c.active = 1)`
 	}
 	rows, err := q.QueryContext(ctx, `SELECT o.id, o.kind, o.item_id, i.name, i.description, i.price_minor, coalesce(i.image_path,''),
-		o.badge, o.highlight, o.sort, i.active FROM emenu_offers o JOIN items i ON i.id = o.item_id
+		o.badge, o.highlight, o.sort, i.prep_minutes, i.active FROM emenu_offers o JOIN items i ON i.id = o.item_id
 		WHERE `+where+` ORDER BY o.kind, o.sort, o.created_at`)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	out := []EMenuOffer{}
+	idx := map[string]int{}
 	for rows.Next() {
 		var o EMenuOffer
 		var active int64
-		if err := rows.Scan(&o.ID, &o.Kind, &o.ItemID, &o.Name, &o.Description, &o.Price, &o.Image, &o.Badge, &o.Highlight, &o.Sort, &active); err != nil {
+		if err := rows.Scan(&o.ID, &o.Kind, &o.ItemID, &o.Name, &o.Description, &o.Price, &o.Image, &o.Badge, &o.Highlight, &o.Sort, &o.PrepMinutes, &active); err != nil {
+			rows.Close()
 			return nil, err
 		}
 		o.Image, o.Active = imageURL(imgPrefix, o.Image), active == 1
+		o.Contents = []EMenuOfferContent{}
+		idx[o.ID] = len(out)
 		out = append(out, o)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows, err = q.QueryContext(ctx, `SELECT b.offer_id, b.item_id, b.qty, i.name, i.price_minor
+		FROM emenu_offer_items b JOIN items i ON i.id = b.item_id ORDER BY b.sort`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var offerID string
+		var c EMenuOfferContent
+		if err := rows.Scan(&offerID, &c.ItemID, &c.Qty, &c.Name, &c.Price); err != nil {
+			return nil, err
+		}
+		if i, ok := idx[offerID]; ok {
+			out[i].Contents = append(out[i].Contents, c)
+		}
 	}
 	return out, rows.Err()
 }
 
 func loadFeatured(ctx context.Context, q sqlite.Querier, imgPrefix string) ([]EMenuFeatured, error) {
-	rows, err := q.QueryContext(ctx, `SELECT f.item_id, f.badge, i.name, i.price_minor, coalesce(i.image_path,'')
+	rows, err := q.QueryContext(ctx, `SELECT f.item_id, f.badge, f.note, f.deal_price_minor, i.name, i.price_minor, coalesce(i.image_path,'')
 		FROM emenu_featured f JOIN items i ON i.id = f.item_id WHERE i.deleted_at IS NULL ORDER BY f.sort`)
 	if err != nil {
 		return nil, err
@@ -373,7 +413,7 @@ func loadFeatured(ctx context.Context, q sqlite.Querier, imgPrefix string) ([]EM
 	out := []EMenuFeatured{}
 	for rows.Next() {
 		var f EMenuFeatured
-		if err := rows.Scan(&f.ItemID, &f.Badge, &f.Name, &f.Price, &f.Image); err != nil {
+		if err := rows.Scan(&f.ItemID, &f.Badge, &f.Note, &f.Deal, &f.Name, &f.Price, &f.Image); err != nil {
 			return nil, err
 		}
 		f.Image = imageURL(imgPrefix, f.Image)
@@ -384,7 +424,10 @@ func loadFeatured(ctx context.Context, q sqlite.Querier, imgPrefix string) ([]EM
 
 // ---- offers ----------------------------------------------------------------------------
 
-const offersCategory = "العروض"
+const (
+	offersCategory   = "العروض"
+	maxOfferContents = 12
+)
 
 type EMenuOfferInput struct {
 	EMenuOffer
@@ -410,6 +453,12 @@ func (a *App) SaveOffer(ctx context.Context, actor Actor, in EMenuOfferInput) (E
 	if o.Price <= 0 {
 		return o, invalid("سعر العرض يجب أن يكون أكبر من صفر")
 	}
+	if o.PrepMinutes < 0 || o.PrepMinutes > maxPrepMinutes {
+		return o, invalid("وقت التحضير غير صحيح")
+	}
+	if len(o.Contents) > maxOfferContents {
+		return o, invalid(fmt.Sprintf("الحد الأقصى %d أصناف في العرض", maxOfferContents))
+	}
 	if in.ImageData == "-" {
 		return o, invalid("صورة العرض مطلوبة")
 	}
@@ -419,7 +468,9 @@ func (a *App) SaveOffer(ctx context.Context, actor Actor, in EMenuOfferInput) (E
 	}
 	err = a.tx(ctx, func(tx *sql.Tx) error {
 		now := a.stamp()
-		if o.ID == "" {
+		isNew := o.ID == ""
+		o.Sort = keptSort(ctx, tx, "emenu_offers", o.ID, o.Sort)
+		if isNew {
 			if image == "" {
 				return invalid("اختر صورة للعرض")
 			}
@@ -428,9 +479,9 @@ func (a *App) SaveOffer(ctx context.Context, actor Actor, in EMenuOfferInput) (E
 				return err
 			}
 			o.ID, o.ItemID = sqlite.NewID(), sqlite.NewID()
-			if _, err := tx.ExecContext(ctx, `INSERT INTO items(id, code, name, category_id, price_minor, image_path, description, sort, active, created_at, updated_at)
-				VALUES (?,?,?,?,?,?,?,?,?,?,?)`, o.ItemID, "OF-"+o.ItemID[len(o.ItemID)-8:], o.Name, catID, o.Price, image, o.Description, o.Sort,
-				sqlite.Int(o.Active), now, now); err != nil {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO items(id, code, name, category_id, price_minor, image_path, description, sort, prep_minutes, active, created_at, updated_at)
+				VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, o.ItemID, "OF-"+o.ItemID[len(o.ItemID)-8:], o.Name, catID, o.Price, image, o.Description, o.Sort,
+				o.PrepMinutes, sqlite.Int(o.Active), now, now); err != nil {
 				return err
 			}
 			if _, err := tx.ExecContext(ctx, `INSERT INTO emenu_offers(id, kind, item_id, badge, highlight, sort, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)`,
@@ -442,8 +493,8 @@ func (a *App) SaveOffer(ctx context.Context, actor Actor, in EMenuOfferInput) (E
 				WHERE o.id = ? AND i.deleted_at IS NULL`, o.ID).Scan(&o.ItemID); err != nil {
 				return noRows(err, "العرض")
 			}
-			if _, err := tx.ExecContext(ctx, `UPDATE items SET name=?, price_minor=?, description=?, sort=?, active=?, updated_at=? WHERE id=?`,
-				o.Name, o.Price, o.Description, o.Sort, sqlite.Int(o.Active), now, o.ItemID); err != nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE items SET name=?, price_minor=?, description=?, sort=?, prep_minutes=?, active=?, updated_at=? WHERE id=?`,
+				o.Name, o.Price, o.Description, o.Sort, o.PrepMinutes, sqlite.Int(o.Active), now, o.ItemID); err != nil {
 				return err
 			}
 			if image != "" {
@@ -455,6 +506,17 @@ func (a *App) SaveOffer(ctx context.Context, actor Actor, in EMenuOfferInput) (E
 				o.Kind, o.Badge, o.Highlight, o.Sort, now, o.ID); err != nil {
 				return err
 			}
+		}
+		if err := placeInOrder(ctx, tx, offerScope(o.Kind), o.ID, o.Sort, isNew); err != nil {
+			return err
+		}
+		// The POS lists offers as items: same order as the guest sees.
+		if _, err := tx.ExecContext(ctx, `UPDATE items SET sort = (SELECT e.sort FROM emenu_offers e WHERE e.item_id = items.id)
+			WHERE id IN (SELECT item_id FROM emenu_offers WHERE kind = ?)`, o.Kind); err != nil {
+			return err
+		}
+		if err := saveOfferContents(ctx, tx, o.ID, o.Contents); err != nil {
+			return err
 		}
 		return a.audit(ctx, tx, actor, "emenu.offer.save", "emenu_offers", o.ID,
 			map[string]any{"name": o.Name, "kind": o.Kind, "price": o.Price, "active": o.Active, "item_id": o.ItemID})
@@ -472,6 +534,61 @@ func (a *App) SaveOffer(ctx context.Context, actor Actor, in EMenuOfferInput) (E
 		}
 	}
 	return o, notFound("العرض")
+}
+
+// saveOfferContents replaces what an offer is made of. Contents are real menu
+// items; an offer can't contain another offer.
+func saveOfferContents(ctx context.Context, tx *sql.Tx, offerID string, list []EMenuOfferContent) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM emenu_offer_items WHERE offer_id = ?`, offerID); err != nil {
+		return err
+	}
+	seen := map[string]bool{}
+	for i, c := range list {
+		if c.Qty < 1 || c.Qty > maxOnlineQty {
+			return invalid("كمية الصنف في العرض غير صحيحة")
+		}
+		if c.ItemID == "" || seen[c.ItemID] {
+			return invalid("صنف مكرر أو غير محدد في العرض")
+		}
+		seen[c.ItemID] = true
+		var found, isOffer int
+		err := tx.QueryRowContext(ctx, `SELECT count(*), (SELECT count(*) FROM emenu_offers WHERE item_id = ?) FROM items WHERE id = ? AND deleted_at IS NULL`,
+			c.ItemID, c.ItemID).Scan(&found, &isOffer)
+		if err != nil {
+			return err
+		}
+		if found == 0 {
+			return notFound("الصنف")
+		}
+		if isOffer > 0 {
+			return invalid("مينفعش تحط عرض جوه عرض")
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO emenu_offer_items(offer_id, item_id, qty, sort) VALUES (?,?,?,?)`, offerID, c.ItemID, c.Qty, i); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// offerContentLabels returns «2× مارجريتا» for each item in an offer (none
+// for a normal item), for the kitchen and printed tickets.
+func offerContentLabels(ctx context.Context, q sqlite.Querier, itemID string) ([]string, error) {
+	rows, err := q.QueryContext(ctx, `SELECT b.qty, i.name FROM emenu_offers o JOIN emenu_offer_items b ON b.offer_id = o.id
+		JOIN items i ON i.id = b.item_id WHERE o.item_id = ? ORDER BY b.sort`, itemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var qty int
+		var name string
+		if err := rows.Scan(&qty, &name); err != nil {
+			return nil, err
+		}
+		out = append(out, fmt.Sprintf("%d× %s", qty, name))
+	}
+	return out, rows.Err()
 }
 
 // DeleteOffer removes the offer and its item (archived instead when past
@@ -535,9 +652,17 @@ func (a *App) SetFeatured(ctx context.Context, actor Actor, list []EMenuFeatured
 		return nil, invalid("الحد الأقصى 24 صنف مميز")
 	}
 	seen := map[string]bool{}
-	for _, f := range list {
+	for i := range list {
+		f := &list[i]
 		if !featuredBadges[f.Badge] {
 			return nil, invalid("الشارة غير صحيحة")
+		}
+		f.Note = clip(f.Note, 40)
+		if f.Badge != "hot_deal" {
+			f.Deal = 0
+		}
+		if f.Deal < 0 {
+			return nil, invalid("سعر العرض غير صحيح")
 		}
 		if f.ItemID == "" || seen[f.ItemID] {
 			return nil, invalid("صنف مكرر أو غير محدد")
@@ -549,12 +674,15 @@ func (a *App) SetFeatured(ctx context.Context, actor Actor, list []EMenuFeatured
 			return err
 		}
 		for i, f := range list {
-			var ok int
-			tx.QueryRowContext(ctx, `SELECT count(*) FROM items WHERE id = ? AND deleted_at IS NULL`, f.ItemID).Scan(&ok)
-			if ok == 0 {
-				return notFound("الصنف")
+			var price money.Minor
+			if err := tx.QueryRowContext(ctx, `SELECT price_minor FROM items WHERE id = ? AND deleted_at IS NULL`, f.ItemID).Scan(&price); err != nil {
+				return noRows(err, "الصنف")
 			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO emenu_featured(item_id, badge, sort) VALUES (?,?,?)`, f.ItemID, f.Badge, i); err != nil {
+			if f.Deal >= price && f.Deal > 0 {
+				return invalid("سعر العرض لازم يكون أقل من سعر الصنف")
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO emenu_featured(item_id, badge, note, deal_price_minor, sort) VALUES (?,?,?,?,?)`,
+				f.ItemID, f.Badge, f.Note, f.Deal, i); err != nil {
 				return err
 			}
 		}
@@ -617,7 +745,10 @@ func (a *App) PreviewEMenu(ctx context.Context, actor Actor, draft EMenuSettings
 		return m, err
 	}
 	// Show the ordering screens the owner enabled, whatever the license says.
-	m.Ordering = PublicOrdering{DineIn: bool(draft.AllowDineIn), Delivery: bool(draft.AllowDelivery), Note: draft.OrderNote}
+	m.Ordering = PublicOrdering{DineIn: bool(draft.AllowDineIn), Delivery: bool(draft.AllowDelivery), CallWaiter: bool(draft.AllowCallWaiter), Note: draft.OrderNote}
+	if m.Tables, err = tableNames(ctx, a.db.Read); err != nil {
+		return m, err
+	}
 	if bool(draft.AllowDelivery) {
 		if s, err := loadSettings(ctx, a.db.Read); err == nil {
 			m.Ordering.DeliveryFee = s.DeliveryFee

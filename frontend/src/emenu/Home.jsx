@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { Search, SlidersHorizontal, ShoppingCart, Plus, ArrowLeft, ArrowRight, Languages, ChevronDown, Utensils, Phone, MapPin, MessageCircle, Globe, Link as LinkIcon } from 'lucide-react';
-import { cx, Thumb, Badge, SectionTitle, safeHref, social, waLink } from './lib';
+import { Search, SlidersHorizontal, Bell, BellRing, Plus, ArrowLeft, ArrowRight, Languages, ChevronDown, Utensils, Phone, MapPin, MessageCircle, Globe, Link as LinkIcon } from 'lucide-react';
+import { cx, Thumb, Badge, PriceTag, SectionTitle, safeHref, social, waLink } from './lib';
 import { langNames } from './i18n';
 
 // ---- header ----------------------------------------------------------------------
 
-export function Header({ menu, t, lang, onLang, count, onCart }) {
+export function Header({ menu, t, lang, onLang, order, tracking, onBell }) {
   const r = menu.restaurant;
   const [open, setOpen] = useState(false);
+  const ready = order?.stage === 'ready';
   return (
     <header className="flex items-center gap-3 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))]">
       {r.logo && <img src={r.logo} alt="" className="size-11 shrink-0 rounded-xl object-cover shadow" />}
@@ -33,9 +34,10 @@ export function Header({ menu, t, lang, onLang, count, onCart }) {
           )}
         </div>
       )}
-      <button onClick={onCart} aria-label={t('cart')} className="relative flex size-11 items-center justify-center rounded-full bg-card shadow-sm">
-        <ShoppingCart className="size-5" aria-hidden />
-        {count > 0 && <span className="num anim-pop absolute -end-1 -top-1 flex size-5 items-center justify-center rounded-full bg-p text-[10px] font-bold text-onp">{count}</span>}
+      <button onClick={onBell} aria-label={ready ? t('orderReady') : t('notifications')}
+        className={cx('relative flex size-11 items-center justify-center rounded-full shadow-sm transition', ready ? 'anim-pulse bg-p text-onp' : 'bg-card')}>
+        {ready ? <BellRing className="size-5" aria-hidden /> : <Bell className="size-5" aria-hidden />}
+        {tracking && !ready && <span className="anim-pop absolute end-2.5 top-2.5 size-2.5 rounded-full bg-p ring-2 ring-card" />}
       </button>
     </header>
   );
@@ -115,7 +117,7 @@ export function HeroSlider({ offers, t, money, showPrices, onPick }) {
                 <button onClick={() => onPick(o.item)} className="flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-p px-4 text-xs font-bold uppercase text-onp shadow-lg transition active:scale-95">
                   {t('orderNow')}<Arrow />
                 </button>
-                {showPrices && <span className="num whitespace-nowrap text-sm font-bold">{money(o.item.price_minor)}</span>}
+                {showPrices && <PriceTag item={o.item} money={money} className="whitespace-nowrap text-sm font-bold" wasClassName="text-white/60" />}
               </div>
             </div>
           </article>
@@ -170,9 +172,11 @@ export function ItemCard({ item, badge, t, money, showPrices, canOrder, count, o
         {count > 0 && <span className="num anim-pop absolute end-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-fg text-[11px] font-bold text-bg">{count}</span>}
       </div>
       <h3 className="mt-2 line-clamp-1 px-0.5 text-sm font-bold">{item.name}</h3>
-      {item.description && <p className="line-clamp-1 px-0.5 text-[11px] text-mut">{item.description}</p>}
-      <div className="mt-auto flex items-center justify-between px-0.5 pt-1.5">
-        {showPrices ? <span className="num font-black">{money(item.price_minor)}</span> : <span />}
+      {item.note
+        ? <p className="line-clamp-1 px-0.5 text-[11px] font-semibold text-p">{item.note}</p>
+        : item.description && <p className="line-clamp-1 px-0.5 text-[11px] text-mut">{item.description}</p>}
+      <div className="mt-auto flex items-center justify-between gap-1 px-0.5 pt-1.5">
+        {showPrices ? <PriceTag item={item} money={money} className="font-black" /> : <span />}
         {canOrder && <span className="flex size-7 items-center justify-center rounded-full bg-p text-onp shadow"><Plus className="size-4" aria-hidden /></span>}
       </div>
     </button>
@@ -209,7 +213,7 @@ export function FamilyBanner({ offer, t, money, showPrices, onPick }) {
         {offer.badge && <span className="text-[10px] font-bold uppercase tracking-wider text-p">{offer.badge}</span>}
         <h3 className="line-clamp-2 text-lg font-black leading-tight">{it.name}</h3>
         {it.description && <p className="line-clamp-1 text-[11px] text-white/70">{it.description}</p>}
-        {showPrices && <span className="num mt-0.5 text-sm font-bold">{money(it.price_minor)}</span>}
+        {showPrices && <span className="mt-0.5"><PriceTag item={it} money={money} className="text-sm font-bold" wasClassName="text-white/60" /></span>}
       </div>
       {offer.highlight && (
         <span className="anim-float absolute start-[52%] top-1/2 flex size-[68px] -translate-y-1/2 items-center justify-center rounded-full bg-p p-2 text-center text-[13px] font-black leading-tight text-onp shadow-xl rtl:translate-x-1/2 ltr:-translate-x-1/2">

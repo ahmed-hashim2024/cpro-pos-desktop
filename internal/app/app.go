@@ -33,6 +33,14 @@ type App struct {
 	emenuMu     sync.Mutex
 	emenuLocal  json.RawMessage
 	emenuLoaded bool
+
+	// «Continue with Google» in progress (connect.go).
+	connectMu sync.Mutex
+	connect   *connectFlow
+
+	// Result of the latest copy to the owner's backup folder (backup.go).
+	backupMu   sync.Mutex
+	backupCopy BackupCopy
 }
 
 func New(db *sqlite.DB, p paths.Paths, log *slog.Logger) *App {

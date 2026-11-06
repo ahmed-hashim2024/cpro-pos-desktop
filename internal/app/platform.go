@@ -25,10 +25,10 @@ var Version = "dev"
 // Linking to the Platform: activation, license checks and the config the
 // owner edits on the Platform (restaurant domain, e-menu settings).
 //
-// A new installation works offline for license.TrialDays with no account.
-// After that, selling is blocked (requireLicensed) until the owner enters
-// the activation key from their account on the Platform; the app still
-// opens, and reports and backups keep working.
+// A new installation must be connected to an account first («Continue with
+// Google», connect.go); the trial and subscription then live on the Platform.
+// A connected device that stops reaching the Platform gets a countdown and
+// then stops selling until it's back online (license.Evaluate).
 
 const (
 	platformKey     = "platform"
@@ -40,7 +40,6 @@ const (
 // configured while offline.
 type platformState struct {
 	URL         string          `json:"url"` // override of saas.DefaultURL
-	TrialStart  int64           `json:"trial_start"`
 	License     string          `json:"license"`
 	Tunnel      *saas.Tunnel    `json:"tunnel"`
 	EMenu       json.RawMessage `json:"emenu"`
@@ -83,17 +82,6 @@ func (a *App) EnablePlatform(ctx context.Context, c *saas.Client) error {
 	}
 	p.claims = verifyFor(p.st.License, c.ID)
 	a.platform = p
-	// The trial counts from the earliest first run this computer remembers
-	// (the identity file or the database), so neither alone resets it.
-	start := c.ID.Created.Unix()
-	if p.st.TrialStart > 0 && p.st.TrialStart < start {
-		start = p.st.TrialStart
-	}
-	if start != p.st.TrialStart {
-		p.st.TrialStart = start
-		p.st.HighWater = max(p.st.HighWater, a.now().Unix())
-		return a.savePlatformLocked(ctx)
-	}
 	return nil
 }
 
@@ -138,31 +126,19 @@ func (a *App) licenseStatus() license.Status {
 	return p.statusLocked(a.now())
 }
 
-func (p *platformLink) trialLocked(now time.Time) license.Status {
-	return license.LocalTrial(time.Unix(p.st.TrialStart, 0), now, time.Unix(p.st.HighWater, 0))
-}
-
 func (p *platformLink) statusLocked(now time.Time) license.Status {
-	trial := p.trialLocked(now)
 	if p.claims == nil {
-		return trial
+		return license.Status{State: license.Restricted, Reason: license.ReasonNotConnected}
 	}
 	if p.st.Revoked {
 		return license.Status{State: license.Restricted, Reason: license.ReasonRevoked}
 	}
-	st := license.Evaluate(*p.claims, now, time.Unix(p.st.HighWater, 0))
-	// Activating early never shortens this computer's own trial, but a
-	// suspended account stops at once.
-	if !st.CanSell() && st.Reason != license.ReasonSuspended && trial.CanSell() {
-		return trial
-	}
-	return st
+	return license.Evaluate(*p.claims, now, time.Unix(p.st.HighWater, 0))
 }
 
 // features are what the license grants; all on when licensing is off. The
 // features are Platform services (e-menu on the restaurant's domain, remote
-// access), so a computer that isn't activated has none of them, even during
-// its trial.
+// access), so a computer that isn't connected has none of them.
 func (a *App) features() license.Features {
 	p := a.platform
 	if p == nil {
@@ -179,7 +155,7 @@ func (a *App) features() license.Features {
 	return p.claims.Features
 }
 
-var errUnlicensed = &Error{CodeForbidden, "البيع متوقف: انتهت الفترة التجريبية أو الاشتراك. أدخل كود التفعيل من الإعدادات ← الاشتراك"}
+var errUnlicensed = &Error{CodeForbidden, "البيع متوقف حالياً، راجع الإعدادات ← الاشتراك"}
 
 // requireLicensed blocks selling without a valid license.
 func (a *App) requireLicensed() error {
@@ -364,7 +340,6 @@ type PlatformInfo struct {
 	Reason      string           `json:"reason"`
 	TenantName  string           `json:"tenant_name"`
 	Plan        string           `json:"plan"` // trial | active | ...
-	TrialEndsAt string           `json:"trial_ends_at"`
 	Features    license.Features `json:"features"`
 	ExpiresAt   string           `json:"expires_at"`
 	GraceUntil  string           `json:"grace_until"`
@@ -412,10 +387,6 @@ func (a *App) PlatformInfo(ctx context.Context, actor Actor) (PlatformInfo, erro
 		if st.GraceUntil.After(st.ExpiresAt) {
 			info.GraceUntil = sqlite.FormatTime(st.GraceUntil)
 		}
-	}
-	info.TrialEndsAt = sqlite.FormatTime(p.trialLocked(a.now()).ExpiresAt)
-	if p.claims == nil {
-		info.ExpiresAt = info.TrialEndsAt
 	}
 	info.Features = f
 	info.DeviceID = p.client.ID.DeviceID
@@ -474,6 +445,8 @@ func (a *App) platformRequired() (*platformLink, error) {
 
 // ActivateDevice links this computer to the owner's account with the
 // activation code shown on the Platform.
+// ActivateDevice links this computer with an account's activation key. The
+// app connects through StartConnect; this stays for tools and tests.
 func (a *App) ActivateDevice(ctx context.Context, actor Actor, code, deviceName string) (PlatformInfo, error) {
 	if err := actor.require(rbac.SettingsManage); err != nil {
 		return PlatformInfo{}, err
@@ -532,34 +505,8 @@ func (a *App) SyncPlatform(ctx context.Context, actor Actor) (PlatformInfo, erro
 // UnlinkDevice frees this computer's slot on the account. With force, the
 // local link is removed even if the Platform can't be reached (the owner
 // can then revoke the device from the Platform).
-func (a *App) UnlinkDevice(ctx context.Context, actor Actor, force bool) error {
-	if err := actor.require(rbac.SettingsManage); err != nil {
-		return err
-	}
-	p, err := a.platformRequired()
-	if err != nil {
-		return err
-	}
-	p.mu.RLock()
-	base := p.baseURL()
-	p.mu.RUnlock()
-	if err := p.client.Deactivate(ctx, base); err != nil && !force {
-		return platformErr(err)
-	}
-	p.mu.Lock()
-	p.st = platformState{URL: p.st.URL, TrialStart: p.st.TrialStart, HighWater: p.st.HighWater, Update: p.st.Update, UpdateChecked: p.st.UpdateChecked}
-	p.claims = nil
-	err = a.savePlatformLocked(ctx)
-	p.mu.Unlock()
-	a.notifyPlatform()
-	if err != nil {
-		return err
-	}
-	return a.audit(ctx, a.db.Write, actor, "platform.unlink", "settings", platformKey, map[string]bool{"force": force})
-}
-
-// SetPlatformURL overrides the Platform address (Settings → Advanced).
-// Empty restores the built-in default.
+// SetPlatformURL overrides the Platform address, for the dev server and
+// tests. The app itself always uses the built-in address. Empty restores it.
 func (a *App) SetPlatformURL(ctx context.Context, actor Actor, raw string) error {
 	if err := actor.require(rbac.SettingsManage); err != nil {
 		return err

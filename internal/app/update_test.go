@@ -47,6 +47,8 @@ func TestMandatoryUpdate(t *testing.T) {
 	a.upd.http = srv.Client()
 	launched := make(chan string, 1)
 	a.SetUpdateLauncher(func(p string) error { launched <- p; return nil })
+	_, err := a.ActivateDevice(ctx, f.owner, "ACT-TEST", "")
+	f.must(err)
 
 	// Same version: nothing to do.
 	fake.Release = saas.Release{Version: "1.0.0", Mandatory: true, URL: srv.URL + "/cpro-setup.exe", SHA256: hex.EncodeToString(sum[:])}

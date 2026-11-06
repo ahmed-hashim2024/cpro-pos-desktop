@@ -79,8 +79,8 @@ func TestEvaluate(t *testing.T) {
 	}{
 		{"valid", c, exp.Add(-day), time.Time{}, Active, "", true},
 		{"grace", c, exp.Add(3 * day), time.Time{}, Grace, "", true},
-		{"after grace", c, exp.Add(15 * day), time.Time{}, Restricted, ReasonExpired, false},
-		{"clock turned back", c, exp.Add(-day), exp.Add(15 * day), Restricted, ReasonExpired, false},
+		{"after grace", c, exp.Add(15 * day), time.Time{}, Restricted, ReasonOffline, false},
+		{"clock turned back", c, exp.Add(-day), exp.Add(15 * day), Restricted, ReasonOffline, false},
 		{"trial", Claims{Status: "trial", ExpiresAt: exp.Unix()}, exp.Add(-day), time.Time{}, Trial, "", true},
 		{"trial over", Claims{Status: "trial", ExpiresAt: exp.Unix()}, exp.Add(time.Minute), time.Time{}, Restricted, ReasonTrialEnded, false},
 		{"suspended", Claims{Status: "suspended", ExpiresAt: exp.Unix()}, exp.Add(-day), time.Time{}, Restricted, ReasonSuspended, false},
@@ -94,17 +94,29 @@ func TestEvaluate(t *testing.T) {
 	}
 }
 
-func TestLocalTrial(t *testing.T) {
-	start := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
-	if st := LocalTrial(start, start.Add(71*time.Hour), time.Time{}); st.State != Trial || !st.CanSell() {
-		t.Fatalf("day 3: %+v", st)
+func TestOfflineWindow(t *testing.T) {
+	iat := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	// The Platform's own exp and grace don't change the two-week rule.
+	c := Claims{Status: "active", IssuedAt: iat.Unix(), ExpiresAt: iat.Add(7 * 24 * time.Hour).Unix(), GraceDays: 14}
+	day := 24 * time.Hour
+	if st := Evaluate(c, iat.Add(13*day), time.Time{}); st.State != Active {
+		t.Fatalf("day 13: %+v", st)
 	}
-	st := LocalTrial(start, start.Add(72*time.Hour), time.Time{})
-	if st.State != Restricted || st.Reason != ReasonTrialEnded || st.CanSell() {
-		t.Fatalf("after 3 days: %+v", st)
+	st := Evaluate(c, iat.Add(15*day), time.Time{})
+	if st.State != Grace || !st.CanSell() || !st.GraceUntil.Equal(iat.Add(21*day)) {
+		t.Fatalf("day 15: %+v", st)
 	}
-	// Turning the clock back doesn't bring the trial back.
-	if st := LocalTrial(start, start, start.Add(80*time.Hour)); st.State != Restricted {
-		t.Fatalf("clock rollback: %+v", st)
+	st = Evaluate(c, iat.Add(21*day+time.Minute), time.Time{})
+	if st.State != Restricted || st.Reason != ReasonOffline || st.CanSell() {
+		t.Fatalf("day 21: %+v", st)
+	}
+	// Turning the clock back doesn't buy time.
+	if st := Evaluate(c, iat.Add(day), iat.Add(22*day)); st.State != Restricted {
+		t.Fatalf("clock back: %+v", st)
+	}
+	// A trial ends on its date, with no grace.
+	tr := Claims{Status: "trial", IssuedAt: iat.Unix(), ExpiresAt: iat.Add(3 * day).Unix()}
+	if st := Evaluate(tr, iat.Add(4*day), time.Time{}); st.State != Restricted || st.Reason != ReasonTrialEnded {
+		t.Fatalf("trial: %+v", st)
 	}
 }

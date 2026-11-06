@@ -30,6 +30,11 @@ const (
 	ordersPerIP     = 5 // per window
 	callsPerIP      = 10
 	publicRateBurst = 10 * time.Minute
+	maxPrepMinutes  = 240
+
+	// An order paid or voided this long ago stops being followed, in case
+	// the kitchen screen was never used for it.
+	orderFollowFor = 2 * time.Hour
 )
 
 func newPublicToken() string {
@@ -114,14 +119,24 @@ type PublicModifierGroup struct {
 	Modifiers []PublicModifier `json:"modifiers"`
 }
 
+// PublicInclude is a line of what an offer contains.
+type PublicInclude struct {
+	Name string `json:"name"`
+	Qty  int    `json:"qty"`
+}
+
 type PublicItem struct {
 	ID          string                `json:"id"`
 	CategoryID  string                `json:"category_id"`
 	Name        string                `json:"name"`
 	Description string                `json:"description"`
 	Price       money.Minor           `json:"price_minor"`
+	WasPrice    money.Minor           `json:"was_price_minor"` // struck through; 0 = no discount
+	Note        string                `json:"note"`            // featured item's short line
+	PrepMinutes int                   `json:"prep_minutes"`
 	Image       string                `json:"image"`
 	Groups      []PublicModifierGroup `json:"groups"`
+	Includes    []PublicInclude       `json:"includes"`
 }
 
 type PublicCategory struct {
@@ -145,10 +160,11 @@ type PublicFeatured struct {
 	Item  PublicItem `json:"item"`
 }
 
-// PublicOrdering says how a guest may order: in the hall (from the table's
-// QR code, or by typing the table number) and/or delivery to an address.
+// PublicOrdering says how a guest may order, which depends on the link they
+// opened: the online link orders delivery; a table's QR code and the shared
+// hall QR order in the hall (the hall QR picks the table from a list).
 type PublicOrdering struct {
-	CallWaiter  bool        `json:"call_waiter"` // table QR only
+	CallWaiter  bool        `json:"call_waiter"` // table or hall QR
 	DineIn      bool        `json:"dine_in"`
 	Delivery    bool        `json:"delivery"`
 	DeliveryFee money.Minor `json:"delivery_fee_minor"`
@@ -178,7 +194,8 @@ type PublicMenu struct {
 	DefaultLanguage string           `json:"default_language"`
 	ShowPrices      bool             `json:"show_prices"`
 	Ordering        PublicOrdering   `json:"ordering"`
-	Table           *string          `json:"table"` // table name when opened from a table QR
+	Table           *string          `json:"table"`  // table name when opened from a table QR
+	Tables          []string         `json:"tables"` // to pick from on the hall QR
 	Categories      []PublicCategory `json:"categories"`
 	Offers          []PublicOffer    `json:"offers"`
 	Featured        []PublicFeatured `json:"featured"`
@@ -216,8 +233,36 @@ func tableByToken(ctx context.Context, q sqlite.Querier, token string) (id, name
 	return id, name, noRows(err, "الطاولة")
 }
 
-// PublicMenu is what a guest's phone loads. tableToken is optional.
+func tableNames(ctx context.Context, q sqlite.Querier) ([]string, error) {
+	rows, err := q.QueryContext(ctx, `SELECT name FROM dining_tables WHERE active = 1 AND deleted_at IS NULL ORDER BY area, sort, name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out = append(out, name)
+	}
+	return out, rows.Err()
+}
+
+// PublicMenu is what a guest's phone loads from the online link (no token) or
+// a table's QR code.
 func (a *App) PublicMenu(ctx context.Context, tableToken string) (PublicMenu, error) {
+	return a.publicMenu(ctx, tableToken, false)
+}
+
+// PublicHallMenu is the menu behind the shared hall QR: the guest is in the
+// restaurant and picks their table from a list.
+func (a *App) PublicHallMenu(ctx context.Context) (PublicMenu, error) {
+	return a.publicMenu(ctx, "", true)
+}
+
+func (a *App) publicMenu(ctx context.Context, tableToken string, hall bool) (PublicMenu, error) {
 	if !a.menuOpen() {
 		return PublicMenu{}, errMenuClosed
 	}
@@ -235,7 +280,19 @@ func (a *App) PublicMenu(ctx context.Context, tableToken string) (PublicMenu, er
 		return m, err
 	}
 	s, err := loadSettings(ctx, a.db.Read)
-	m.Ordering = a.ordering(cfg, table != nil, s.DeliveryFee)
+	if err != nil {
+		return m, err
+	}
+	m.Tables = []string{}
+	m.Ordering = a.ordering(cfg, table != nil || hall, s.DeliveryFee)
+	switch {
+	case table != nil:
+	case hall:
+		m.Ordering.Delivery, m.Ordering.DeliveryFee = false, 0
+		m.Tables, err = tableNames(ctx, a.db.Read)
+	default:
+		m.Ordering.DineIn = false // tables exist only on the QR links
+	}
 	return m, err
 }
 
@@ -291,9 +348,57 @@ func sortLangs(l []string) {
 // publicCatalog returns what guests may order: visible items by category,
 // the offers and the featured row. Offer items appear only as offers.
 func publicCatalog(ctx context.Context, q sqlite.Querier, img string) ([]PublicCategory, []PublicOffer, []PublicFeatured, error) {
+	// What offers are made of, and the notes and deals on featured items.
+	type content struct {
+		PublicInclude
+		price money.Minor
+		prep  int
+	}
+	contents := map[string][]content{}
+	rows, err := q.QueryContext(ctx, `SELECT o.item_id, i.name, b.qty, i.price_minor, i.prep_minutes
+		FROM emenu_offers o JOIN emenu_offer_items b ON b.offer_id = o.id JOIN items i ON i.id = b.item_id ORDER BY b.sort`)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for rows.Next() {
+		var itemID string
+		var c content
+		if err := rows.Scan(&itemID, &c.Name, &c.Qty, &c.price, &c.prep); err != nil {
+			rows.Close()
+			return nil, nil, nil, err
+		}
+		contents[itemID] = append(contents[itemID], c)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, nil, nil, err
+	}
+	type extra struct {
+		badge, note string
+		deal        money.Minor
+	}
+	extras := map[string]extra{}
+	rows, err = q.QueryContext(ctx, `SELECT item_id, badge, note, deal_price_minor FROM emenu_featured`)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for rows.Next() {
+		var itemID string
+		var e extra
+		if err := rows.Scan(&itemID, &e.badge, &e.note, &e.deal); err != nil {
+			rows.Close()
+			return nil, nil, nil, err
+		}
+		extras[itemID] = e
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, nil, nil, err
+	}
+
 	// Modifier groups per item, in one pass.
 	groups := map[string][]PublicModifierGroup{}
-	rows, err := q.QueryContext(ctx, `
+	rows, err = q.QueryContext(ctx, `
 		SELECT ig.item_id, g.id, g.name, g.min_select, g.max_select, m.id, m.name, m.price_minor
 		  FROM item_modifier_groups ig
 		  JOIN modifier_groups g ON g.id = ig.group_id AND g.active = 1 AND g.deleted_at IS NULL
@@ -332,7 +437,7 @@ func publicCatalog(ctx context.Context, q sqlite.Querier, img string) ([]PublicC
 	var all []row
 	byID := map[string]PublicItem{}
 	rows, err = q.QueryContext(ctx, `
-		SELECT c.id, c.name, coalesce(c.image_path,''), i.id, i.name, i.description, i.price_minor, coalesce(i.image_path,'')
+		SELECT c.id, c.name, coalesce(c.image_path,''), i.id, i.name, i.description, i.price_minor, i.prep_minutes, coalesce(i.image_path,'')
 		  FROM items i JOIN categories c ON c.id = i.category_id AND c.active = 1
 		 WHERE i.active = 1 AND i.deleted_at IS NULL
 		 ORDER BY c.sort, c.name, i.sort, i.name`)
@@ -341,7 +446,7 @@ func publicCatalog(ctx context.Context, q sqlite.Querier, img string) ([]PublicC
 	}
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.cat.ID, &r.cat.Name, &r.cat.Image, &r.item.ID, &r.item.Name, &r.item.Description, &r.item.Price, &r.item.Image); err != nil {
+		if err := rows.Scan(&r.cat.ID, &r.cat.Name, &r.cat.Image, &r.item.ID, &r.item.Name, &r.item.Description, &r.item.Price, &r.item.PrepMinutes, &r.item.Image); err != nil {
 			rows.Close()
 			return nil, nil, nil, err
 		}
@@ -349,6 +454,26 @@ func publicCatalog(ctx context.Context, q sqlite.Querier, img string) ([]PublicC
 		r.item.Groups = groups[r.item.ID]
 		if r.item.Groups == nil {
 			r.item.Groups = []PublicModifierGroup{}
+		}
+		if e, ok := extras[r.item.ID]; ok {
+			r.item.Note = e.note
+			if price, deal := dealPrice(e.badge, e.deal, r.item.Price); deal {
+				r.item.Price, r.item.WasPrice = price, r.item.Price
+			}
+		}
+		r.item.Includes = []PublicInclude{}
+		var worth money.Minor
+		longest := 0
+		for _, c := range contents[r.item.ID] {
+			r.item.Includes = append(r.item.Includes, c.PublicInclude)
+			worth += c.price * money.Minor(c.Qty)
+			longest = max(longest, c.prep)
+		}
+		if r.item.PrepMinutes == 0 {
+			r.item.PrepMinutes = longest
+		}
+		if worth > r.item.Price && r.item.WasPrice == 0 {
+			r.item.WasPrice = worth
 		}
 		all = append(all, r)
 		byID[r.item.ID] = r.item
@@ -417,16 +542,41 @@ func publicCatalog(ctx context.Context, q sqlite.Querier, img string) ([]PublicC
 	return cats, offers, featured, nil
 }
 
+// dealPrice returns the e-menu price of a featured hot deal, if it has a
+// valid one. POS sales never use it: the deal is for e-menu orders only.
+func dealPrice(badge string, deal, price money.Minor) (money.Minor, bool) {
+	if badge == "hot_deal" && deal > 0 && deal < price {
+		return deal, true
+	}
+	return price, false
+}
+
 // ---- call the waiter -------------------------------------------------------------
 
-// CallWaiter records a waiter or bill request from a table. A second call of
-// the same kind while one is open is a no-op.
-func (a *App) CallWaiter(ctx context.Context, tableToken, kind, ip string) error {
+// ServiceCall is a guest asking for the waiter, the bill or reporting a
+// problem with the food. Table is the table QR's token; on the hall QR the
+// guest names the table instead (TableNumber).
+type ServiceCall struct {
+	Table       string `json:"table"`
+	TableNumber string `json:"table_number"`
+	Kind        string `json:"kind"` // waiter | bill | issue
+	Note        string `json:"note"` // issue: what went wrong
+}
+
+// CallWaiter records a request from a table. A second call of the same kind
+// while one is open adds nothing (a problem's newer description replaces the
+// older one).
+func (a *App) CallWaiter(ctx context.Context, in ServiceCall, ip string) error {
 	if !a.menuOpen() {
 		return errMenuClosed
 	}
-	if kind != "waiter" && kind != "bill" {
+	kind := in.Kind
+	if kind != "waiter" && kind != "bill" && kind != "issue" {
 		return invalid("نوع الطلب غير صحيح")
+	}
+	note := ""
+	if kind == "issue" {
+		note = clip(in.Note, 200)
 	}
 	if !a.ordering(a.emenuConfig(), true, 0).CallWaiter {
 		return &Error{CodeForbidden, "نداء الويتر غير متاح"}
@@ -435,17 +585,30 @@ func (a *App) CallWaiter(ctx context.Context, tableToken, kind, ip string) error
 		return errTooMany
 	}
 	return a.tx(ctx, func(tx *sql.Tx) error {
-		tableID, _, err := tableByToken(ctx, tx, tableToken)
+		var tableID string
+		var err error
+		switch {
+		case in.Table != "":
+			tableID, _, err = tableByToken(ctx, tx, in.Table)
+		case strings.TrimSpace(in.TableNumber) != "":
+			tableID, err = tableByNumber(ctx, tx, clip(in.TableNumber, 20))
+		default:
+			err = invalid("اختار الترابيزة")
+		}
 		if err != nil {
 			return err
 		}
 		var open int
 		tx.QueryRowContext(ctx, `SELECT count(*) FROM service_requests WHERE table_id = ? AND kind = ? AND status = 'open'`, tableID, kind).Scan(&open)
 		if open > 0 {
-			return nil
+			if note == "" {
+				return nil
+			}
+			_, err = tx.ExecContext(ctx, `UPDATE service_requests SET note = ? WHERE table_id = ? AND kind = ? AND status = 'open'`, note, tableID, kind)
+			return err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO service_requests(id, table_id, kind, created_at) VALUES (?,?,?,?)`,
-			sqlite.NewID(), tableID, kind, a.stamp())
+		_, err = tx.ExecContext(ctx, `INSERT INTO service_requests(id, table_id, kind, note, created_at) VALUES (?,?,?,?,?)`,
+			sqlite.NewID(), tableID, kind, note, a.stamp())
 		return err
 	})
 }
@@ -460,7 +623,7 @@ type OnlineLineInput struct {
 }
 
 // OnlineOrderInput is a guest's order. In the hall the table comes from the
-// QR code (TableToken) or the number the guest typed (TableNumber);
+// table's QR code (TableToken) or the list on the hall QR (TableNumber);
 // delivery needs a name, phone and address.
 type OnlineOrderInput struct {
 	Type         string            `json:"type"`        // dine_in | delivery (a TableToken implies dine_in)
@@ -499,6 +662,7 @@ type OnlineOrder struct {
 	Notes        string       `json:"notes"`
 	Lines        []OnlineLine `json:"lines"`
 	Total        money.Minor  `json:"total_minor"`
+	ETAMinutes   int          `json:"eta_minutes"`
 	Status       string       `json:"status"`
 	OrderID      string       `json:"order_id"`
 	OrderNumber  int          `json:"order_number"`
@@ -514,7 +678,9 @@ type GuestOrder struct {
 	TableName    string       `json:"table_name"`
 	Lines        []OnlineLine `json:"lines"`
 	Total        money.Minor  `json:"total_minor"`
+	ETAMinutes   int          `json:"eta_minutes"` // 0 = no estimate
 	Status       string       `json:"status"`
+	Stage        string       `json:"stage"` // once accepted: preparing | ready | closed
 	OrderNumber  int          `json:"order_number"`
 	RejectReason string       `json:"reject_reason"`
 	CreatedAt    string       `json:"created_at"`
@@ -554,7 +720,7 @@ func (a *App) SubmitOnlineOrder(ctx context.Context, in OnlineOrderInput, ip str
 			return GuestOrder{}, &Error{CodeForbidden, "الطلب من الصالة غير متاح، نادِ الويتر"}
 		}
 		if in.TableToken == "" && in.TableNumber == "" {
-			return GuestOrder{}, invalid("اكتب رقم الترابيزة")
+			return GuestOrder{}, invalid("اختار الترابيزة")
 		}
 		in.Address = ""
 		if in.Phone != "" && !validPhone(in.Phone) {
@@ -609,17 +775,28 @@ func (a *App) SubmitOnlineOrder(ctx context.Context, in OnlineOrderInput, ip str
 		}
 		lines := make([]OnlineLine, 0, len(in.Lines))
 		var total money.Minor
+		eta := 0 // the kitchen works on a ticket's items together: the longest one
 		for _, l := range in.Lines {
 			if l.Qty < 1 || l.Qty > maxOnlineQty {
 				return invalid("الكمية غير صحيحة")
 			}
 			var name string
 			var price money.Minor
-			err := tx.QueryRowContext(ctx, `SELECT i.name, i.price_minor FROM items i JOIN categories c ON c.id = i.category_id AND c.active = 1
-				WHERE i.id = ? AND i.active = 1 AND i.deleted_at IS NULL`, l.ItemID).Scan(&name, &price)
+			var prep, contentsPrep int
+			var badge string
+			var deal money.Minor
+			err := tx.QueryRowContext(ctx, `SELECT i.name, i.price_minor, i.prep_minutes, coalesce(f.badge,''), coalesce(f.deal_price_minor,0),
+				(SELECT coalesce(max(x.prep_minutes),0) FROM emenu_offers o JOIN emenu_offer_items b ON b.offer_id = o.id JOIN items x ON x.id = b.item_id WHERE o.item_id = i.id)
+				FROM items i JOIN categories c ON c.id = i.category_id AND c.active = 1 LEFT JOIN emenu_featured f ON f.item_id = i.id
+				WHERE i.id = ? AND i.active = 1 AND i.deleted_at IS NULL`, l.ItemID).Scan(&name, &price, &prep, &badge, &deal, &contentsPrep)
 			if err != nil {
 				return noRows(err, "الصنف")
 			}
+			price, _ = dealPrice(badge, deal, price)
+			if prep == 0 {
+				prep = contentsPrep
+			}
+			eta = max(eta, prep)
 			mods, err := resolveModifiers(ctx, tx, l.ItemID, l.ModifierIDs)
 			if err != nil {
 				return err
@@ -635,11 +812,14 @@ func (a *App) SubmitOnlineOrder(ctx context.Context, in OnlineOrderInput, ip str
 			lines = append(lines, OnlineLine{ItemID: l.ItemID, Name: name, Qty: l.Qty, UnitPrice: price, Modifiers: mods,
 				ModifierIDs: ids, Notes: clip(l.Notes, 120), Total: lt})
 		}
+		if typ == "delivery" {
+			eta += cfg.DeliveryMinutes
+		}
 		b, _ := json.Marshal(lines)
 		token = newPublicToken() + newPublicToken()
-		_, err := tx.ExecContext(ctx, `INSERT INTO online_orders(id, public_token, type, table_id, customer_name, phone, address, notes, lines_json, total_minor, ip, created_at)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, sqlite.NewID(), token, typ, sqlite.NullString(tableID), in.CustomerName, in.Phone, in.Address, in.Notes,
-			string(b), total, clip(ip, 64), a.stamp())
+		_, err := tx.ExecContext(ctx, `INSERT INTO online_orders(id, public_token, type, table_id, customer_name, phone, address, notes, lines_json, total_minor, eta_minutes, ip, created_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, sqlite.NewID(), token, typ, sqlite.NullString(tableID), in.CustomerName, in.Phone, in.Address, in.Notes,
+			string(b), total, eta, clip(ip, 64), a.stamp())
 		return err
 	})
 	if err != nil {
@@ -663,7 +843,7 @@ func validPhone(p string) bool {
 }
 
 const onlineCols = `o.id, o.public_token, o.type, coalesce(o.table_id,''), coalesce(t.name,''), coalesce(o.customer_id,''), o.customer_name, o.phone, o.address, o.notes,
-	o.lines_json, o.total_minor, o.status, coalesce(o.order_id,''), coalesce(r.number,0), o.reject_reason, o.created_at, coalesce(o.decided_at,'')`
+	o.lines_json, o.total_minor, o.eta_minutes, o.status, coalesce(o.order_id,''), coalesce(r.number,0), o.reject_reason, o.created_at, coalesce(o.decided_at,'')`
 
 const onlineFrom = ` FROM online_orders o LEFT JOIN dining_tables t ON t.id = o.table_id LEFT JOIN orders r ON r.id = o.order_id`
 
@@ -671,7 +851,7 @@ func scanOnline(row interface{ Scan(...any) error }) (OnlineOrder, error) {
 	var o OnlineOrder
 	var lines string
 	err := row.Scan(&o.ID, &o.Token, &o.Type, &o.TableID, &o.TableName, &o.CustomerID, &o.CustomerName, &o.Phone, &o.Address, &o.Notes,
-		&lines, &o.Total, &o.Status, &o.OrderID, &o.OrderNumber, &o.RejectReason, &o.CreatedAt, &o.DecidedAt)
+		&lines, &o.Total, &o.ETAMinutes, &o.Status, &o.OrderID, &o.OrderNumber, &o.RejectReason, &o.CreatedAt, &o.DecidedAt)
 	if err != nil {
 		return o, err
 	}
@@ -691,8 +871,41 @@ func (a *App) GuestOrderStatus(ctx context.Context, token string) (GuestOrder, e
 	if err != nil {
 		return GuestOrder{}, noRows(err, "الطلب")
 	}
-	return GuestOrder{Token: o.Token, Type: o.Type, TableName: o.TableName, Lines: o.Lines, Total: o.Total, Status: o.Status,
-		OrderNumber: o.OrderNumber, RejectReason: o.RejectReason, CreatedAt: o.CreatedAt}, nil
+	stage := ""
+	if o.Status == "accepted" && o.OrderID != "" {
+		if stage, err = a.orderStage(ctx, o.OrderID); err != nil {
+			return GuestOrder{}, err
+		}
+	}
+	return GuestOrder{Token: o.Token, Type: o.Type, TableName: o.TableName, Lines: o.Lines, Total: o.Total, ETAMinutes: o.ETAMinutes, Status: o.Status,
+		Stage: stage, OrderNumber: o.OrderNumber, RejectReason: o.RejectReason, CreatedAt: o.CreatedAt}, nil
+}
+
+// orderStage is how far an accepted order got, from its lines on the kitchen
+// screen: ready once the kitchen finished every line that wasn't cancelled.
+// (The screen's «done» moves a whole ticket to served, so that counts too.)
+func (a *App) orderStage(ctx context.Context, orderID string) (string, error) {
+	var status, closedAt string
+	var lines, finished int
+	err := a.db.Write.QueryRowContext(ctx, `SELECT o.status, coalesce(o.closed_at,''),
+		(SELECT count(*) FROM order_lines l WHERE l.order_id = o.id AND l.voided_at IS NULL),
+		(SELECT count(*) FROM order_lines l WHERE l.order_id = o.id AND l.voided_at IS NULL AND l.kitchen_status IN ('ready','served'))
+		FROM orders o WHERE o.id = ?`, orderID).Scan(&status, &closedAt, &lines, &finished)
+	if err != nil {
+		return "", noRows(err, "الطلب")
+	}
+	if status == "void" || lines == 0 {
+		return "closed", nil
+	}
+	if status == "paid" {
+		if a.now().Sub(sqlite.ParseTime(closedAt)) > orderFollowFor {
+			return "closed", nil
+		}
+	}
+	if finished == lines {
+		return "ready", nil
+	}
+	return "preparing", nil
 }
 
 // ---- staff side ---------------------------------------------------------------------
@@ -702,6 +915,7 @@ type ServiceRequest struct {
 	TableID   string `json:"table_id"`
 	TableName string `json:"table_name"`
 	Kind      string `json:"kind"`
+	Note      string `json:"note"`
 	CreatedAt string `json:"created_at"`
 }
 
@@ -736,7 +950,7 @@ func (a *App) Inbox(ctx context.Context, actor Actor) (Inbox, error) {
 	if err := rows.Err(); err != nil {
 		return in, err
 	}
-	rows, err = a.db.Write.QueryContext(ctx, `SELECT s.id, s.table_id, t.name, s.kind, s.created_at FROM service_requests s
+	rows, err = a.db.Write.QueryContext(ctx, `SELECT s.id, s.table_id, t.name, s.kind, s.note, s.created_at FROM service_requests s
 		JOIN dining_tables t ON t.id = s.table_id WHERE s.status = 'open' ORDER BY s.created_at`)
 	if err != nil {
 		return in, err
@@ -744,7 +958,7 @@ func (a *App) Inbox(ctx context.Context, actor Actor) (Inbox, error) {
 	defer rows.Close()
 	for rows.Next() {
 		var r ServiceRequest
-		if err := rows.Scan(&r.ID, &r.TableID, &r.TableName, &r.Kind, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.TableID, &r.TableName, &r.Kind, &r.Note, &r.CreatedAt); err != nil {
 			return in, err
 		}
 		in.Requests = append(in.Requests, r)
@@ -813,7 +1027,7 @@ func (a *App) AcceptOnlineOrder(ctx context.Context, actor Actor, id string) (Or
 			return err
 		}
 		for _, l := range o.Lines {
-			in := LineInput{ItemID: l.ItemID, Qty: money.Milli(l.Qty) * money.OneUnit, ModifierIDs: l.ModifierIDs, Notes: l.Notes, Course: 1}
+			in := LineInput{ItemID: l.ItemID, Qty: money.Milli(l.Qty) * money.OneUnit, ModifierIDs: l.ModifierIDs, Notes: l.Notes, Course: 1, PriceOverride: &l.UnitPrice}
 			if err := addLineTx(ctx, tx, orderID, in); err != nil {
 				var ae *Error
 				if errors.As(err, &ae) {

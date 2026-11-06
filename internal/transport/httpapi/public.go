@@ -21,17 +21,17 @@ func NewPublic(a *app.App, log *slog.Logger, static fs.FS) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/public/v1/menu", s.public(func(w http.ResponseWriter, r *http.Request) (any, error) {
+		if r.URL.Query().Has("hall") {
+			return a.PublicHallMenu(r.Context())
+		}
 		return a.PublicMenu(r.Context(), r.URL.Query().Get("table"))
 	}))
 	mux.HandleFunc("POST /api/public/v1/call", s.public(func(w http.ResponseWriter, r *http.Request) (any, error) {
-		var in struct {
-			Table string `json:"table"`
-			Kind  string `json:"kind"`
-		}
+		var in app.ServiceCall
 		if err := decodeSmall(w, r, &in); err != nil {
 			return nil, err
 		}
-		return nil, a.CallWaiter(r.Context(), in.Table, in.Kind, remoteIP(r))
+		return nil, a.CallWaiter(r.Context(), in, remoteIP(r))
 	}))
 	mux.HandleFunc("POST /api/public/v1/orders", s.public(func(w http.ResponseWriter, r *http.Request) (any, error) {
 		var in app.OnlineOrderInput
@@ -99,6 +99,7 @@ func NewPublic(a *app.App, log *slog.Logger, static fs.FS) http.Handler {
 	}
 	mux.HandleFunc("GET /{$}", page)
 	mux.HandleFunc("GET /t/{token}", page)
+	mux.HandleFunc("GET /hall", page)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Only built assets; never index.html (the staff app).
 		p := strings.TrimPrefix(path.Clean(r.URL.Path), "/")

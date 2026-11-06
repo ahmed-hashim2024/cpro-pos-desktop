@@ -26,6 +26,23 @@ function loadImage(file) {
   });
 }
 
+function checkFile(file) {
+  if (!file) throw new Error(T('اختر صورة'));
+  if (!TYPES.includes(file.type)) throw new Error(T('الصورة يجب أن تكون PNG أو JPG أو WEBP'));
+  if (file.size > MAX_SOURCE) throw new Error(T('الصورة كبيرة جداً'));
+}
+
+// A picture to frame on screen; its blob URL stays alive (the caller revokes it).
+export function openImage(file) {
+  checkFile(file);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => { URL.revokeObjectURL(img.src); reject(new Error(T('تعذر قراءة الصورة'))); };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 const toBlob = (canvas, type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality));
 
 // Any transparent pixel? Checked on a small copy to stay fast.
@@ -40,10 +57,23 @@ function hasAlpha(img) {
   return false;
 }
 
+// Cuts box (in the picture's own pixels) out of img as a new file, at most
+// maxSide wide or high and never enlarged. Keeps transparency unless JPEG.
+export async function cropImage(img, box, { maxSide = 1600, type = 'image/png' } = {}) {
+  const scale = Math.min(1, maxSide / Math.max(box.w, box.h));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(box.w * scale));
+  c.height = Math.max(1, Math.round(box.h * scale));
+  const g = c.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(img, box.x, box.y, box.w, box.h, 0, 0, c.width, c.height);
+  const blob = await toBlob(c, type === 'image/jpeg' ? 'image/jpeg' : 'image/png', 0.95);
+  if (!blob) throw new Error(T('تعذر قراءة الصورة'));
+  return new File([blob], 'picture', { type: blob.type });
+}
+
 export async function prepareImage(file, { maxSide = 1600 } = {}) {
-  if (!file) throw new Error(T('اختر صورة'));
-  if (!TYPES.includes(file.type)) throw new Error(T('الصورة يجب أن تكون PNG أو JPG أو WEBP'));
-  if (file.size > MAX_SOURCE) throw new Error(T('الصورة كبيرة جداً'));
+  checkFile(file);
   const img = await loadImage(file);
   const w0 = img.naturalWidth;
   const h0 = img.naturalHeight;
@@ -75,9 +105,7 @@ export async function prepareImage(file, { maxSide = 1600 } = {}) {
 // App (PWA) icon: the picture cropped to a centred square and drawn at
 // 512 and 192 px as PNG (what browsers and iOS ask for).
 export async function makeAppIcons(file) {
-  if (!file) throw new Error(T('اختر صورة'));
-  if (!TYPES.includes(file.type)) throw new Error(T('الصورة يجب أن تكون PNG أو JPG أو WEBP'));
-  if (file.size > MAX_SOURCE) throw new Error(T('الصورة كبيرة جداً'));
+  checkFile(file);
   const img = await loadImage(file);
   const side = Math.min(img.naturalWidth, img.naturalHeight);
   const sx = (img.naturalWidth - side) / 2;

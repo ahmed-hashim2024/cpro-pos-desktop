@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Trash2, Loader2, Utensils, Clock3, CheckCircle2, XCircle, BellRing, Receipt, ShoppingCart, Bike } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Trash2, Loader2, Utensils, Clock3, CheckCircle2, XCircle, Bell, BellRing, Receipt, ShoppingCart, Bike, ConciergeBell, TriangleAlert, ChefHat, Heart } from 'lucide-react';
 import { menuApi } from './api';
 import { cx, Thumb, Stepper, Sheet, SheetHeader, lineTotal, tableToken, effectiveMode, contactReady } from './lib';
 
@@ -129,95 +129,179 @@ export function CartPage({ menu, t, money, cart, setCart, contact, onPlaced, onB
 
 // ---- order status ---------------------------------------------------------------------
 
-export function StatusSheet({ token, t, money, onClose, onDone }) {
-  const [o, setO] = useState(null);
-  const [gone, setGone] = useState(false);
+export const orderFinished = (o) => o.status === 'rejected' || o.status === 'expired' || o.stage === 'closed';
+
+// Follows the guest's order while the page is open, so the bell can change
+// with the sheet closed. onChange(order, previous) runs on each reply; order
+// is null when the server no longer knows it.
+export function useOrderTracker(token, onChange) {
+  const [order, setOrder] = useState(null);
+  const notify = useRef(onChange);
+  notify.current = onChange;
   useEffect(() => {
+    setOrder(null);
+    if (!token) return undefined;
     let timer;
     let stop = false;
+    let prev = null;
     const poll = async () => {
+      if (document.hidden) { timer = setTimeout(poll, 5000); return; }
       try {
         const r = await menuApi.status(token);
         if (stop) return;
-        setO(r);
-        if (r.status === 'pending') timer = setTimeout(poll, 4000);
+        setOrder(r);
+        notify.current(r, prev);
+        prev = r;
+        if (!orderFinished(r)) timer = setTimeout(poll, r.status === 'pending' ? 4000 : r.stage === 'ready' ? 15000 : 6000);
       } catch (e) {
-        if (e.status === 404) setGone(true);
-        else if (!stop) timer = setTimeout(poll, 6000);
+        if (stop) return;
+        if (e.status === 404) notify.current(null, prev);
+        else timer = setTimeout(poll, 6000);
       }
     };
     poll();
     return () => { stop = true; clearTimeout(timer); };
   }, [token]);
-  useEffect(() => { if (gone) onDone(); }, [gone, onDone]);
+  return order;
+}
 
-  const view = {
-    pending: { icon: Clock3, tone: 'text-p bg-p/15', title: t('pending'), sub: t('pendingSub'), spin: true },
-    accepted: { icon: CheckCircle2, tone: 'text-emerald-500 bg-emerald-500/15', title: t('accepted'), sub: t('acceptedSub', [o?.order_number]) },
-    rejected: { icon: XCircle, tone: 'text-red-500 bg-red-500/15', title: t('rejected'), sub: o?.reject_reason },
-    expired: { icon: Clock3, tone: 'text-mut bg-card2', title: t('expired'), sub: t('expiredSub') },
-  }[o?.status || 'pending'];
+function orderView(o, t) {
+  const eta = o.eta_minutes > 0 ? t('etaSub', [t.num(o.eta_minutes)]) : t('etaNone');
+  if (o.status === 'pending') return { icon: CheckCircle2, tone: 'text-p bg-p/15', title: t('orderPlaced'), sub: eta };
+  if (o.status === 'rejected') return { icon: XCircle, tone: 'text-red-500 bg-red-500/15', title: t('rejected'), sub: o.reject_reason };
+  if (o.status === 'expired') return { icon: Clock3, tone: 'text-mut bg-card2', title: t('expired'), sub: t('expiredSub') };
+  if (o.stage === 'ready') return { icon: BellRing, tone: 'text-emerald-500 bg-emerald-500/15', title: t('orderReady'), sub: t(o.type === 'delivery' ? 'readyDelivery' : 'readyHall'), ring: true };
+  if (o.stage === 'closed') return { icon: Heart, tone: 'text-p bg-p/15', title: t('orderDone'), sub: t('orderDoneSub') };
+  return { icon: ChefHat, tone: 'text-p bg-p/15', title: t('accepted'), sub: `${t('acceptedSub', [t.num(o.order_number)])} · ${eta}` };
+}
+
+export function StatusSheet({ order: o, tracking, t, money, onClose, onDone }) {
+  if (!o) {
+    return (
+      <Sheet onClose={onClose} label={t('notifications')}>
+        <SheetHeader title={t('notifications')} onClose={onClose} t={t} />
+        <div className="flex flex-col items-center gap-2 px-8 py-12 text-center text-mut">
+          {tracking ? <Loader2 className="size-8 animate-spin" aria-hidden /> : (
+            <>
+              <Bell className="size-10" aria-hidden />
+              <p className="font-bold text-fg">{t('noNotifications')}</p>
+              <p className="text-sm">{t('noNotificationsSub')}</p>
+            </>
+          )}
+        </div>
+      </Sheet>
+    );
+  }
+  const view = orderView(o, t);
   const Icon = view.icon;
+  // While the order is being made the button only closes the sheet: the bell
+  // must keep following it until it's ready.
+  const finished = orderFinished(o) || o.stage === 'ready';
   return (
     <Sheet onClose={onClose} label={t('yourOrder')}>
       <SheetHeader title={t('yourOrder')} onClose={onClose} t={t} />
       <div className="overflow-y-auto px-5 py-6">
         <div className="flex flex-col items-center text-center">
           <span className={cx('anim-pop relative flex size-20 items-center justify-center rounded-full', view.tone)}>
-            {view.spin && <span className="absolute inset-0 animate-ping rounded-full bg-current opacity-20 motion-reduce:hidden" />}
+            {view.ring && <span className="absolute inset-0 animate-ping rounded-full bg-current opacity-20 motion-reduce:hidden" />}
             <Icon className="size-10" aria-hidden />
           </span>
           <h2 className="mt-4 text-xl font-bold">{view.title}</h2>
           {view.sub && <p className="mt-1 text-mut">{view.sub}</p>}
         </div>
-        {o && (
-          <ul className="mt-6 divide-y divide-line rounded-3xl border border-line bg-card px-4">
-            {o.lines.map((l, i) => (
-              <li key={i} className="flex gap-2 py-3 text-sm">
-                <span className="num font-bold text-p">{l.qty}×</span>
-                <span className="flex-1">{l.name}{l.modifiers?.length > 0 && <span className="block text-xs text-mut">+ {l.modifiers.map((m) => m.name).join('، ')}</span>}</span>
-                <span className="num">{money(l.total_minor)}</span>
-              </li>
-            ))}
-            <li className="flex justify-between py-3 font-bold"><span>{t('total')}</span><span className="num">{money(o.total_minor)}</span></li>
-          </ul>
-        )}
+        <ul className="mt-6 divide-y divide-line rounded-3xl border border-line bg-card px-4">
+          {o.lines.map((l, i) => (
+            <li key={i} className="flex gap-2 py-3 text-sm">
+              <span className="num font-bold text-p">{l.qty}×</span>
+              <span className="flex-1">{l.name}{l.modifiers?.length > 0 && <span className="block text-xs text-mut">+ {l.modifiers.map((m) => m.name).join('، ')}</span>}</span>
+              <span className="num">{money(l.total_minor)}</span>
+            </li>
+          ))}
+          <li className="flex justify-between py-3 font-bold"><span>{t('total')}</span><span className="num">{money(o.total_minor)}</span></li>
+        </ul>
       </div>
-      {o && o.status !== 'pending' && (
+      {o.status !== 'pending' && (
         <div className="border-t border-line bg-card px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
-          <button onClick={onDone} className="w-full rounded-2xl bg-p py-4 font-bold text-onp">{o.status === 'accepted' ? t('backToMenu') : t('newOrder')}</button>
+          <button onClick={finished ? onDone : onClose} className="w-full rounded-2xl bg-p py-4 font-bold text-onp">{o.status === 'accepted' ? t('backToMenu') : t('newOrder')}</button>
         </div>
       )}
     </Sheet>
   );
 }
 
-// ---- waiter / bill (table QR only) ----------------------------------------------------------
+// ---- help: waiter, bill or a problem with the food (table and hall QR) ------------------------
 
-export function ServiceButtons({ t, flash, preview }) {
+export function ServiceButton({ menu, t, flash, contact, onTable }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button onClick={() => setOpen(true)}
+        className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] end-[max(1rem,calc(50%-14rem+1rem))] z-30 flex h-11 items-center gap-2 rounded-full bg-fg px-4 text-sm font-bold text-bg shadow-xl transition active:opacity-70">
+        <ConciergeBell className="size-5" aria-hidden />{t('needHelp')}
+      </button>
+      {open && <ServiceSheet menu={menu} t={t} flash={flash} contact={contact} onTable={onTable} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function ServiceSheet({ menu, t, flash, contact, onTable, onClose }) {
+  const [table, setTable] = useState(() => (menu.tables?.includes(contact.table) ? contact.table : ''));
+  const [issue, setIssue] = useState(false);
+  const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
-  const call = async (kind) => {
-    if (preview) { flash(t('previewOnly')); return; }
+  const [err, setErr] = useState('');
+
+  const send = async (kind) => {
+    if (menu.preview) { flash(t('previewOnly')); return; }
+    if (!menu.table && !table) { setErr(t('chooseTable')); return; }
     setBusy(kind);
+    setErr('');
     try {
-      await menuApi.call(tableToken, kind);
-      flash(kind === 'bill' ? t('billComing') : t('waiterComing'));
-    } catch (e) {
-      flash(e.status === 0 ? t('error') : e.message);
+      await menuApi.call({ table: tableToken, table_number: menu.table ? '' : table, kind, note: kind === 'issue' ? note.trim() : '' });
+      if (!menu.table) onTable(table);
+      flash(t({ waiter: 'waiterComing', bill: 'billComing', issue: 'issueSent' }[kind]));
+      onClose();
+    } catch (ex) {
+      setErr(ex.status === 0 ? t('error') : ex.message);
     } finally {
       setBusy('');
     }
   };
+  const option = (kind, Icon, label, onClick) => (
+    <button key={kind} onClick={onClick} disabled={!!busy} aria-expanded={kind === 'issue' ? issue : undefined}
+      className="flex min-h-14 items-center gap-3 rounded-2xl bg-card px-4 text-start font-bold shadow-sm transition active:scale-[.98] disabled:opacity-50">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-p/15 text-p">
+        {busy === kind ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <Icon className="size-5" aria-hidden />}
+      </span>
+      {label}
+    </button>
+  );
   return (
-    <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] end-[max(1rem,calc(50%-14rem+1rem))] z-30 flex items-center overflow-hidden rounded-full bg-fg text-bg shadow-xl">
-      <button onClick={() => call('waiter')} disabled={!!busy} className="flex h-11 items-center gap-2 ps-4 pe-3 text-sm font-bold transition active:opacity-70">
-        {busy === 'waiter' ? <Loader2 className="size-5 animate-spin" /> : <BellRing className="size-5" aria-hidden />}{t('callWaiter')}
-      </button>
-      <span className="h-6 w-px bg-bg/30" aria-hidden />
-      <button onClick={() => call('bill')} disabled={!!busy} aria-label={t('askBill')} title={t('askBill')} className="flex h-11 items-center justify-center ps-3 pe-4 transition active:opacity-70">
-        {busy === 'bill' ? <Loader2 className="size-5 animate-spin" /> : <Receipt className="size-5" aria-hidden />}
-      </button>
-    </div>
+    <Sheet onClose={onClose} label={t('needHelp')}>
+      <SheetHeader title={t('needHelp')} onClose={onClose} t={t} />
+      <div className="grid gap-2.5 overflow-y-auto px-5 py-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        {!menu.table && (
+          <label className="grid gap-1.5">
+            <span className="text-sm font-bold">{t('tableNumber')} *</span>
+            <select value={table} onChange={(e) => setTable(e.target.value)} className="h-12 w-full rounded-2xl border border-line bg-card px-4 outline-none focus:border-p">
+              <option value="">{t('chooseTable')}</option>
+              {menu.tables.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+          </label>
+        )}
+        {option('waiter', BellRing, t('callWaiter'), () => send('waiter'))}
+        {option('bill', Receipt, t('askBill'), () => send('bill'))}
+        {option('issue', TriangleAlert, t('foodIssue'), () => setIssue(!issue))}
+        {issue && (
+          <div className="anim-fade grid gap-2">
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('issuePh')} aria-label={t('foodIssue')} maxLength={200} rows={2} autoFocus
+              className="w-full rounded-2xl border border-line bg-card px-4 py-3 outline-none focus:border-p" />
+            <button onClick={() => send('issue')} disabled={!!busy} className="h-12 rounded-2xl bg-p font-bold text-onp shadow-lg disabled:opacity-40">{t('sendIssue')}</button>
+          </div>
+        )}
+        {err && <p role="alert" className="rounded-2xl bg-red-500/15 px-4 py-3 text-sm font-semibold text-red-500">{err}</p>}
+      </div>
+    </Sheet>
   );
 }
 

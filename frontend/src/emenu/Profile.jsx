@@ -51,7 +51,10 @@ export function ProfilePage({ menu, t, contact, setContact, flash, onDone }) {
         ) : (
           <label className="grid gap-1.5">
             <span className="text-sm font-bold">{t('tableNumber')} *</span>
-            <input required value={c.table} onChange={set('table')} placeholder={t('tableNumberPh')} maxLength={20} inputMode="text" className={`${field} num`} autoFocus />
+            <select required value={menu.tables.includes(c.table) ? c.table : ''} onChange={set('table')} className={field}>
+              <option value="">{t('chooseTable')}</option>
+              {menu.tables.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
           </label>
         ))}
         <label className="grid gap-1.5">

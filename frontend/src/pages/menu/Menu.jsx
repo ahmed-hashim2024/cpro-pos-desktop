@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import { Plus, Trash2, ImagePlus, Utensils, UtensilsCrossed } from 'lucide-react';
+import { Plus, Trash2, Utensils, UtensilsCrossed } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useTab } from '@/lib/useTab';
 import { toast, toastError } from '@/lib/store';
 import { confirm } from '@/components/Confirm';
 import { money, minorInput, toMinor, toMilli, milliInput, units, pct } from '@/lib/format';
-import { Button, Checkbox, Field, Input, Modal, PageHeader, Select, Switch, Table, Td, Tabs, Textarea, useLoad, useAction } from '@/components/ui';
+import { Button, Checkbox, Field, Input, Modal, PageHeader, PositionSelect, Select, Switch, Table, Td, Tabs, Textarea, useLoad, useAction } from '@/components/ui';
 import { T, lang } from '@/lib/i18n';
 import EMenuDesigner from './EMenu';
-import { prepareImage } from '@/lib/image';
+import { ImagePick } from '@/components/ImagePick';
 
 export default function Menu() {
   const [tab, setTab] = useTab('items');
@@ -74,7 +74,7 @@ function Items() {
         <Select className="w-56" value={cat} onChange={(e) => setCat(e.target.value)}>
           <option value="">{T('كل الأقسام')}</option>{d?.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </Select>
-        <Button onClick={() => setEdit({ name: '', code: '', category_id: cat, price_minor: 0, active: true, description: '', sort: 0, modifier_group_ids: [], recipe: [] })}>
+        <Button onClick={() => setEdit({ name: '', code: '', category_id: cat, price_minor: 0, active: true, description: '', prep_minutes: 0, modifier_group_ids: [], recipe: [] })}>
           <Plus className="size-4" />{T('صنف جديد')}
         </Button>
       </div>
@@ -100,23 +100,23 @@ function Items() {
 }
 
 function ItemDialog({ item, data, onClose, onSaved, onDelete }) {
-  const [f, setF] = useState({ ...item, price: minorInput(item.price_minor) });
+  // Position inside the item's category: where it is now, or last.
+  const peers = (cat) => data.items.filter((i) => (i.category_id || '') === (cat || '') && i.id !== item.id);
+  const placeIn = (cat) => {
+    const at = cat === item.category_id ? data.items.filter((i) => (i.category_id || '') === (cat || '')).findIndex((i) => i.id === item.id) : -1;
+    return at >= 0 ? at + 1 : peers(cat).length + 1;
+  };
+  const [f, setF] = useState(() => ({ ...item, price: minorInput(item.price_minor), sort: placeIn(item.category_id), prep: item.prep_minutes || '' }));
   const [image, setImage] = useState('');
   const [busy, run] = useAction();
   const ing = Object.fromEntries(data.ingredients.map((g) => [g.id, g]));
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const recipeCost = f.recipe.reduce((s, r) => s + Math.round(((ing[r.ingredient_id]?.cost_minor || 0) * (r.qty_milli || 0)) / 1000), 0);
 
-  const pickImage = async (e) => {
-    const file = e.target.files[0];
-    e.target.value = '';
-    if (!file) return;
-    try { setImage(await prepareImage(file, { maxSide: 1600 })); } catch (err) { toastError(err); }
-  };
   const save = () => run(async () => {
     const price = toMinor(f.price);
     if (price == null) throw new Error(T('السعر غير صحيح'));
-    await api.post('/items', { ...f, price_minor: price, sort: Number(f.sort) || 0, image_data: image, recipe: f.recipe.filter((r) => r.ingredient_id && r.qty_milli > 0) });
+    await api.post('/items', { ...f, price_minor: price, prep_minutes: Number(f.prep) || 0, image_data: image, recipe: f.recipe.filter((r) => r.ingredient_id && r.qty_milli > 0) });
     toast(T('تم الحفظ'));
     onSaved();
   });
@@ -131,18 +131,19 @@ function ItemDialog({ item, data, onClose, onSaved, onDelete }) {
             <Field label={T('السعر')}><Input className="num" value={f.price} onChange={set('price')} /></Field>
             <Field label={T('الكود')} hint={T('يُولَّد تلقائياً إن تُرك فارغاً')}><Input className="num" value={f.code} onChange={set('code')} /></Field>
             <Field label={T('القسم')}>
-              <Select value={f.category_id} onChange={set('category_id')}>
+              <Select value={f.category_id} onChange={(e) => setF({ ...f, category_id: e.target.value, sort: placeIn(e.target.value) })}>
                 <option value="">{T('— بدون —')}</option>{data.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </Select>
             </Field>
-            <Field label={T('الترتيب')}><Input type="number" value={f.sort} onChange={set('sort')} /></Field>
+            <Field label={T('الترتيب في القسم')}><PositionSelect count={peers(f.category_id).length + 1} value={f.sort} onChange={(v) => setF({ ...f, sort: v })} /></Field>
+            <Field label={T('وقت التحضير التقديري (دقيقة)')} hint={T('بيتحسب منه الوقت المتوقع للطلب في المنيو الإلكتروني')} className="col-span-2">
+              <Input className="num" type="number" min={0} max={240} value={f.prep} onChange={set('prep')} />
+            </Field>
           </div>
           <Field label={T('الوصف')}><Textarea value={f.description} onChange={set('description')} /></Field>
           <div className="flex items-center gap-3">
             {(image || f.image) && <img src={image || f.image} className="size-20 rounded-lg object-cover" alt="" />}
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-line px-3 py-2">
-              <ImagePlus className="size-4" />{T('صورة')} <span className="text-xs font-normal text-muted" dir="auto">(1200 × 900)</span><input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={pickImage} />
-            </label>
+            <ImagePick onPick={setImage} hint="(1200 × 900)" />
             <Checkbox label={T('يظهر في المنيو')} checked={f.active} onChange={(v) => setF({ ...f, active: v })} />
           </div>
           <Field label={T('مجموعات الإضافات')}>
@@ -206,18 +207,19 @@ function Categories() {
   const [edit, setEdit] = useState(null);
   const [busy, run] = useAction();
   const st = Object.fromEntries((data.data?.stations || []).map((s) => [s.id, s.name]));
+  const cats = data.data?.cats || [];
   const save = () => run(async () => {
-    await api.post('/categories', { ...edit, sort: Number(edit.sort) || 0 });
+    await api.post('/categories', edit);
     setEdit(null);
     data.reload(true);
   });
   return (
     <>
-      <Button className="mb-3" onClick={() => setEdit({ name: '', kitchen_station_id: '', sort: 0, active: true })}><Plus className="size-4" />{T('قسم جديد')}</Button>
+      <Button className="mb-3" onClick={() => setEdit({ name: '', kitchen_station_id: '', sort: cats.length + 1, active: true })}><Plus className="size-4" />{T('قسم جديد')}</Button>
       <Table head={[T('القسم'), T('محطة المطبخ'), T('الترتيب'), T('الحالة')]}>
-        {(data.data?.cats || []).map((c) => (
-          <tr key={c.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setEdit(c)}>
-            <Td className="font-semibold">{c.name}</Td><Td>{st[c.kitchen_station_id] || '—'}</Td><Td>{c.sort}</Td>
+        {cats.map((c, i) => (
+          <tr key={c.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setEdit({ ...c, sort: i + 1 })}>
+            <Td className="font-semibold">{c.name}</Td><Td>{st[c.kitchen_station_id] || '—'}</Td><Td>{i + 1}</Td>
             <Td><Switch checked={c.active} onChange={(v) => toggle(c, v)} label={T('مفعّل')} /></Td>
           </tr>
         ))}
@@ -231,7 +233,7 @@ function Categories() {
                 <option value="">{T('— كل الشاشات —')}</option>{data.data.stations.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </Select>
             </Field>
-            <Field label={T('الترتيب')}><Input type="number" value={edit.sort} onChange={(e) => setEdit({ ...edit, sort: e.target.value })} /></Field>
+            <Field label={T('الترتيب')}><PositionSelect count={cats.length + (edit.id ? 0 : 1)} value={edit.sort} onChange={(v) => setEdit({ ...edit, sort: v })} /></Field>
             <Checkbox label={T('ظاهر في نقطة البيع')} checked={edit.active} onChange={(v) => setEdit({ ...edit, active: v })} />
           </div>
         </Modal>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { X, SearchX, Tag } from 'lucide-react';
-import { cx, Thumb, Stepper, Sheet, SheetHeader, Badge, useLockScroll, useEscape } from './lib';
+import { X, SearchX, Tag, Clock3 } from 'lucide-react';
+import { cx, Thumb, Stepper, Sheet, SheetHeader, Badge, PriceTag, useLockScroll, useEscape } from './lib';
 import { SearchBar, ItemCard, FamilyBanner } from './Home';
 
 // ---- filters ---------------------------------------------------------------------------
@@ -119,7 +119,7 @@ export function OffersPage({ menu, t, money, onPick }) {
               {o.badge && <span className="w-fit rounded-full bg-p/15 px-2 py-0.5 text-[10px] font-bold text-p">{o.badge}</span>}
               <h3 className="line-clamp-1 font-bold">{o.item.name}</h3>
               {o.item.description && <p className="line-clamp-2 text-xs text-mut">{o.item.description}</p>}
-              {menu.show_prices && <span className="num font-black">{money(o.item.price_minor)}</span>}
+              {menu.show_prices && <PriceTag item={o.item} money={money} className="font-black" />}
             </div>
           </button>
         ))}
@@ -172,8 +172,13 @@ export function ItemModal({ item, badge, t, money, canOrder, showPrices, onClose
           </div>
           <div className="px-5 pt-4 text-center">
             <h2 className="text-xl font-black leading-tight">{item.name}</h2>
+            {item.note && <p className="mt-1 text-sm font-semibold text-p">{item.note}</p>}
             {item.description && <p className="mt-2 text-sm leading-relaxed text-mut">{item.description}</p>}
-            {showPrices && <p className="num mt-2 text-2xl font-black text-p">{money(item.price_minor)}</p>}
+            {item.includes?.length > 0 && (
+              <p className="mt-2 rounded-2xl bg-card2 px-3 py-2 text-sm"><span className="font-bold">{t('includes')}: </span>{item.includes.map((c) => `${c.qty}× ${c.name}`).join(t.lang === 'ar' ? '، ' : ', ')}</p>
+            )}
+            {showPrices && <p className="mt-2"><PriceTag item={item} money={money} className="text-2xl font-black text-p" /></p>}
+            {item.prep_minutes > 0 && <p className="mt-1 inline-flex items-center gap-1 text-xs text-mut"><Clock3 className="size-3.5" aria-hidden />{t('prepAbout', [t.num(item.prep_minutes)])}</p>}
           </div>
           {item.groups.map((g) => (
             <fieldset key={g.id} className="mx-5 mt-4 border-t border-line pt-3">

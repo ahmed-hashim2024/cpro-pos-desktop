@@ -2,14 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Home as HomeIcon, LayoutGrid, ShoppingBag, Tag, UserRound, Utensils, Clock3, Eye } from 'lucide-react';
 import { menuApi } from './api';
 import { makeT, pickLang, saveLang } from './i18n';
-import { cx, store, tableToken, PREVIEW, validHex, onColor, loadContact, emptyContact } from './lib';
+import { cx, store, tableToken, hallLink, PREVIEW, validHex, onColor, loadContact, saveContact, emptyContact, orderModes } from './lib';
 import { Header, SearchBar, HeroSlider, CategoryRail, Popular, FamilyOffers, Info, TableChip } from './Home';
 import { FullMenu, OffersPage, ItemModal, FilterSheet, emptyFilters, isFiltered } from './Browse';
-import { CartPage, StatusSheet, ServiceButtons } from './Order';
+import { CartPage, StatusSheet, ServiceButton, useOrderTracker, orderFinished } from './Order';
 import { ProfilePage } from './Profile';
 import { useAppLinks, useInstallOffer, InstallPopup } from './Install';
 
-const ORDER_KEY = `cpro.menu.order.${tableToken || 'web'}`;
+const ORDER_KEY = `cpro.menu.order.${tableToken || (hallLink ? 'hall' : 'web')}`;
+const SEEN_KEY = `${ORDER_KEY}.seen`; // the bad news the guest already saw
 
 export default function MenuApp() {
   const [menu, setMenu] = useState(null);
@@ -21,7 +22,7 @@ export default function MenuApp() {
   const [filters, setFilters] = useState(emptyFilters);
   const [filterOpen, setFilterOpen] = useState(false);
   const [orderToken, setOrderToken] = useState(() => (PREVIEW ? null : store.get(ORDER_KEY)));
-  const [statusOpen, setStatusOpen] = useState(() => !PREVIEW && !!store.get(ORDER_KEY));
+  const [statusOpen, setStatusOpen] = useState(false);
   const [contact, setContact] = useState(() => (PREVIEW ? emptyContact : loadContact()));
   const [toast, setToast] = useState('');
   const [backToCart, setBackToCart] = useState(false);
@@ -31,7 +32,7 @@ export default function MenuApp() {
   const load = useCallback(async () => {
     setFailed(null);
     try {
-      const m = await menuApi.menu(tableToken);
+      const m = await menuApi.menu(tableToken, hallLink);
       setMenu(m);
       setLang(pickLang(m.languages, m.default_language));
     } catch (e) {
@@ -79,7 +80,21 @@ export default function MenuApp() {
     const n = new Intl.NumberFormat(t.locale, { maximumFractionDigits: 2 }).format((minor || 0) / 100);
     return `${n} ${t.currency(menu?.restaurant.currency || 'EGP')}`;
   }, [t, menu]);
-  const doneStatus = useCallback(() => { store.set(ORDER_KEY, ''); setOrderToken(null); setStatusOpen(false); }, []);
+  const doneStatus = useCallback(() => { store.set(ORDER_KEY, ''); store.set(SEEN_KEY, ''); setOrderToken(null); setStatusOpen(false); }, []);
+
+  // The order sheet opens by itself only for news the guest hasn't seen: after
+  // placing an order or when it's refused. A reload never repeats a message.
+  const order = useOrderTracker(orderToken, (o, prev) => {
+    if (!o) { doneStatus(); return; }
+    if (orderFinished(o)) {
+      if (o.stage === 'closed' || store.get(SEEN_KEY) === o.status) { doneStatus(); return; }
+      store.set(SEEN_KEY, o.status);
+      setStatusOpen(true);
+    } else if (prev && o.stage === 'ready' && prev.stage !== 'ready') {
+      flash(t('orderReady'));
+      navigator.vibrate?.(200);
+    }
+  });
 
   const inCart = useMemo(() => {
     const m = {};
@@ -90,7 +105,7 @@ export default function MenuApp() {
   if (failed) return <Fallback t={t} kind={failed} onRetry={load} />;
   if (!menu) return <Skeleton />;
 
-  const canOrder = menu.ordering.dine_in || menu.ordering.takeaway;
+  const canOrder = orderModes(menu).length > 0;
   const count = cart.reduce((s, l) => s + l.qty, 0);
   const badgeOf = (id) => menu.featured.find((f) => f.item.id === id)?.badge || '';
   const pick = (item) => setPicked({ item, badge: badgeOf(item.id) });
@@ -104,6 +119,7 @@ export default function MenuApp() {
   };
   const placed = (token) => {
     store.set(ORDER_KEY, token);
+    store.set(SEEN_KEY, '');
     setOrderToken(token);
     setCart([]);
     setStatusOpen(true);
@@ -121,7 +137,7 @@ export default function MenuApp() {
 
       {tab === 'home' && (
         <>
-          <Header menu={menu} t={t} lang={lang} onLang={(l) => { saveLang(l); setLang(l); }} count={count} onCart={() => setTab('cart')} />
+          <Header menu={menu} t={t} lang={lang} onLang={(l) => { saveLang(l); setLang(l); }} order={order} tracking={!!orderToken} onBell={() => setStatusOpen(true)} />
           <TableChip menu={menu} t={t} />
           <div className="mt-2">
             <SearchBar t={t} value="" onChange={(q) => browse({ ...filters, q })} onFilter={() => setFilterOpen(true)} filtered={isFiltered(filters)} />
@@ -155,11 +171,14 @@ export default function MenuApp() {
           onDone={backToCart && cart.length ? () => { setBackToCart(false); setTab('cart'); } : undefined} />
       )}
 
-      {menu.ordering.call_waiter && <ServiceButtons t={t} flash={flash} preview={menu.preview} />}
+      {menu.ordering.call_waiter && (menu.table || menu.tables?.length > 0) && (
+        <ServiceButton menu={menu} t={t} flash={flash} contact={contact}
+          onTable={(table) => { const next = { ...contact, table }; if (!PREVIEW) saveContact(next); setContact(next); }} />
+      )}
       {orderToken && !statusOpen && (
         <button onClick={() => setStatusOpen(true)}
           className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] start-[max(1rem,calc(50%-14rem+1rem))] z-30 flex items-center gap-2 rounded-full bg-card px-4 py-2.5 text-sm font-semibold shadow-xl">
-          <Clock3 className="size-4 text-p" aria-hidden />{t('yourOrder')}
+          <Clock3 className="size-4 text-p" aria-hidden />{order?.stage === 'ready' ? t('orderReady') : t('yourOrder')}
         </button>
       )}
 
@@ -170,7 +189,7 @@ export default function MenuApp() {
           onClose={() => setPicked(null)} onAdd={addToCart} />
       )}
       {filterOpen && <FilterSheet menu={menu} t={t} filters={filters} onClose={() => setFilterOpen(false)} onApply={(f) => { setFilterOpen(false); browse(f); }} />}
-      {statusOpen && orderToken && <StatusSheet token={orderToken} t={t} money={money} onClose={() => setStatusOpen(false)} onDone={doneStatus} />}
+      {statusOpen && <StatusSheet order={order} tracking={!!orderToken} t={t} money={money} onClose={() => setStatusOpen(false)} onDone={doneStatus} />}
       {installDemo && <InstallPopup kind={installDemo} app={menu.app} t={t} demo onClose={() => setInstallDemo('')} />}
       {installKind && !picked && !statusOpen && !filterOpen && <InstallPopup kind={installKind} app={menu.app} t={t} onClose={closeInstall} />}
       {toast && <div role="status" className="anim-fade fixed inset-x-0 top-4 z-[60] mx-auto w-fit max-w-[90vw] rounded-full bg-fg px-4 py-2 text-sm font-semibold text-bg shadow-xl">{toast}</div>}

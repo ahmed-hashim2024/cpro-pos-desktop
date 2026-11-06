@@ -33,7 +33,12 @@ func (s *server) routes(mux *http.ServeMux) {
 	// ---- public ----
 	mux.HandleFunc("GET /api/v1/status", s.public(func(w http.ResponseWriter, r *http.Request) (any, error) {
 		needs, err := a.NeedsSetup(r.Context())
-		return map[string]any{"needs_setup": needs, "channel": s.channel}, err
+		// Only the desktop window itself connects the computer to an account.
+		out := map[string]any{"needs_setup": needs, "channel": s.channel, "needs_connect": false}
+		if s.channel == app.ChannelApp {
+			out["needs_connect"], out["account"] = a.NeedsConnect(), a.Account()
+		}
+		return out, err
 	}))
 	mux.HandleFunc("POST /api/v1/setup", s.public(func(w http.ResponseWriter, r *http.Request) (any, error) {
 		var in app.SetupInput
@@ -536,26 +541,55 @@ func (s *server) routes(mux *http.ServeMux) {
 		}
 		return a.ActivateDevice(r.Context(), actor, in.Code, in.DeviceName)
 	}))
+	// The connect flow runs before the first user exists, so it's open to the
+	// desktop window only (never the network or the tunnel).
+	windowOnly := func(fn func(r *http.Request) (any, error)) http.HandlerFunc {
+		return s.public(func(w http.ResponseWriter, r *http.Request) (any, error) {
+			if s.channel != app.ChannelApp {
+				return nil, &app.Error{Code: app.CodeForbidden, Msg: "متاح من جهاز الكاشير الرئيسي فقط"}
+			}
+			return fn(r)
+		})
+	}
+	mux.HandleFunc("POST /api/v1/platform/connect", windowOnly(func(r *http.Request) (any, error) {
+		url, err := a.StartConnect(r.Context())
+		return map[string]string{"url": url}, err
+	}))
+	mux.HandleFunc("GET /api/v1/platform/connect", windowOnly(func(r *http.Request) (any, error) {
+		return a.ConnectState(), nil
+	}))
+	mux.HandleFunc("POST /api/v1/platform/domain/check", windowOnly(func(r *http.Request) (any, error) {
+		var in struct {
+			Subdomain string `json:"subdomain"`
+		}
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return a.CheckDomain(r.Context(), in.Subdomain)
+	}))
+	mux.HandleFunc("POST /api/v1/platform/domain", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		var in struct {
+			Subdomain string `json:"subdomain"`
+		}
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return a.ClaimDomain(r.Context(), actor, in.Subdomain)
+	}))
+	mux.HandleFunc("GET /api/v1/backups/location", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		return a.BackupLocation(r.Context(), actor)
+	}))
+	mux.HandleFunc("PUT /api/v1/backups/location", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		var in struct {
+			Dir string `json:"dir"`
+		}
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		return a.SetBackupDir(r.Context(), actor, in.Dir)
+	}))
 	mux.HandleFunc("POST /api/v1/platform/sync", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
 		return a.SyncPlatform(r.Context(), actor)
-	}))
-	mux.HandleFunc("POST /api/v1/platform/unlink", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
-		var in struct {
-			Force bool `json:"force"`
-		}
-		if err := decode(r, &in); err != nil {
-			return nil, err
-		}
-		return nil, a.UnlinkDevice(r.Context(), actor, in.Force)
-	}))
-	mux.HandleFunc("PUT /api/v1/platform/url", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
-		var in struct {
-			URL string `json:"url"`
-		}
-		if err := decode(r, &in); err != nil {
-			return nil, err
-		}
-		return nil, a.SetPlatformURL(r.Context(), actor, in.URL)
 	}))
 
 	// ---- app updates ----

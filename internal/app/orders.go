@@ -407,6 +407,9 @@ type LineInput struct {
 	DiscRate    money.BasisPoints  `json:"discount_rate_bp"`
 	DiscAmount  money.Minor        `json:"discount_amount_minor"`
 	ApproverPIN string             `json:"approver_pin"`
+	// PriceOverride keeps the price a guest was quoted on the e-menu. It is
+	// set only by AcceptOnlineOrder and can never come in through the API.
+	PriceOverride *money.Minor `json:"-"`
 }
 
 func (a *App) AddLine(ctx context.Context, actor Actor, orderID string, in LineInput) (Order, error) {
@@ -440,7 +443,9 @@ func (a *App) AddLine(ctx context.Context, actor Actor, orderID string, in LineI
 	return loadOrder(ctx, a.db.Write, orderID)
 }
 
-// addLineTx adds an item at its current menu price; the caller recalculates.
+// addLineTx adds an item at its current menu price (or the price the guest
+// was quoted); the caller recalculates. An offer's contents go on the line as
+// free modifiers, so the kitchen and printed tickets show what to make.
 func addLineTx(ctx context.Context, tx *sql.Tx, orderID string, in LineInput) error {
 	var name string
 	var price money.Minor
@@ -448,7 +453,14 @@ func addLineTx(ctx context.Context, tx *sql.Tx, orderID string, in LineInput) er
 	if err != nil {
 		return noRows(err, "الصنف")
 	}
+	if in.PriceOverride != nil {
+		price = *in.PriceOverride
+	}
 	mods, err := resolveModifiers(ctx, tx, in.ItemID, in.ModifierIDs)
+	if err != nil {
+		return err
+	}
+	contents, err := offerContentLabels(ctx, tx, in.ItemID)
 	if err != nil {
 		return err
 	}
@@ -462,6 +474,12 @@ func addLineTx(ctx context.Context, tx *sql.Tx, orderID string, in LineInput) er
 	for _, m := range mods {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO order_line_modifiers(id, line_id, modifier_id, name, price_minor) VALUES (?,?,?,?,?)`,
 			sqlite.NewID(), lineID, m.ModifierID, m.Name, m.Price); err != nil {
+			return err
+		}
+	}
+	for _, label := range contents {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO order_line_modifiers(id, line_id, modifier_id, name, price_minor) VALUES (?,?,NULL,?,0)`,
+			sqlite.NewID(), lineID, label); err != nil {
 			return err
 		}
 	}

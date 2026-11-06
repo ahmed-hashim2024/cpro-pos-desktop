@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Download, HardDriveDownload, Settings as SettingsIcon } from 'lucide-react';
+import { Plus, Trash2, Download, FolderOpen, HardDriveDownload, Settings as SettingsIcon } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useTab } from '@/lib/useTab';
 import { useTheme, fontScales } from '@/lib/theme';
@@ -181,6 +181,7 @@ function Backups() {
         </div>
         <p className="mt-2 text-sm text-muted">{T('تُؤخذ نسخة أيضاً عند إغلاق البرنامج. احتفظ بنسخة خارج الجهاز (فلاشة أو سحابة) بشكل دوري.')}</p>
       </Card>
+      <BackupLocation onCopied={() => list.reload(true)} />
       <Card title={T('النسخ المحفوظة')} actions={<Button busy={creating} onClick={() => run(async () => { await api.post('/backups'); toast(T('تم إنشاء نسخة')); list.reload(true); })}><HardDriveDownload className="size-4" />{T('نسخة الآن')}</Button>}>
         <Table head={[T('الملف'), T('الحجم'), T('التاريخ'), '']}>
           {(list.data || []).map((b) => (
@@ -192,6 +193,38 @@ function Backups() {
         </Table>
       </Card>
     </div>
+  );
+}
+
+// A second copy of every backup, in a folder the owner picks on any drive.
+function BackupLocation({ onCopied }) {
+  const loc = useLoad(() => api.get('/backups/location'));
+  const [busy, run] = useAction();
+  const pick = window.go?.native?.Native?.PickFolder;
+  const setDir = (dir) => run(async () => {
+    await api.put('/backups/location', { dir });
+    await loc.reload(true);
+    onCopied();
+    toast(dir ? T('تم حفظ نسخة في المكان الجديد') : T('هتتحفظ النسخ على الجهاز بس'));
+  });
+  const choose = async () => {
+    const dir = await pick(T('اختار مكان النسخ الاحتياطي'));
+    if (dir) setDir(dir);
+  };
+  const d = loc.data;
+  return (
+    <Card title={T('مكان النسخ الاحتياطي')} icon={FolderOpen}>
+      <p className="text-sm text-muted">{T('كل نسخة بتتحفظ على الجهاز، ونسخة تانية منها في المكان اللي تختاره. الأفضل هارد خارجي أو فلاشة، أو على الأقل بارتيشن غير اللي عليه الويندوز، علشان لو حصل حاجة للويندوز الداتا تفضل موجودة.')}</p>
+      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-surface-2 p-3">
+        <span className="min-w-0 flex-1 truncate font-semibold" dir="auto">{d?.dir || T('لم يتم اختيار مكان إضافي')}</span>
+        {pick && <Button variant="secondary" icon={FolderOpen} busy={busy} onClick={choose}>{d?.dir ? T('تغيير المكان') : T('اختيار المكان')}</Button>}
+        {pick && d?.dir && <Button variant="ghost" onClick={() => setDir('')}>{T('إلغاء')}</Button>}
+      </div>
+      {!pick && <p className="mt-2 text-xs text-muted">{T('المكان بيتغير من جهاز الكاشير الرئيسي فقط')}</p>}
+      {d?.same_drive && <p className="mt-2 rounded-xl bg-warning-soft p-2.5 text-sm text-warning">{T('المكان ده على نفس البارتيشن بتاع البرنامج، فلو حصلت مشكلة النسختين هيضيعوا مع بعض. اختار بارتيشن أو هارد تاني.')}</p>}
+      {d?.last_copy?.error && <p className="mt-2 rounded-xl bg-danger-soft p-2.5 text-sm text-danger">{d.last_copy.error}</p>}
+      {d?.dir && d.last_copy?.at && !d.last_copy.error && <p className="mt-2 text-xs text-muted">{T('آخر نسخة في المكان ده')}: <span className="num">{dateTime(d.last_copy.at)}</span></p>}
+    </Card>
   );
 }
 

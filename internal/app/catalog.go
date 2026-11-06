@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -50,6 +51,7 @@ type Item struct {
 	Image            string       `json:"image"` // URL path, empty if none
 	Description      string       `json:"description"`
 	Sort             int          `json:"sort"`
+	PrepMinutes      int          `json:"prep_minutes"` // estimated time shown to guests; 0 = not set
 	Active           bool         `json:"active"`
 	ModifierGroupIDs []string     `json:"modifier_group_ids"`
 	Recipe           []RecipeLine `json:"recipe"`
@@ -86,6 +88,83 @@ type Table struct {
 
 func isUnique(err error) bool { return err != nil && strings.Contains(err.Error(), "UNIQUE") }
 
+// ---- display order ---------------------------------------------------------
+
+// orderScope is a group of rows that share one display order.
+type orderScope struct {
+	table string // a constant from this package, never user input
+	where string
+	args  []any
+	by    string // tie-break for rows saved before positions were unique
+}
+
+var categoryScope = orderScope{table: "categories", where: "1 = 1", by: "sort, name"}
+
+func itemScope(categoryID string) orderScope {
+	if categoryID == "" {
+		return orderScope{table: "items", where: "category_id IS NULL AND deleted_at IS NULL", by: "sort, name"}
+	}
+	return orderScope{table: "items", where: "category_id = ? AND deleted_at IS NULL", args: []any{categoryID}, by: "sort, name"}
+}
+
+func offerScope(kind string) orderScope {
+	return orderScope{table: "emenu_offers", where: "kind = ? AND item_id IN (SELECT id FROM items WHERE deleted_at IS NULL)",
+		args: []any{kind}, by: "sort, created_at"}
+}
+
+// keptSort is the position to save for a row: the one asked for, or the
+// row's current one when none was given (0 would jump it to the front).
+func keptSort(ctx context.Context, tx *sql.Tx, table, id string, pos int) int {
+	if pos <= 0 && id != "" {
+		tx.QueryRowContext(ctx, `SELECT sort FROM `+table+` WHERE id = ?`, id).Scan(&pos)
+	}
+	return pos
+}
+
+// placeInOrder gives id the position pos (1 = first) and renumbers its group
+// 1..n, so no two rows ever share a position. With no position a new row goes
+// last and an existing one stays where it is.
+func placeInOrder(ctx context.Context, tx *sql.Tx, s orderScope, id string, pos int, isNew bool) error {
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM `+s.table+` WHERE `+s.where+` ORDER BY `+s.by, s.args...)
+	if err != nil {
+		return err
+	}
+	others := []string{}
+	at := -1
+	for rows.Next() {
+		var x string
+		if err := rows.Scan(&x); err != nil {
+			rows.Close()
+			return err
+		}
+		if x == id {
+			at = len(others)
+		} else {
+			others = append(others, x)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if at < 0 {
+		return nil // not in this group
+	}
+	if pos > 0 {
+		at = pos - 1
+	} else if isNew {
+		at = len(others)
+	}
+	at = min(at, len(others))
+	ordered := append(append(append([]string{}, others[:at]...), id), others[at:]...)
+	for i, x := range ordered {
+		if _, err := tx.ExecContext(ctx, `UPDATE `+s.table+` SET sort = ? WHERE id = ?`, i+1, x); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ---- categories ------------------------------------------------------------
 
 func (a *App) Categories(ctx context.Context, _ Actor) ([]Category, error) {
@@ -118,6 +197,8 @@ func (a *App) SaveCategory(ctx context.Context, actor Actor, c Category) (Catego
 	}
 	err := a.tx(ctx, func(tx *sql.Tx) error {
 		var err error
+		isNew := c.ID == ""
+		c.Sort = keptSort(ctx, tx, "categories", c.ID, c.Sort)
 		if c.ID == "" {
 			c.ID = sqlite.NewID()
 			_, err = tx.ExecContext(ctx, `INSERT INTO categories(id, name, kitchen_station_id, sort, active) VALUES (?,?,?,?,?)`,
@@ -131,6 +212,9 @@ func (a *App) SaveCategory(ctx context.Context, actor Actor, c Category) (Catego
 		}
 		if err != nil {
 			return noRows(err, "القسم")
+		}
+		if err := placeInOrder(ctx, tx, categoryScope, c.ID, c.Sort, isNew); err != nil {
+			return err
 		}
 		return a.audit(ctx, tx, actor, "category.save", "categories", c.ID, c)
 	})
@@ -198,7 +282,7 @@ func (a *App) SaveStation(ctx context.Context, actor Actor, s Station) (Station,
 // Items returns the full catalog including recipes and costs.
 func (a *App) Items(ctx context.Context, _ Actor) ([]Item, error) {
 	q := a.db.Read
-	rows, err := q.QueryContext(ctx, `SELECT id, code, name, coalesce(category_id,''), price_minor, coalesce(image_path,''), description, sort, active FROM items WHERE deleted_at IS NULL ORDER BY sort, name`)
+	rows, err := q.QueryContext(ctx, `SELECT id, code, name, coalesce(category_id,''), price_minor, coalesce(image_path,''), description, sort, prep_minutes, active FROM items WHERE deleted_at IS NULL ORDER BY sort, name`)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +291,7 @@ func (a *App) Items(ctx context.Context, _ Actor) ([]Item, error) {
 	for rows.Next() {
 		var it Item
 		var active int64
-		if err := rows.Scan(&it.ID, &it.Code, &it.Name, &it.CategoryID, &it.Price, &it.Image, &it.Description, &it.Sort, &active); err != nil {
+		if err := rows.Scan(&it.ID, &it.Code, &it.Name, &it.CategoryID, &it.Price, &it.Image, &it.Description, &it.Sort, &it.PrepMinutes, &active); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -276,6 +360,9 @@ func (a *App) SaveItem(ctx context.Context, actor Actor, in ItemInput) (string, 
 	if it.Price < 0 {
 		return "", invalid("السعر غير صحيح")
 	}
+	if it.PrepMinutes < 0 || it.PrepMinutes > maxPrepMinutes {
+		return "", invalid("وقت التحضير غير صحيح")
+	}
 	for _, r := range it.Recipe {
 		if r.Qty <= 0 || r.IngredientID == "" {
 			return "", invalid("كمية الخامة في الوصفة يجب أن تكون أكبر من صفر")
@@ -286,7 +373,9 @@ func (a *App) SaveItem(ctx context.Context, actor Actor, in ItemInput) (string, 
 		return "", err
 	}
 	err = a.tx(ctx, func(tx *sql.Tx) error {
-		if it.ID == "" {
+		isNew := it.ID == ""
+		it.Sort = keptSort(ctx, tx, "items", it.ID, it.Sort)
+		if isNew {
 			it.ID = sqlite.NewID()
 			if it.Code == "" {
 				var n int
@@ -294,13 +383,13 @@ func (a *App) SaveItem(ctx context.Context, actor Actor, in ItemInput) (string, 
 				it.Code = fmt.Sprintf("I%04d", n)
 			}
 			_, err = tx.ExecContext(ctx,
-				`INSERT INTO items(id, code, name, category_id, price_minor, image_path, description, sort, active, created_at, updated_at)
-				 VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-				it.ID, it.Code, it.Name, sqlite.NullString(it.CategoryID), it.Price, sqlite.NullString(image), it.Description, it.Sort, sqlite.Int(it.Active), a.stamp(), a.stamp())
+				`INSERT INTO items(id, code, name, category_id, price_minor, image_path, description, sort, prep_minutes, active, created_at, updated_at)
+				 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+				it.ID, it.Code, it.Name, sqlite.NullString(it.CategoryID), it.Price, sqlite.NullString(image), it.Description, it.Sort, it.PrepMinutes, sqlite.Int(it.Active), a.stamp(), a.stamp())
 		} else {
 			err = mustAffect(tx.ExecContext(ctx,
-				`UPDATE items SET code=?, name=?, category_id=?, price_minor=?, description=?, sort=?, active=?, updated_at=? WHERE id=?`,
-				it.Code, it.Name, sqlite.NullString(it.CategoryID), it.Price, it.Description, it.Sort, sqlite.Int(it.Active), a.stamp(), it.ID))
+				`UPDATE items SET code=?, name=?, category_id=?, price_minor=?, description=?, sort=?, prep_minutes=?, active=?, updated_at=? WHERE id=?`,
+				it.Code, it.Name, sqlite.NullString(it.CategoryID), it.Price, it.Description, it.Sort, it.PrepMinutes, sqlite.Int(it.Active), a.stamp(), it.ID))
 			if err == nil && in.ImageData != "" {
 				_, err = tx.ExecContext(ctx, `UPDATE items SET image_path=? WHERE id=?`, sqlite.NullString(image), it.ID)
 			}
@@ -310,6 +399,9 @@ func (a *App) SaveItem(ctx context.Context, actor Actor, in ItemInput) (string, 
 		}
 		if err != nil {
 			return noRows(err, "الصنف")
+		}
+		if err := placeInOrder(ctx, tx, itemScope(it.CategoryID), it.ID, it.Sort, isNew); err != nil {
+			return err
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM item_modifier_groups WHERE item_id = ?`, it.ID); err != nil {
 			return err
@@ -640,6 +732,15 @@ func (a *App) deleteItemTx(ctx context.Context, tx *sql.Tx, actor Actor, id stri
 	var name, code string
 	if err := tx.QueryRowContext(ctx, `SELECT name, code FROM items WHERE id = ? AND deleted_at IS NULL`, id).Scan(&name, &code); err != nil {
 		return res, noRows(err, "الصنف")
+	}
+	var offer string
+	err := tx.QueryRowContext(ctx, `SELECT i.name FROM emenu_offer_items b JOIN emenu_offers o ON o.id = b.offer_id JOIN items i ON i.id = o.item_id
+		WHERE b.item_id = ? LIMIT 1`, id).Scan(&offer)
+	if err == nil {
+		return res, conflict("الصنف ده جزء من عرض «" + offer + "»، شيله من العرض الأول")
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return res, err
 	}
 	inUse, err := used(ctx, tx, `SELECT (SELECT count(*) FROM order_lines WHERE item_id = ?) + (SELECT count(*) FROM waste_entries WHERE item_id = ?)`, id, id)
 	if err != nil {
