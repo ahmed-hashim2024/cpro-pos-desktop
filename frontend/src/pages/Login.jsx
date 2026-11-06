@@ -5,6 +5,7 @@ import { api, deviceId } from '@/lib/api';
 import { useApp, toastError } from '@/lib/store';
 import { ConnectGoogle } from '@/components/License';
 import { DomainField, slugify } from '@/components/Domain';
+import { RestoreFirstRun } from '@/components/Restore';
 import { roles } from '@/lib/format';
 import { Button, Field, Input, Select, Spinner, cx } from '@/components/ui';
 import { T } from '@/lib/i18n';
@@ -18,9 +19,10 @@ export default function Login() {
   const load = () => api.get('/status').then(setStatus).catch(toastError);
   useEffect(() => { load(); }, []);
   if (!status) return <Spinner />;
+  const returning = status.needs_setup && !status.needs_connect && status.account?.returning;
   return (
-    <div className="flex min-h-full bg-bg">
-      <aside className="bg-brand relative hidden w-[42%] flex-col justify-between overflow-hidden p-12 text-white lg:flex">
+    <div className="flex h-dvh overflow-hidden bg-bg">
+      <aside className="bg-brand relative hidden w-[42%] shrink-0 flex-col justify-between overflow-hidden p-12 text-white lg:flex">
         <div className="absolute -end-24 -top-24 size-80 rounded-full bg-white/10" aria-hidden />
         <div className="absolute -bottom-32 -start-20 size-96 rounded-full bg-white/10" aria-hidden />
         <div className="relative flex items-center gap-3">
@@ -38,19 +40,22 @@ export default function Login() {
         </div>
         <div className="relative text-sm text-white/70">© CPro POS</div>
       </aside>
-      <main className="relative flex flex-1 items-center justify-center p-6">
+      <main className="relative min-w-0 flex-1 overflow-y-auto">
         <div className="absolute end-6 top-6"><LangMenu /></div>
+        <div className="flex min-h-full items-center justify-center p-6">
         <div className="w-full max-w-2xl">
           <div className="mb-8">
-            <h2 className="text-3xl font-bold">{status.needs_connect || status.needs_setup ? T('مرحباً بك في CPro') : T('تسجيل الدخول')}</h2>
+            <h2 className="text-3xl font-bold">{returning ? T('أهلاً بيك تاني') : status.needs_connect || status.needs_setup ? T('مرحباً بك في CPro') : T('تسجيل الدخول')}</h2>
             <p className="mt-1 text-muted">
               {status.needs_connect ? T('سجّل دخولك بحساب Google علشان تبدأ. لو مالكش حساب هيتعمل لوحده.')
-                : status.needs_setup ? T('خطوة أخيرة: جهّز حساب المالك على الجهاز ده') : T('اختر حسابك وأدخل الرقم السري')}
+                : returning ? T('حسابك جاهز. كمّل على الجهاز ده من نسختك الاحتياطية، أو ابدأ من غير نسخة.')
+                  : status.needs_setup ? T('خطوة أخيرة: جهّز حساب المالك على الجهاز ده') : T('اختر حسابك وأدخل الرقم السري')}
             </p>
           </div>
           {status.needs_connect
             ? <div className="max-w-md"><ConnectGoogle onDone={load} /></div>
             : status.needs_setup ? <Setup account={status.account} /> : <SignIn channel={status.channel} />}
+        </div>
         </div>
       </main>
     </div>
@@ -58,8 +63,31 @@ export default function Login() {
 }
 
 function Setup({ account }) {
+  const [start, setStart] = useState(!account?.returning);
+  if (!start) return <ReturningChoice account={account} onStart={() => setStart(true)} />;
+  return <SetupForm account={account} onBack={account?.returning ? () => setStart(false) : null} />;
+}
+
+// An owner who has used CPro before, on a computer with nothing on it yet.
+function ReturningChoice({ account, onStart }) {
+  return (
+    <div className="grid max-w-md gap-3">
+      <RestoreFirstRun />
+      <div className="grid gap-2 rounded-card border border-line bg-surface p-4 shadow-card">
+        <div>
+          <h3 className="font-bold">{T('معندكش نسخة احتياطية؟')}</h3>
+          <p className="text-sm text-muted">{account.restaurant ? T('هتبدأ ببيانات مطعمك من حسابك، والأصناف والمبيعات فاضية.') : T('هتبدأ من غير بيانات، والدومين من حسابك.')}</p>
+        </div>
+        <Button variant="secondary" onClick={onStart}>{T('ابدأ من غير نسخة')}</Button>
+      </div>
+    </div>
+  );
+}
+
+function SetupForm({ account, onBack }) {
   const signedIn = useApp((s) => s.signedIn);
-  const [f, setF] = useState({ restaurant_name: '', owner_name: account?.name || '', username: '', password: '', pin: '' });
+  const known = !!account?.restaurant; // the account already has the restaurant's data
+  const [f, setF] = useState({ restaurant_name: account?.restaurant || '', owner_name: account?.owner_name || account?.name || '', username: account?.username || '', password: '', pin: '' });
   const [busy, setBusy] = useState(false);
   const wantsDomain = !!account?.emenu && !account.has_domain;
   const [domain, setDomain] = useState({ value: '', touched: false, status: 'idle' });
@@ -80,14 +108,32 @@ function Setup({ account }) {
   };
   return (
     <form onSubmit={submit} className="grid max-w-md gap-4 rounded-card border border-line bg-surface p-6 shadow-card">
-      <h3 className="text-lg font-bold">{T('إعداد النظام لأول مرة')}</h3>
-      <Field label={T('اسم المطعم')}><Input required value={f.restaurant_name} onChange={set('restaurant_name')} /></Field>
+      <h3 className="text-lg font-bold">{onBack ? T('كلمة مرور للجهاز ده') : T('إعداد النظام لأول مرة')}</h3>
+      {known ? (
+        <dl className="grid gap-2 rounded-xl bg-surface-2 p-3 text-sm">
+          <div className="flex justify-between gap-3"><dt className="text-muted">{T('المطعم')}</dt><dd className="font-bold">{f.restaurant_name}</dd></div>
+          {f.username && <div className="flex justify-between gap-3"><dt className="text-muted">{T('اسم المستخدم')}</dt><dd className="font-bold" dir="ltr">{f.username}</dd></div>}
+          {account?.domain && <div className="flex justify-between gap-3"><dt className="text-muted">{T('المنيو')}</dt><dd className="num font-bold" dir="ltr">{account.domain}</dd></div>}
+        </dl>
+      ) : (
+        <Field label={T('اسم المطعم')}><Input required value={f.restaurant_name} onChange={set('restaurant_name')} /></Field>
+      )}
+      {!known && account?.domain && (
+        <div className="rounded-xl bg-surface-2 p-3 text-sm">
+          <div className="text-muted">{T('دومين المنيو من حسابك')}</div>
+          <div className="num font-bold" dir="ltr">{account.domain}</div>
+        </div>
+      )}
       {wantsDomain && (
         <DomainField value={subdomain} onChange={(value) => setDomain({ ...domain, value, touched: true })}
           onStatus={(status) => setDomain((d) => ({ ...d, status }))} />
       )}
-      <Field label={T('اسم المالك')}><Input required value={f.owner_name} onChange={set('owner_name')} /></Field>
-      <Field label={T('اسم المستخدم')}><Input required value={f.username} onChange={set('username')} /></Field>
+      {!(known && account?.username) && (
+        <>
+          <Field label={T('اسم المالك')}><Input required value={f.owner_name} onChange={set('owner_name')} /></Field>
+          <Field label={T('اسم المستخدم')}><Input required value={f.username} onChange={set('username')} /></Field>
+        </>
+      )}
       <Field label={T('كلمة المرور')} hint={T('8 أحرف على الأقل وتحتوي على حرف ورقم')}>
         <Input required type="password" value={f.password} onChange={set('password')} />
       </Field>
@@ -95,6 +141,7 @@ function Setup({ account }) {
         <Input inputMode="numeric" maxLength={6} value={f.pin} onChange={(e) => setF({ ...f, pin: e.target.value.replace(/\D/g, '') })} />
       </Field>
       <Button busy={busy} size="lg" disabled={wantsDomain && !['free', 'error'].includes(domain.status)}>{T('ابدأ')}</Button>
+      {onBack && <Button type="button" variant="ghost" onClick={onBack}>{T('رجوع')}</Button>}
     </form>
   );
 }

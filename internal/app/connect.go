@@ -9,6 +9,7 @@ import (
 	"html"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -59,6 +60,13 @@ type ConnectedAccount struct {
 	Name      string `json:"name"`
 	EMenu     bool   `json:"emenu"`
 	HasDomain bool   `json:"has_domain"`
+	Domain    string `json:"domain"` // the address the account already has
+
+	// A returning owner is offered their backup; these fill the new computer.
+	Returning  bool   `json:"returning"`
+	Restaurant string `json:"restaurant"`
+	OwnerName  string `json:"owner_name"`
+	Username   string `json:"username"`
 }
 
 // Account returns the linked account, or nil when not connected.
@@ -70,7 +78,15 @@ func (a *App) Account() *ConnectedAccount {
 	f := a.features()
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return &ConnectedAccount{Name: p.claims.TenantName, EMenu: f.EMenu(), HasDomain: p.st.Tunnel != nil}
+	domain := p.st.AccountDomain
+	if p.st.Tunnel != nil {
+		domain = p.st.Tunnel.Domain
+	}
+	out := &ConnectedAccount{Name: p.claims.TenantName, EMenu: f.EMenu(), HasDomain: domain != "", Domain: domain, Returning: p.st.Returning}
+	if profile := readProfile(p.st.Profile); profile != nil {
+		out.Restaurant, out.OwnerName, out.Username = profile.Settings.RestaurantName, profile.OwnerName, profile.Username
+	}
+	return out
 }
 
 // StartConnect begins a connection and returns the page to open in the
@@ -117,7 +133,8 @@ func (a *App) StartConnect(context.Context) (string, error) {
 	go f.srv.Serve(ln)
 
 	port := ln.Addr().(*net.TCPAddr).Port
-	return fmt.Sprintf("%s/portal/connect?port=%d&state=%s", base, port, f.state), nil
+	return fmt.Sprintf("%s/portal/connect?port=%d&state=%s&device=%s&fp=%s", base, port, f.state,
+		url.QueryEscape(p.client.ID.DeviceID), url.QueryEscape(deviceInfo("").Fingerprint)), nil
 }
 
 // ConnectState is the progress of the latest StartConnect.

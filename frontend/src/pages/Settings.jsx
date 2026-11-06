@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Download, FolderOpen, HardDriveDownload, Settings as SettingsIcon } from 'lucide-react';
+import { Plus, Trash2, Download, FolderOpen, HardDriveDownload, RotateCcw, Settings as SettingsIcon } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useTab } from '@/lib/useTab';
 import { useTheme, fontScales } from '@/lib/theme';
@@ -7,6 +7,7 @@ import { useApp, toast } from '@/lib/store';
 import { toMinor, minorInput, toBP, dateTime } from '@/lib/format';
 import { Badge, Button, Card, Checkbox, Field, Input, PageHeader, Select, Spinner, Table, Td, Tabs, Textarea, useLoad, useAction } from '@/components/ui';
 import { T, lang, languages, setLang } from '@/lib/i18n';
+import { RestoreCard, RestoreConfirm } from '@/components/Restore';
 import Platform from './settings/Platform';
 
 export default function Settings() {
@@ -168,6 +169,8 @@ function Devices() {
 function Backups() {
   const { data, busy, save } = useSettingsForm();
   const list = useLoad(() => api.get('/backups'));
+  const owner = useApp((st) => st.me?.role === 'owner');
+  const [restoring, setRestoring] = useState(null);
   const [creating, run] = useAction();
   if (!data.data) return <Spinner />;
   const s = data.data;
@@ -187,11 +190,14 @@ function Backups() {
           {(list.data || []).map((b) => (
             <tr key={b.name}>
               <Td className="num">{b.name}</Td><Td className="num">{(b.size / 1024 / 1024).toFixed(2)} MB</Td><Td>{dateTime(b.created_at)}</Td>
-              <Td><Button size="sm" variant="ghost" onClick={() => api.download(`/backups/${b.name}`, b.name)}><Download className="size-4" />{T('تحميل')}</Button></Td>
+              <Td><Button size="sm" variant="ghost" onClick={() => api.download(`/backups/${b.name}`, b.name)}><Download className="size-4" />{T('تحميل')}</Button>
+                {owner && <Button size="sm" variant="ghost" onClick={() => setRestoring({ name: b.name })}><RotateCcw className="size-4" />{T('استرجاع')}</Button>}</Td>
             </tr>
           ))}
         </Table>
       </Card>
+      {owner && <RestoreCard onPick={(file) => setRestoring({ file })} />}
+      <RestoreConfirm target={restoring} onClose={() => setRestoring(null)} />
     </div>
   );
 }

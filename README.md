@@ -59,6 +59,15 @@ owner's own domain.
 - **Backups:** every backup stays on this computer, with a second copy in a
   folder the owner picks on any drive (Settings → Backups). If the drive is
   missing, the local backup still happens and the screen says so.
+- **Restoring:** a backup is one `.db` file holding the data and the pictures.
+  Upload it on the first-run screen of a new computer or in Settings → Backups;
+  the app restarts on it. The account link and backup folder stay this
+  computer's. Domain and e-menu settings come from the account on connecting.
+- **A new computer without a backup:** the restaurant's settings are saved on
+  the account whenever they change (never the menu, sales or passwords). A
+  returning owner picks a backup or starts with those settings and no data.
+- **Moving computers:** when every device slot is taken, the connect page lists
+  the devices to move from. A computer that lost its data keeps its slot.
 - **E-menu:** needs a connected account and a menu address. The first-run
   form suggests one from the restaurant's name and checks it's free; the
   Platform creates the Cloudflare tunnel and this computer serves it.

@@ -41,6 +41,8 @@ type App struct {
 	// Result of the latest copy to the owner's backup folder (backup.go).
 	backupMu   sync.Mutex
 	backupCopy BackupCopy
+
+	relaunch func() // closes the app and starts it again; set by main
 }
 
 func New(db *sqlite.DB, p paths.Paths, log *slog.Logger) *App {

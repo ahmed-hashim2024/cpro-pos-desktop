@@ -142,6 +142,17 @@ func (s *server) routes(mux *http.ServeMux) {
 		http.ServeContent(w, r, filepath.Base(p), time.Time{}, f)
 		return written{}, nil
 	}))
+	mux.HandleFunc("POST /api/v1/backups/restore", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		if name := q(r, "name"); name != "" {
+			return nil, a.RestoreSaved(r.Context(), actor, name)
+		}
+		path, err := s.receiveBackup(w, r)
+		if err != nil {
+			return nil, err
+		}
+		defer os.Remove(path)
+		return nil, a.RestoreUpload(r.Context(), actor, path)
+	}))
 	mux.HandleFunc("GET /api/v1/audit", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
 		from, to := rangeOf(r)
 		return a.AuditLog(r.Context(), actor, from, to, q(r, "action"), q(r, "user"))
@@ -573,6 +584,18 @@ func (s *server) routes(mux *http.ServeMux) {
 			return fn(r)
 		})
 	}
+	// A new computer starts from the owner's backup instead of the setup form.
+	mux.HandleFunc("POST /api/v1/setup/restore", s.public(func(w http.ResponseWriter, r *http.Request) (any, error) {
+		if s.channel != app.ChannelApp {
+			return nil, &app.Error{Code: app.CodeForbidden, Msg: "متاح من جهاز الكاشير الرئيسي فقط"}
+		}
+		path, err := s.receiveBackup(w, r)
+		if err != nil {
+			return nil, err
+		}
+		defer os.Remove(path)
+		return nil, a.RestoreFirstRun(r.Context(), path)
+	}))
 	mux.HandleFunc("POST /api/v1/platform/connect", windowOnly(func(r *http.Request) (any, error) {
 		url, err := a.StartConnect(r.Context())
 		return map[string]string{"url": url}, err

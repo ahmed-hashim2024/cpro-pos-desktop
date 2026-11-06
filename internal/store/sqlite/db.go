@@ -147,6 +147,58 @@ func (db *DB) Tx(ctx context.Context, fn func(*sql.Tx) error) (err error) {
 	return tx.Commit()
 }
 
+// EditFile changes a database file that isn't open anywhere: a fresh backup
+// or a backup about to be restored. fn runs in one transaction; compact then
+// gives back the space of anything it dropped.
+func EditFile(ctx context.Context, path string, compact bool, fn func(*sql.Tx) error) error {
+	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path)+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := fn(tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil || !compact {
+		return err
+	}
+	_, err = db.ExecContext(ctx, `VACUUM`)
+	return err
+}
+
+// ReadFile opens a database file that isn't open anywhere, read-only.
+func ReadFile(path string) (*sql.DB, error) { return sql.Open("sqlite", dsn(path, true)) }
+
+// SchemaVersion is the latest migration applied to q.
+func SchemaVersion(ctx context.Context, q Querier) (int64, error) {
+	var v sql.NullInt64
+	err := q.QueryRowContext(ctx, `SELECT max(version_id) FROM goose_db_version`).Scan(&v)
+	return v.Int64, err
+}
+
+// ApplyPending puts a restored database in place of path, if one is waiting.
+// It must run before Open. A crash at any point leaves pending where it is,
+// so the next start simply does it again.
+func ApplyPending(path, pending string) error {
+	if _, err := os.Stat(pending); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, f := range []string{path + "-wal", path + "-shm"} {
+		if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return os.Rename(pending, path)
+}
+
 // CheckIntegrity opens a database file read-only and runs integrity_check.
 func CheckIntegrity(ctx context.Context, path string) (string, error) {
 	db, err := sql.Open("sqlite", dsn(path, true))

@@ -165,6 +165,12 @@ type Tunnel struct {
 // kept raw; the app decodes the fields it knows.
 type Sync struct {
 	Tunnel *Tunnel `json:"tunnel"`
+	// Domain is the account's menu address, even while its tunnel isn't up.
+	Domain string `json:"domain"`
+	// Profile is the restaurant's data as this account's computers saved it.
+	Profile json.RawMessage `json:"profile"`
+	// Returning means the account has been set up on a computer before.
+	Returning bool `json:"returning"`
 	// TunnelError says why the latest attempt to create the tunnel failed.
 	TunnelError string          `json:"tunnel_error"`
 	EMenu       json.RawMessage `json:"emenu"`
@@ -296,6 +302,14 @@ type Release struct {
 func (c *Client) Update(ctx context.Context, base, platform, version string) (Release, error) {
 	var r Release
 	return r, c.call(ctx, base, "update", map[string]any{"platform": platform, "version": version}, &r)
+}
+
+// SaveProfile keeps the restaurant's data on the account.
+func (c *Client) SaveProfile(ctx context.Context, base string, profile any) error {
+	var r struct {
+		OK bool `json:"ok"`
+	}
+	return c.call(ctx, base, "save_profile", map[string]any{"profile": profile}, &r)
 }
 
 func (c *Client) Refresh(ctx context.Context, base string) (Reply, error) {

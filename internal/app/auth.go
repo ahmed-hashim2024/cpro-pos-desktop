@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -60,6 +61,13 @@ func (a *App) Setup(ctx context.Context, in SetupInput, ch Channel) (Session, er
 	if ch != ChannelApp {
 		return Session{}, errForbidden
 	}
+	s := defaultSettings()
+	if profile := a.accountProfile(); profile != nil {
+		s = profile.Settings
+		in.RestaurantName = cmp.Or(in.RestaurantName, s.RestaurantName)
+		in.OwnerName = cmp.Or(in.OwnerName, profile.OwnerName)
+		in.Username = cmp.Or(in.Username, profile.Username)
+	}
 	if strings.TrimSpace(in.RestaurantName) == "" {
 		return Session{}, invalid("اسم المطعم مطلوب")
 	}
@@ -79,7 +87,6 @@ func (a *App) Setup(ctx context.Context, in SetupInput, ch Channel) (Session, er
 		if err != nil {
 			return err
 		}
-		s := defaultSettings()
 		s.RestaurantName = strings.TrimSpace(in.RestaurantName)
 		if err := a.saveSettings(ctx, tx, s); err != nil {
 			return err

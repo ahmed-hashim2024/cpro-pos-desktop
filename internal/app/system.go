@@ -147,6 +147,10 @@ func (a *App) BackupNow(ctx context.Context, actor Actor, reason string) (Backup
 	if err := a.db.BackupTo(ctx, path); err != nil {
 		return Backup{}, err
 	}
+	if err := a.packImages(ctx, path); err != nil {
+		os.Remove(path)
+		return Backup{}, err
+	}
 	integrity, err := sqlite.CheckIntegrity(ctx, path)
 	if err != nil || integrity != "ok" {
 		os.Remove(path)

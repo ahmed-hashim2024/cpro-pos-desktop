@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -66,6 +67,25 @@ func (s *server) auth(fn handlerFunc) http.HandlerFunc {
 		out, err := fn(w, r, actor)
 		s.respond(w, r, out, err)
 	}
+}
+
+// maxBackupUpload is well above any real backup; pictures count towards it.
+const maxBackupUpload = 2 << 30
+
+// receiveBackup saves an uploaded backup to a temporary file for the caller
+// to remove. A backup can be large, so it's never held in memory.
+func (s *server) receiveBackup(w http.ResponseWriter, r *http.Request) (string, error) {
+	f, err := os.CreateTemp("", "cpro-restore-*.db")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	n, err := io.Copy(f, http.MaxBytesReader(w, r.Body, maxBackupUpload))
+	if err != nil || n == 0 {
+		os.Remove(f.Name())
+		return "", &app.Error{Code: app.CodeInvalid, Msg: "أرفق ملف النسخة الاحتياطية"}
+	}
+	return f.Name(), nil
 }
 
 // written marks that a handler already wrote its own response (file download).

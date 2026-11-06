@@ -29,6 +29,8 @@ type Tenant struct {
 	EMenuSettings           map[string]any
 	Extra                   map[string]bool           // add-on features
 	Integrations            map[string]map[string]any // add-on settings
+	Profile                 map[string]any            // the POS app's restaurant data
+	Returning               bool
 	Ver                     int64
 	ValidFor                time.Duration
 	GraceDays               int
@@ -288,6 +290,9 @@ func (f *Fake) handle(method, deviceID string, ts int64, nonce, body, sig string
 			}
 		}
 		return out, nil
+	case "save_profile":
+		t.Profile, _ = data["profile"].(map[string]any)
+		return map[string]any{"ok": true}, nil
 	case "refresh":
 		if d.revoked {
 			return map[string]any{"revoked": true}, nil
@@ -323,6 +328,7 @@ func (f *Fake) reply(t *Tenant, deviceID, key string) map[string]any {
 	return map[string]any{
 		"license": f.Sign(claims),
 		"sync": map[string]any{"tunnel": t.Tunnel, "tunnel_error": t.TunnelError, "emenu": t.EMenuSettings, "integrations": t.Integrations,
+			"profile": t.Profile, "returning": t.Returning || t.Profile != nil,
 			"ver": t.Ver, "server_time": now.Unix()},
 	}
 }

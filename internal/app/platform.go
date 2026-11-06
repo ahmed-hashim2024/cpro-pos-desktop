@@ -44,12 +44,19 @@ type platformState struct {
 	Tunnel      *saas.Tunnel    `json:"tunnel"`
 	TunnelError string          `json:"tunnel_error"`
 	EMenu       json.RawMessage `json:"emenu"`
-	Ver         int64           `json:"ver"`
-	Revoked     bool            `json:"revoked"`
-	HighWater   int64           `json:"high_water"` // latest time seen (anti clock rollback)
-	LastRefresh int64           `json:"last_refresh"`
-	LastSync    string          `json:"last_sync"`
-	LastError   string          `json:"last_error"`
+	// The account's menu address, also while its tunnel isn't up.
+	AccountDomain string `json:"account_domain"`
+	// The restaurant's data on the account, and whether it was set up before.
+	Profile   json.RawMessage `json:"profile"`
+	Returning bool            `json:"returning"`
+	// Hash of the data last sent, so it only goes when it changes.
+	ProfileHash string `json:"profile_hash"`
+	Ver         int64  `json:"ver"`
+	Revoked     bool   `json:"revoked"`
+	HighWater   int64  `json:"high_water"` // latest time seen (anti clock rollback)
+	LastRefresh int64  `json:"last_refresh"`
+	LastSync    string `json:"last_sync"`
+	LastError   string `json:"last_error"`
 	// Add-on settings by feature key, as sent by the Platform.
 	Integrations map[string]json.RawMessage `json:"integrations"`
 	// Latest release seen (update.go) and when it was checked.
@@ -227,6 +234,8 @@ func (a *App) applyReply(ctx context.Context, r saas.Reply) error {
 		p.st.License = r.License
 		p.st.Revoked = false
 		p.st.Tunnel = r.Sync.Tunnel
+		p.st.AccountDomain = r.Sync.Domain
+		p.st.Profile, p.st.Returning = r.Sync.Profile, r.Sync.Returning
 		p.st.TunnelError = r.Sync.TunnelError
 		if len(r.Sync.EMenu) > 0 {
 			p.st.EMenu = r.Sync.EMenu
@@ -311,6 +320,7 @@ func (a *App) syncOnce(ctx context.Context, force bool) {
 	}
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	a.pushProfile(cctx, base)
 	if !force && !due {
 		remote, revoked, err := p.client.Version(cctx, base)
 		if err != nil {

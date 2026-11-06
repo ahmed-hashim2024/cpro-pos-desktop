@@ -33,10 +33,20 @@ var assets embed.FS
 // (saas integrations/cloudflare.py DESKTOP_TUNNEL_ORIGIN). Loopback only.
 const publicAddr = "127.0.0.1:8788"
 
+// relaunch is set when a restored backup needs the app to start again. It
+// happens only after run returns, so the new process finds the ports free.
+var relaunch bool
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "cpro:", err)
 		os.Exit(1)
+	}
+	if relaunch {
+		if err := native.Relaunch(); err != nil {
+			fmt.Fprintln(os.Stderr, "cpro: relaunch:", err)
+			os.Exit(1)
+		}
 	}
 }
 
@@ -54,6 +64,10 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	if err := sqlite.ApplyPending(p.DB, p.PendingRestore()); err != nil {
+		log.Error("apply restored backup", "err", err)
+		return err
+	}
 	db, err := sqlite.Open(ctx, p.DB)
 	if err != nil {
 		log.Error("open database", "err", err)
@@ -122,6 +136,11 @@ func run() error {
 	}
 	nat := native.New()
 	a.SetUpdateLauncher(native.UpdateLauncher(nat))
+	quit := native.Quitter(nat)
+	a.SetRelaunch(func() {
+		relaunch = true
+		quit()
+	})
 	go a.RunUpdateChecks(ctx)
 	return wails.Run(&options.App{
 		Title:     title,

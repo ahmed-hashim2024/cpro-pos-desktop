@@ -17,6 +17,9 @@ type Paths struct {
 	Images  string // item images
 }
 
+// PendingRestore is where a restored backup waits for the next start.
+func (p Paths) PendingRestore() string { return p.DB + ".restore" }
+
 // Resolve returns the per-user data paths. CPRO_DATA_DIR overrides the root
 // (used by tests and portable installs).
 func Resolve() (Paths, error) {

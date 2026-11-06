@@ -6,8 +6,11 @@ import (
 	"context"
 	"encoding/base64"
 	"os"
+	"os/exec"
+	"runtime"
+	"strings"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	wails "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type Native struct{ ctx context.Context }
@@ -22,7 +25,7 @@ func OnStartup(n *Native) func(context.Context) {
 
 // PickFolder asks for a folder on any drive. It returns "" if cancelled.
 func (n *Native) PickFolder(title string) (string, error) {
-	return runtime.OpenDirectoryDialog(n.ctx, runtime.OpenDialogOptions{Title: title, CanCreateDirectories: true})
+	return wails.OpenDirectoryDialog(n.ctx, wails.OpenDialogOptions{Title: title, CanCreateDirectories: true})
 }
 
 // SaveFile asks where to save and writes the base64 data there. It returns
@@ -32,9 +35,27 @@ func (n *Native) SaveFile(defaultName, dataBase64 string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	path, err := runtime.SaveFileDialog(n.ctx, runtime.SaveDialogOptions{DefaultFilename: defaultName})
+	path, err := wails.SaveFileDialog(n.ctx, wails.SaveDialogOptions{DefaultFilename: defaultName})
 	if err != nil || path == "" {
 		return "", err
 	}
 	return path, os.WriteFile(path, data, 0o644)
+}
+
+// Quitter closes the window. A package function, not a method, so it isn't
+// exposed to JavaScript.
+func Quitter(n *Native) func() {
+	return func() { wails.Quit(n.ctx) }
+}
+
+// Relaunch starts the app again. Call it after the window has closed.
+func Relaunch() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if bundle, _, ok := strings.Cut(exe, ".app/Contents/MacOS/"); ok && runtime.GOOS == "darwin" {
+		return exec.Command("open", "-n", bundle+".app").Start()
+	}
+	return exec.Command(exe).Start()
 }

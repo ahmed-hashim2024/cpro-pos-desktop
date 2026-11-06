@@ -478,16 +478,23 @@ func (a *App) restoreImages(files []*zip.File) int {
 		}
 		b, err := io.ReadAll(io.LimitReader(rc, maxImageFile))
 		rc.Close()
-		if err != nil || imageExt[http.DetectContentType(b)] != strings.ToLower(filepath.Ext(name)) {
-			continue
+		if err == nil && a.saveImage(name, p, b) {
+			n++
 		}
-		if err := os.WriteFile(p, b, 0o644); err != nil {
-			a.log.Error("restore image", "name", name, "err", err)
-			continue
-		}
-		n++
 	}
 	return n
+}
+
+// saveImage writes a picture that came from a file, if it really is a picture.
+func (a *App) saveImage(name, path string, b []byte) bool {
+	if imageExt[http.DetectContentType(b)] != strings.ToLower(filepath.Ext(name)) {
+		return false
+	}
+	if err := os.WriteFile(path, b, 0o644); err != nil {
+		a.log.Error("restore image", "name", name, "err", err)
+		return false
+	}
+	return true
 }
 
 func (r *transferRun) table(table string, rows [][]string, cur Settings) error {

@@ -74,12 +74,16 @@ func run(addr, ui string, fake bool, public string) error {
 		return err
 	}
 	defer closeLog()
+	if err := sqlite.ApplyPending(p.DB, p.PendingRestore()); err != nil {
+		return err
+	}
 	db, err := sqlite.Open(ctx, p.DB)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 	a := app.New(db, p, log)
+	a.SetRelaunch(stop) // run the devserver again by hand: it applies the restore on start
 	if _, err := a.EnsureTerminal(ctx); err != nil {
 		return err
 	}
