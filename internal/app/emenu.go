@@ -153,6 +153,9 @@ type PublicOffer struct {
 	Badge     string     `json:"badge"`
 	Highlight string     `json:"highlight"`
 	Item      PublicItem `json:"item"`
+	// The shade over the picture: a hex colour and 0-100.
+	OverlayColor   string `json:"overlay_color"`
+	OverlayOpacity int    `json:"overlay_opacity"`
 }
 
 type PublicFeatured struct {
@@ -485,16 +488,20 @@ func publicCatalog(ctx context.Context, q sqlite.Querier, img string) ([]PublicC
 
 	offers := []PublicOffer{}
 	isOffer := map[string]bool{}
-	rows, err = q.QueryContext(ctx, `SELECT id, kind, item_id, badge, highlight FROM emenu_offers ORDER BY kind, sort, created_at`)
+	rows, err = q.QueryContext(ctx, `SELECT id, kind, item_id, badge, highlight, overlay_color, overlay_opacity FROM emenu_offers ORDER BY kind, sort, created_at`)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	for rows.Next() {
 		var o PublicOffer
 		var itemID string
-		if err := rows.Scan(&o.ID, &o.Kind, &itemID, &o.Badge, &o.Highlight); err != nil {
+		var overlay string
+		if err := rows.Scan(&o.ID, &o.Kind, &itemID, &o.Badge, &o.Highlight, &overlay, &o.OverlayOpacity); err != nil {
 			rows.Close()
 			return nil, nil, nil, err
+		}
+		if o.OverlayColor, _ = presetHex(offerOverlays, overlay); o.OverlayColor == "" {
+			o.OverlayColor = "#000000"
 		}
 		isOffer[itemID] = true
 		if it, ok := byID[itemID]; ok {
@@ -700,6 +707,19 @@ func (a *App) expireOnlineOrders(ctx context.Context, q sqlite.Querier) error {
 	return err
 }
 
+// expireIfStale is for the screens that poll every few seconds. There's one
+// write connection, so a poll takes it only when something actually expired;
+// otherwise guests waiting on their orders would queue with the cashier's sales.
+func (a *App) expireIfStale(ctx context.Context) error {
+	var stale int
+	err := a.db.Read.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM online_orders WHERE status = 'pending' AND created_at < ?)`,
+		sqlite.FormatTime(a.now().Add(-onlineOrderTTL))).Scan(&stale)
+	if err != nil || stale == 0 {
+		return err
+	}
+	return a.expireOnlineOrders(ctx, a.db.Write)
+}
+
 // SubmitOnlineOrder records a guest's order for staff to accept. Prices are
 // always taken from the menu here, never from the guest.
 func (a *App) SubmitOnlineOrder(ctx context.Context, in OnlineOrderInput, ip string) (GuestOrder, error) {
@@ -864,10 +884,10 @@ func (a *App) GuestOrderStatus(ctx context.Context, token string) (GuestOrder, e
 	if token == "" || len(token) > 64 {
 		return GuestOrder{}, notFound("الطلب")
 	}
-	if err := a.expireOnlineOrders(ctx, a.db.Write); err != nil {
+	if err := a.expireIfStale(ctx); err != nil {
 		return GuestOrder{}, err
 	}
-	o, err := scanOnline(a.db.Write.QueryRowContext(ctx, `SELECT `+onlineCols+onlineFrom+` WHERE o.public_token = ?`, token))
+	o, err := scanOnline(a.db.Read.QueryRowContext(ctx, `SELECT `+onlineCols+onlineFrom+` WHERE o.public_token = ?`, token))
 	if err != nil {
 		return GuestOrder{}, noRows(err, "الطلب")
 	}
@@ -887,7 +907,7 @@ func (a *App) GuestOrderStatus(ctx context.Context, token string) (GuestOrder, e
 func (a *App) orderStage(ctx context.Context, orderID string) (string, error) {
 	var status, closedAt string
 	var lines, finished int
-	err := a.db.Write.QueryRowContext(ctx, `SELECT o.status, coalesce(o.closed_at,''),
+	err := a.db.Read.QueryRowContext(ctx, `SELECT o.status, coalesce(o.closed_at,''),
 		(SELECT count(*) FROM order_lines l WHERE l.order_id = o.id AND l.voided_at IS NULL),
 		(SELECT count(*) FROM order_lines l WHERE l.order_id = o.id AND l.voided_at IS NULL AND l.kitchen_status IN ('ready','served'))
 		FROM orders o WHERE o.id = ?`, orderID).Scan(&status, &closedAt, &lines, &finished)
@@ -930,10 +950,10 @@ func (a *App) Inbox(ctx context.Context, actor Actor) (Inbox, error) {
 	if err := actor.require(rbac.POSSell); err != nil {
 		return in, err
 	}
-	if err := a.expireOnlineOrders(ctx, a.db.Write); err != nil {
+	if err := a.expireIfStale(ctx); err != nil {
 		return in, err
 	}
-	rows, err := a.db.Write.QueryContext(ctx, `SELECT `+onlineCols+onlineFrom+` WHERE o.status = 'pending' ORDER BY o.created_at`)
+	rows, err := a.db.Read.QueryContext(ctx, `SELECT `+onlineCols+onlineFrom+` WHERE o.status = 'pending' ORDER BY o.created_at`)
 	if err != nil {
 		return in, err
 	}
@@ -950,7 +970,7 @@ func (a *App) Inbox(ctx context.Context, actor Actor) (Inbox, error) {
 	if err := rows.Err(); err != nil {
 		return in, err
 	}
-	rows, err = a.db.Write.QueryContext(ctx, `SELECT s.id, s.table_id, t.name, s.kind, s.note, s.created_at FROM service_requests s
+	rows, err = a.db.Read.QueryContext(ctx, `SELECT s.id, s.table_id, t.name, s.kind, s.note, s.created_at FROM service_requests s
 		JOIN dining_tables t ON t.id = s.table_id WHERE s.status = 'open' ORDER BY s.created_at`)
 	if err != nil {
 		return in, err

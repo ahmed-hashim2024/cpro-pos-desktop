@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Banknote, CreditCard, Plus, Search, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp, toastError } from '@/lib/store';
-import { money, moneyC, toMinor, minorInput, qty as fmtQty, toBP } from '@/lib/format';
+import { money, moneyC, toMinor, minorInput, toBP } from '@/lib/format';
 import { Button, Field, Input, Modal, Select, Textarea, Checkbox, cx } from '@/components/ui';
 import { T } from '@/lib/i18n';
 
@@ -348,4 +348,3 @@ export function PayDialog({ order, onClose, onPaid }) {
   );
 }
 
-export const describeLine = (l) => `${fmtQty(l.qty_milli)} × ${l.name}`;

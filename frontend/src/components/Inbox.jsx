@@ -36,6 +36,7 @@ export function useInbox() {
   const [data, setData] = useState(empty);
   const seen = useRef(null);
   const load = async () => {
+    if (document.hidden) return; // nothing to see; the next tick catches up
     try {
       const d = await api.get('/inbox');
       const ids = new Set([...d.orders.map((o) => o.id), ...d.requests.map((r) => r.id)]);

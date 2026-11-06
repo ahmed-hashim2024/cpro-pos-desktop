@@ -448,3 +448,40 @@ func TestServiceRequestsRebuilt(t *testing.T) {
 	}
 	f.must(err)
 }
+
+func TestOfferOverlay(t *testing.T) {
+	f := newFixture(t)
+	a, ctx, owner := f.app, f.ctx, f.owner
+	o := EMenuOffer{Name: "عرض", Kind: "single", Price: 100, Active: true, OverlayOpacity: 40, OverlayColor: "navy"}
+	saved, err := a.SaveOffer(ctx, owner, EMenuOfferInput{EMenuOffer: o, ImageData: pngData(t)})
+	f.must(err)
+	if saved.OverlayOpacity != 40 || saved.OverlayColor != "navy" {
+		t.Fatalf("saved: %+v", saved)
+	}
+	pub, err := a.PublicMenu(ctx, "")
+	f.must(err)
+	if got := pub.Offers[0]; got.OverlayOpacity != 40 || got.OverlayColor != "#0F1F3D" {
+		t.Fatalf("public: %+v", got)
+	}
+
+	// Showing or hiding an offer sends the row back: its shade survives.
+	saved.Active = false
+	again, err := a.SaveOffer(ctx, owner, EMenuOfferInput{EMenuOffer: saved})
+	f.must(err)
+	if again.OverlayOpacity != 40 || again.OverlayColor != "navy" {
+		t.Fatalf("after toggle: %+v", again)
+	}
+
+	// No shade at all is a valid choice; a free-form value isn't.
+	saved.OverlayOpacity = 0
+	if got, err := a.SaveOffer(ctx, owner, EMenuOfferInput{EMenuOffer: saved}); err != nil || got.OverlayOpacity != 0 {
+		t.Fatalf("zero: %+v %v", got, err)
+	}
+	for _, bad := range []EMenuOffer{{OverlayOpacity: 101, OverlayColor: "black"}, {OverlayOpacity: -1, OverlayColor: "black"}, {OverlayOpacity: 50, OverlayColor: "url(evil)"}} {
+		x := saved
+		x.OverlayOpacity, x.OverlayColor = bad.OverlayOpacity, bad.OverlayColor
+		if _, err := a.SaveOffer(ctx, owner, EMenuOfferInput{EMenuOffer: x}); code(err) != CodeInvalid {
+			t.Fatalf("accepted %+v: %v", bad, err)
+		}
+	}
+}

@@ -136,6 +136,14 @@ func (a *App) BackupNow(ctx context.Context, actor Actor, reason string) (Backup
 	now := a.now()
 	name := fmt.Sprintf("cpro-%s-%s.db", now.Format("20060102-150405"), reason)
 	path := filepath.Join(a.paths.Backups, name)
+	// Two backups in the same second keep both.
+	for i := 2; ; i++ {
+		if _, err := os.Stat(path); err != nil {
+			break
+		}
+		name = fmt.Sprintf("cpro-%s-%s-%d.db", now.Format("20060102-150405"), reason, i)
+		path = filepath.Join(a.paths.Backups, name)
+	}
 	if err := a.db.BackupTo(ctx, path); err != nil {
 		return Backup{}, err
 	}

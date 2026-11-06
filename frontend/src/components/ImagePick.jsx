@@ -5,8 +5,9 @@ import { T } from '@/lib/i18n';
 import { cropImage, openImage, prepareImage } from '@/lib/image';
 import { Button, Modal, cx } from '@/components/ui';
 
-// wide: items and offers. square: logo and app icon. round: category icons.
-const ASPECT = { wide: 4 / 3, square: 1, round: 1 };
+// wide: items. slider and family: offer banners, framed exactly as the guest
+// page shows them. square: logo and app icon. round: category icons.
+const ASPECT = { wide: 4 / 3, slider: 12 / 7, family: 5 / 2, square: 1, round: 1 };
 const MAX_ZOOM = 4;
 
 // Picks a picture, lets the owner frame it, then prepares it for upload
@@ -54,7 +55,7 @@ export function ImagePick({ onPick, label = T('صورة'), size = 'md', maxSide 
 
 function CropDialog({ img, shape, busy, onCancel, onDone }) {
   const frame = useRef(null);
-  const W = Math.min(shape === 'wide' ? 480 : 360, window.innerWidth - 96);
+  const W = Math.min(ASPECT[shape] > 1 ? 480 : 360, window.innerWidth - 96);
   const H = Math.round(W / ASPECT[shape]);
   const iw = img.naturalWidth;
   const ih = img.naturalHeight;

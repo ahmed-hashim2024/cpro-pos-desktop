@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ShieldAlert, ExternalLink, LogOut, Loader2, WifiOff, CalendarClock } from 'lucide-react';
 import { api } from '@/lib/api';
-import { useApp, toast, toastError } from '@/lib/store';
+import { useApp, toastError } from '@/lib/store';
 import { openExternal } from '@/lib/open';
 import { Button, cx } from '@/components/ui';
 import { T } from '@/lib/i18n';

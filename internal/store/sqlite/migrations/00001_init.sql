@@ -1,8 +1,6 @@
 -- +goose Up
--- Schema v1: restaurant core. Conventions:
---   ids are ULID TEXT; money columns are *_minor INTEGER (piasters);
---   quantities are *_milli INTEGER (1000 = 1); rates are *_bp (basis points);
---   timestamps are UTC RFC3339 TEXT.
+-- The whole schema of CPro POS. Money is stored in minor units and quantities
+-- in thousandths, as integers. Text ids are ULIDs; times are UTC text.
 
 CREATE TABLE settings (
     key        TEXT PRIMARY KEY,
@@ -42,7 +40,6 @@ CREATE TABLE sessions (
     expires_at   TEXT NOT NULL,
     revoked_at   TEXT
 );
-CREATE INDEX sessions_user ON sessions(user_id);
 
 CREATE TABLE kitchen_stations (
     id      TEXT PRIMARY KEY,
@@ -57,7 +54,7 @@ CREATE TABLE categories (
     kitchen_station_id TEXT REFERENCES kitchen_stations(id),
     sort               INTEGER NOT NULL DEFAULT 0,
     active             INTEGER NOT NULL DEFAULT 1
-);
+, image_path TEXT);
 
 CREATE TABLE items (
     id          TEXT PRIMARY KEY,
@@ -71,8 +68,7 @@ CREATE TABLE items (
     active      INTEGER NOT NULL DEFAULT 1,
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL
-);
-CREATE INDEX items_category ON items(category_id);
+, deleted_at TEXT, prep_minutes INTEGER NOT NULL DEFAULT 0);
 
 CREATE TABLE modifier_groups (
     id         TEXT PRIMARY KEY,
@@ -80,7 +76,7 @@ CREATE TABLE modifier_groups (
     min_select INTEGER NOT NULL DEFAULT 0,
     max_select INTEGER NOT NULL DEFAULT 0, -- 0 = unlimited
     active     INTEGER NOT NULL DEFAULT 1
-);
+, deleted_at TEXT);
 
 CREATE TABLE modifiers (
     id          TEXT PRIMARY KEY,
@@ -105,7 +101,7 @@ CREATE TABLE dining_tables (
     seats  INTEGER NOT NULL DEFAULT 4,
     sort   INTEGER NOT NULL DEFAULT 0,
     active INTEGER NOT NULL DEFAULT 1
-);
+, deleted_at TEXT, qr_token TEXT);
 
 CREATE TABLE customers (
     id         TEXT PRIMARY KEY,
@@ -128,8 +124,6 @@ CREATE TABLE shifts (
     opened_at           TEXT NOT NULL,
     closed_at           TEXT
 );
--- one open shift per cashier per terminal
-CREATE UNIQUE INDEX shifts_one_open ON shifts(user_id, device_id) WHERE status = 'open';
 
 CREATE TABLE cash_movements (
     id           TEXT PRIMARY KEY,
@@ -167,12 +161,9 @@ CREATE TABLE orders (
     idempotency_key       TEXT UNIQUE,
     created_at            TEXT NOT NULL,
     updated_at            TEXT NOT NULL,
-    closed_at             TEXT,
+    closed_at             TEXT, delivery_fee_minor INTEGER NOT NULL DEFAULT 0,
     UNIQUE (business_date, number)
 );
-CREATE INDEX orders_status ON orders(status);
-CREATE INDEX orders_shift ON orders(shift_id);
-CREATE INDEX orders_created ON orders(created_at);
 
 CREATE TABLE order_lines (
     id                    TEXT PRIMARY KEY,
@@ -195,9 +186,7 @@ CREATE TABLE order_lines (
     void_reason           TEXT NOT NULL DEFAULT '',
     voided_by             TEXT REFERENCES users(id),
     sort                  INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX order_lines_order ON order_lines(order_id);
-CREATE INDEX order_lines_kitchen ON order_lines(kitchen_status) WHERE voided_at IS NULL;
+, cost_minor INTEGER NOT NULL DEFAULT 0);
 
 CREATE TABLE order_line_modifiers (
     id          TEXT PRIMARY KEY,
@@ -219,10 +208,7 @@ CREATE TABLE payments (
     idempotency_key TEXT UNIQUE,
     created_at      TEXT NOT NULL
 );
-CREATE INDEX payments_order ON payments(order_id);
-CREATE INDEX payments_shift ON payments(shift_id);
 
--- Gapless invoice numbering per terminal; incremented inside the payment transaction.
 CREATE TABLE invoice_counters (
     device_id   TEXT PRIMARY KEY REFERENCES devices(id),
     prefix      TEXT NOT NULL,
@@ -246,7 +232,7 @@ CREATE TABLE refunds (
     user_id         TEXT NOT NULL REFERENCES users(id),
     idempotency_key TEXT UNIQUE,
     created_at      TEXT NOT NULL
-);
+, restock INTEGER NOT NULL DEFAULT 0, method TEXT NOT NULL DEFAULT 'cash');
 
 CREATE TABLE refund_lines (
     id            TEXT PRIMARY KEY,
@@ -256,7 +242,6 @@ CREATE TABLE refund_lines (
     amount_minor  INTEGER NOT NULL
 );
 
--- Append-only: the triggers below reject any UPDATE or DELETE.
 CREATE TABLE audit_log (
     id        TEXT PRIMARY KEY,
     at        TEXT NOT NULL,
@@ -268,8 +253,212 @@ CREATE TABLE audit_log (
     entity_id TEXT NOT NULL DEFAULT '',
     data      TEXT NOT NULL DEFAULT '{}'
 );
+
+CREATE TABLE ingredients (
+    id              TEXT PRIMARY KEY,
+    name            TEXT NOT NULL UNIQUE,
+    unit            TEXT NOT NULL CHECK (unit IN ('kg','g','l','ml','pcs')),
+    stock_milli     INTEGER NOT NULL DEFAULT 0,   -- may go negative: a kitchen never stops selling
+    min_stock_milli INTEGER NOT NULL DEFAULT 0,   -- low-stock threshold
+    cost_minor      INTEGER NOT NULL DEFAULT 0,   -- weighted average cost per 1 unit
+    active          INTEGER NOT NULL DEFAULT 1,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+);
+
+CREATE TABLE recipe_lines (
+    item_id       TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+    ingredient_id TEXT NOT NULL REFERENCES ingredients(id),
+    qty_milli     INTEGER NOT NULL CHECK (qty_milli > 0),
+    PRIMARY KEY (item_id, ingredient_id)
+);
+
+CREATE TABLE modifier_recipe_lines (
+    modifier_id   TEXT NOT NULL REFERENCES modifiers(id) ON DELETE CASCADE,
+    ingredient_id TEXT NOT NULL REFERENCES ingredients(id),
+    qty_milli     INTEGER NOT NULL CHECK (qty_milli > 0),
+    PRIMARY KEY (modifier_id, ingredient_id)
+);
+
+CREATE TABLE suppliers (
+    id         TEXT PRIMARY KEY,
+    name       TEXT NOT NULL UNIQUE,
+    phone      TEXT NOT NULL DEFAULT '',
+    notes      TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE purchases (
+    id          TEXT PRIMARY KEY,
+    supplier_id TEXT REFERENCES suppliers(id),
+    reference   TEXT NOT NULL DEFAULT '',   -- supplier invoice number
+    total_minor INTEGER NOT NULL,
+    notes       TEXT NOT NULL DEFAULT '',
+    user_id     TEXT NOT NULL REFERENCES users(id),
+    received_at TEXT NOT NULL
+);
+
+CREATE TABLE purchase_lines (
+    id             TEXT PRIMARY KEY,
+    purchase_id    TEXT NOT NULL REFERENCES purchases(id) ON DELETE CASCADE,
+    ingredient_id  TEXT NOT NULL REFERENCES ingredients(id),
+    qty_milli      INTEGER NOT NULL CHECK (qty_milli > 0),
+    unit_cost_minor INTEGER NOT NULL CHECK (unit_cost_minor >= 0),
+    total_minor    INTEGER NOT NULL
+);
+
+CREATE TABLE stock_counts (
+    id         TEXT PRIMARY KEY,
+    status     TEXT NOT NULL CHECK (status IN ('draft','posted','cancelled')),
+    notes      TEXT NOT NULL DEFAULT '',
+    created_by TEXT NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL,
+    posted_by  TEXT REFERENCES users(id),
+    posted_at  TEXT
+);
+
+CREATE TABLE stock_count_lines (
+    count_id       TEXT NOT NULL REFERENCES stock_counts(id) ON DELETE CASCADE,
+    ingredient_id  TEXT NOT NULL REFERENCES ingredients(id),
+    counted_milli  INTEGER NOT NULL CHECK (counted_milli >= 0),
+    expected_milli INTEGER,             -- set on post
+    cost_minor     INTEGER,             -- unit cost at post, to value the variance
+    PRIMARY KEY (count_id, ingredient_id)
+);
+
+CREATE TABLE stock_movements (
+    id            TEXT PRIMARY KEY,
+    ingredient_id TEXT NOT NULL REFERENCES ingredients(id),
+    kind          TEXT NOT NULL CHECK (kind IN ('opening','purchase','sale','refund','waste','adjustment','count')),
+    qty_milli     INTEGER NOT NULL,     -- signed: + in, - out
+    cost_minor    INTEGER NOT NULL,     -- unit cost used to value this movement
+    ref_type      TEXT NOT NULL DEFAULT '',
+    ref_id        TEXT NOT NULL DEFAULT '',
+    reason        TEXT NOT NULL DEFAULT '',
+    user_id       TEXT REFERENCES users(id),
+    created_at    TEXT NOT NULL
+);
+
+CREATE TABLE waste_entries (
+    id            TEXT PRIMARY KEY,
+    item_id       TEXT REFERENCES items(id),
+    ingredient_id TEXT REFERENCES ingredients(id),
+    qty_milli     INTEGER NOT NULL CHECK (qty_milli > 0),
+    reason        TEXT NOT NULL,
+    cost_minor    INTEGER NOT NULL,     -- total cost lost
+    user_id       TEXT NOT NULL REFERENCES users(id),
+    created_at    TEXT NOT NULL,
+    CHECK ((item_id IS NULL) <> (ingredient_id IS NULL))
+);
+
+CREATE TABLE shift_recounts (
+    id                  TEXT PRIMARY KEY,
+    shift_id            TEXT NOT NULL REFERENCES shifts(id),
+    previous_minor      INTEGER NOT NULL,
+    counted_minor       INTEGER NOT NULL,
+    reason              TEXT NOT NULL,
+    user_id             TEXT NOT NULL REFERENCES users(id),
+    created_at          TEXT NOT NULL
+);
+
+CREATE TABLE emenu_offers (
+    id         TEXT PRIMARY KEY,
+    kind       TEXT NOT NULL CHECK (kind IN ('single','family')),
+    item_id    TEXT NOT NULL UNIQUE REFERENCES items(id) ON DELETE CASCADE,
+    badge      TEXT NOT NULL DEFAULT '',   -- small label, e.g. «جديد»
+    highlight  TEXT NOT NULL DEFAULT '',   -- round sticker, e.g. «وفّر 20%»
+    sort       INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+, overlay_opacity INTEGER NOT NULL DEFAULT 75, overlay_color TEXT NOT NULL DEFAULT 'black');
+
+CREATE TABLE emenu_featured (
+    item_id TEXT PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+    badge   TEXT NOT NULL DEFAULT '' CHECK (badge IN ('','bestseller','hot_deal','new')),
+    sort    INTEGER NOT NULL DEFAULT 0
+, note TEXT NOT NULL DEFAULT '', deal_price_minor INTEGER NOT NULL DEFAULT 0);
+
+CREATE TABLE online_orders (
+    id            TEXT PRIMARY KEY,
+    public_token  TEXT NOT NULL UNIQUE,
+    type          TEXT NOT NULL CHECK (type IN ('dine_in','takeaway','delivery')),
+    table_id      TEXT REFERENCES dining_tables(id),
+    customer_id   TEXT REFERENCES customers(id),
+    customer_name TEXT NOT NULL DEFAULT '',
+    phone         TEXT NOT NULL DEFAULT '',
+    address       TEXT NOT NULL DEFAULT '',
+    notes         TEXT NOT NULL DEFAULT '',
+    lines_json    TEXT NOT NULL,
+    total_minor   INTEGER NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','rejected','expired')),
+    order_id      TEXT REFERENCES orders(id),
+    reject_reason TEXT NOT NULL DEFAULT '',
+    ip            TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL,
+    decided_at    TEXT,
+    decided_by    TEXT REFERENCES users(id)
+, eta_minutes INTEGER NOT NULL DEFAULT 0);
+
+CREATE TABLE emenu_offer_items (
+    offer_id TEXT NOT NULL REFERENCES emenu_offers(id) ON DELETE CASCADE,
+    item_id  TEXT NOT NULL REFERENCES items(id),
+    qty      INTEGER NOT NULL CHECK (qty BETWEEN 1 AND 50),
+    sort     INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (offer_id, item_id)
+);
+
+CREATE TABLE service_requests (
+    id         TEXT PRIMARY KEY,
+    table_id   TEXT NOT NULL REFERENCES dining_tables(id),
+    kind       TEXT NOT NULL CHECK (kind IN ('waiter','bill','issue')),
+    note       TEXT NOT NULL DEFAULT '',
+    status     TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','done')),
+    created_at TEXT NOT NULL,
+    done_by    TEXT REFERENCES users(id),
+    done_at    TEXT
+);
+
+CREATE INDEX sessions_user ON sessions(user_id);
+
+CREATE INDEX items_category ON items(category_id);
+
+CREATE UNIQUE INDEX shifts_one_open ON shifts(user_id, device_id) WHERE status = 'open';
+
+CREATE INDEX orders_status ON orders(status);
+
+CREATE INDEX orders_shift ON orders(shift_id);
+
+CREATE INDEX orders_created ON orders(created_at);
+
+CREATE INDEX order_lines_order ON order_lines(order_id);
+
+CREATE INDEX order_lines_kitchen ON order_lines(kitchen_status) WHERE voided_at IS NULL;
+
+CREATE INDEX payments_order ON payments(order_id);
+
+CREATE INDEX payments_shift ON payments(shift_id);
+
 CREATE INDEX audit_log_at ON audit_log(at);
+
 CREATE INDEX audit_log_entity ON audit_log(entity, entity_id);
+
+CREATE UNIQUE INDEX stock_counts_one_draft ON stock_counts(status) WHERE status = 'draft';
+
+CREATE INDEX stock_movements_ingredient ON stock_movements(ingredient_id, created_at);
+
+CREATE INDEX stock_movements_kind ON stock_movements(kind, created_at);
+
+CREATE INDEX stock_movements_ref ON stock_movements(ref_type, ref_id);
+
+CREATE INDEX shift_recounts_shift ON shift_recounts(shift_id, created_at);
+
+CREATE UNIQUE INDEX dining_tables_qr ON dining_tables(qr_token);
+
+CREATE INDEX online_orders_status ON online_orders(status, created_at);
+
+CREATE INDEX emenu_offer_items_item ON emenu_offer_items(item_id);
+
+CREATE INDEX service_requests_open ON service_requests(status, created_at);
 
 -- +goose StatementBegin
 CREATE TRIGGER audit_log_no_update BEFORE UPDATE ON audit_log
@@ -281,6 +470,15 @@ CREATE TRIGGER audit_log_no_delete BEFORE DELETE ON audit_log
 BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
 -- +goose StatementEnd
 
+-- What the screens filter and join on most: an order's add-ons and refunds,
+-- a shift's cash, a purchase's lines, sales by item, add-ons by group.
+CREATE INDEX order_line_modifiers_line ON order_line_modifiers(line_id);
+CREATE INDEX order_lines_item ON order_lines(item_id);
+CREATE INDEX refunds_invoice ON refunds(invoice_id);
+CREATE INDEX refund_lines_refund ON refund_lines(refund_id);
+CREATE INDEX cash_movements_shift ON cash_movements(shift_id);
+CREATE INDEX purchase_lines_purchase ON purchase_lines(purchase_id);
+CREATE INDEX modifiers_group ON modifiers(group_id);
+CREATE INDEX orders_table_open ON orders(table_id) WHERE status IN ('open','held');
+
 -- +goose Down
--- Intentionally empty: customer data is never migrated down.
--- Roll back by restoring the automatic pre-migration backup.

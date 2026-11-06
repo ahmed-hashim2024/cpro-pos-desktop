@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Minus, Plus, X } from 'lucide-react';
+import { overlayGradient } from '../lib/overlay';
 
 export const cx = (...c) => c.filter(Boolean).join(' ');
 
@@ -70,10 +71,6 @@ export const waLink = (n) => `https://wa.me/${String(n).replace(/[^\d]/g, '')}`;
 
 export const lineTotal = (l) => (l.item.price_minor + l.mods.reduce((s, m) => s + m.price_minor, 0)) * l.qty;
 
-export function allItems(menu) {
-  return [...menu.categories.flatMap((c) => c.items), ...menu.offers.map((o) => o.item)];
-}
-
 // ---- small pieces ----------------------------------------------------------------
 
 // The price, with the old one struck out next to it when there is a discount.
@@ -84,6 +81,13 @@ export function PriceTag({ item, money, className, wasClassName = 'text-mut' }) 
       {item.was_price_minor > item.price_minor && <s className={cx('num text-[0.75em] font-medium', wasClassName)}>{money(item.was_price_minor)}</s>}
     </span>
   );
+}
+
+// Colours and shade of an offer card. The colour is only ever a preset the
+// server sends, but it reaches a style attribute, so it's checked here too.
+export function offerShade(offer) {
+  const hex = validHex(offer.overlay_color) ? offer.overlay_color : '#000000';
+  return { card: { backgroundColor: hex }, shade: { backgroundImage: overlayGradient(hex, offer.overlay_opacity ?? 75) } };
 }
 
 export function Thumb({ item, className }) {

@@ -42,6 +42,11 @@ var backgrounds = []ColorPreset{
 	{"cream", "#F7EFE4"}, {"white", "#F4F4F6"}, {"fresh", "#F3F8F4"}, {"midnight", "#121110"}, {"espresso", "#1A120D"},
 }
 
+// The shade over an offer's picture. All dark, so white text stays readable.
+var offerOverlays = []ColorPreset{
+	{"black", "#000000"}, {"brown", "#2B1A10"}, {"navy", "#0F1F3D"}, {"green", "#0F3D2E"}, {"red", "#4A1010"}, {"purple", "#2A1648"},
+}
+
 func presetHex(list []ColorPreset, id string) (string, bool) {
 	for _, p := range list {
 		if p.ID == id {
@@ -289,6 +294,9 @@ type EMenuOffer struct {
 	PrepMinutes int                 `json:"prep_minutes"`
 	Active      bool                `json:"active"`
 	Contents    []EMenuOfferContent `json:"contents"`
+	// OverlayOpacity (0-100) and OverlayColor (a preset id) shade the picture.
+	OverlayOpacity int    `json:"overlay_opacity"`
+	OverlayColor   string `json:"overlay_color"`
 }
 
 type EMenuFeatured struct {
@@ -316,11 +324,12 @@ type EMenuAdmin struct {
 	Featured    []EMenuFeatured `json:"featured"`
 	Buttons     []ColorPreset   `json:"button_colors"`
 	Backgrounds []ColorPreset   `json:"backgrounds"`
+	Overlays    []ColorPreset   `json:"overlays"`
 	Status      EMenuStatus     `json:"status"`
 }
 
 func (a *App) EMenuAdmin(ctx context.Context, actor Actor) (EMenuAdmin, error) {
-	out := EMenuAdmin{Buttons: buttonColors, Backgrounds: backgrounds}
+	out := EMenuAdmin{Buttons: buttonColors, Backgrounds: backgrounds, Overlays: offerOverlays}
 	if err := actor.require(rbac.CatalogManage); err != nil {
 		return out, err
 	}
@@ -361,7 +370,7 @@ func loadOffers(ctx context.Context, q sqlite.Querier, imgPrefix string, publicO
 		where += ` AND i.active = 1 AND EXISTS (SELECT 1 FROM categories c WHERE c.id = i.category_id AND c.active = 1)`
 	}
 	rows, err := q.QueryContext(ctx, `SELECT o.id, o.kind, o.item_id, i.name, i.description, i.price_minor, coalesce(i.image_path,''),
-		o.badge, o.highlight, o.sort, i.prep_minutes, i.active FROM emenu_offers o JOIN items i ON i.id = o.item_id
+		o.badge, o.highlight, o.sort, i.prep_minutes, i.active, o.overlay_opacity, o.overlay_color FROM emenu_offers o JOIN items i ON i.id = o.item_id
 		WHERE `+where+` ORDER BY o.kind, o.sort, o.created_at`)
 	if err != nil {
 		return nil, err
@@ -371,7 +380,7 @@ func loadOffers(ctx context.Context, q sqlite.Querier, imgPrefix string, publicO
 	for rows.Next() {
 		var o EMenuOffer
 		var active int64
-		if err := rows.Scan(&o.ID, &o.Kind, &o.ItemID, &o.Name, &o.Description, &o.Price, &o.Image, &o.Badge, &o.Highlight, &o.Sort, &o.PrepMinutes, &active); err != nil {
+		if err := rows.Scan(&o.ID, &o.Kind, &o.ItemID, &o.Name, &o.Description, &o.Price, &o.Image, &o.Badge, &o.Highlight, &o.Sort, &o.PrepMinutes, &active, &o.OverlayOpacity, &o.OverlayColor); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -456,6 +465,15 @@ func (a *App) SaveOffer(ctx context.Context, actor Actor, in EMenuOfferInput) (E
 	if o.PrepMinutes < 0 || o.PrepMinutes > maxPrepMinutes {
 		return o, invalid("وقت التحضير غير صحيح")
 	}
+	if o.OverlayColor == "" {
+		o.OverlayColor = "black"
+	}
+	if _, ok := presetHex(offerOverlays, o.OverlayColor); !ok {
+		return o, invalid("اختر لون الخلفية من الألوان المتاحة")
+	}
+	if o.OverlayOpacity < 0 || o.OverlayOpacity > 100 {
+		return o, invalid("درجة الغمقان غير صحيحة")
+	}
 	if len(o.Contents) > maxOfferContents {
 		return o, invalid(fmt.Sprintf("الحد الأقصى %d أصناف في العرض", maxOfferContents))
 	}
@@ -484,8 +502,8 @@ func (a *App) SaveOffer(ctx context.Context, actor Actor, in EMenuOfferInput) (E
 				o.PrepMinutes, sqlite.Int(o.Active), now, now); err != nil {
 				return err
 			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO emenu_offers(id, kind, item_id, badge, highlight, sort, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)`,
-				o.ID, o.Kind, o.ItemID, o.Badge, o.Highlight, o.Sort, now, now); err != nil {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO emenu_offers(id, kind, item_id, badge, highlight, sort, overlay_opacity, overlay_color, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+				o.ID, o.Kind, o.ItemID, o.Badge, o.Highlight, o.Sort, o.OverlayOpacity, o.OverlayColor, now, now); err != nil {
 				return err
 			}
 		} else {
@@ -502,8 +520,8 @@ func (a *App) SaveOffer(ctx context.Context, actor Actor, in EMenuOfferInput) (E
 					return err
 				}
 			}
-			if _, err := tx.ExecContext(ctx, `UPDATE emenu_offers SET kind=?, badge=?, highlight=?, sort=?, updated_at=? WHERE id=?`,
-				o.Kind, o.Badge, o.Highlight, o.Sort, now, o.ID); err != nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE emenu_offers SET kind=?, badge=?, highlight=?, sort=?, overlay_opacity=?, overlay_color=?, updated_at=? WHERE id=?`,
+				o.Kind, o.Badge, o.Highlight, o.Sort, o.OverlayOpacity, o.OverlayColor, now, o.ID); err != nil {
 				return err
 			}
 		}

@@ -271,7 +271,7 @@ export function useLoad(fn, deps = [], { poll } = {}) {
   useEffect(() => {
     reload();
     if (!poll) return;
-    const t = setInterval(() => reload(true), poll);
+    const t = setInterval(() => { if (!document.hidden) reload(true); }, poll);
     return () => clearInterval(t);
   }, [reload, poll]);
   return { ...state, reload };

@@ -23,8 +23,7 @@
   --font-sans: "IBM Plex Sans Arabic", system-ui, sans-serif;
 }
 
-:root { --p: #e8590c; --onp: #ffffff; --a: #e8590c; --fade: right; }
-[dir="rtl"] { --fade: left; }
+:root { --p: #e8590c; --onp: #ffffff; --a: #e8590c; }
 [data-theme="cream"] {
   --bg: #f7efe4; --card: #ffffff; --card2: #f1e6d7; --fg: #22180f; --mut: #7a6a5a; --line: #eadccb; color-scheme: light;
 }
@@ -58,11 +57,9 @@ body { font-family: var(--font-sans); min-height: 100dvh; }
 .anim-pop { animation: pop .45s cubic-bezier(.2, .8, .2, 1); }
 @keyframes swal { 0% { transform: scale(.7); opacity: 0; } 45% { transform: scale(1.04); opacity: 1; } 70% { transform: scale(.98); } 100% { transform: scale(1); } }
 @keyframes rise { from { transform: translateY(14px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-@keyframes float { 0%, 100% { margin-top: 0; } 50% { margin-top: -5px; } }
 @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--p) 45%, transparent); } 100% { box-shadow: 0 0 0 14px transparent; } }
 .anim-swal { animation: swal .38s cubic-bezier(.2, .8, .2, 1); }
 .anim-rise { animation: rise .45s cubic-bezier(.2, .8, .2, 1) both; }
-.anim-float { animation: float 2.6s ease-in-out infinite; }
 .anim-pulse { animation: pulse-ring 1.6s ease-out infinite; }
 .skeleton {
   background: linear-gradient(90deg, var(--card2) 25%, var(--line) 50%, var(--card2) 75%);

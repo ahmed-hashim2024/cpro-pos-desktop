@@ -34,6 +34,11 @@ owner's own domain.
   the update template comes prefilled with current data. Every row is
   validated, and errors are shown by row and column. Nothing is saved unless
   the whole file is valid.
+- **Moving to another computer:** Import → Move data gives the owner one file
+  with the menu and its pictures, stock, customers, sales history and the
+  restaurant's settings. Users, devices and the license stay behind; old sales
+  arrive under the owner doing the move. A backup comes first, one bad row
+  saves nothing, and uploading the same file twice adds nothing.
 - **Languages:** Arabic (RTL), English and French (LTR), chosen per device.
 - **Connecting and license:** the first screen is «Continue with Google».
   It opens the Platform in the browser (sign up or log in), and once the
@@ -70,9 +75,6 @@ owner's own domain.
     against the normal one struck out. The POS keeps the normal price.
   - Every picture is framed by the owner when picked (drag and zoom).
   - Lists have unique positions: saving one in a taken place moves the rest.
-  - Guests can sign in with phone + password (bcrypt; hashed session tokens,
-    separate from staff sessions, rate limited). Orders placed while signed
-    in are attached to that customer.
   - Three ways in: the online link (browsing and delivery), each table's QR
     code (printable, regenerable; the table is known) and one shared hall QR
     at `/hall` (the guest picks the table from a list).

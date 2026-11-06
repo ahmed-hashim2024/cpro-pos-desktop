@@ -514,6 +514,27 @@ func (s *server) routes(mux *http.ServeMux) {
 		}
 		return a.Import(r.Context(), actor, r.PathValue("entity"), app.ImportMode(q(r, "mode")), bytes.NewReader(file), q(r, "lang"))
 	}))
+	// Moving the restaurant to another computer (owner only, see app/transfer.go).
+	mux.HandleFunc("GET /api/v1/transfer", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		return a.TransferSummary(r.Context(), actor, q(r, "lang"))
+	}))
+	mux.HandleFunc("GET /api/v1/transfer/export", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		b, name, err := a.ExportTransfer(r.Context(), actor)
+		if err != nil {
+			return nil, err
+		}
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+		w.Write(b)
+		return written{}, nil
+	}))
+	mux.HandleFunc("POST /api/v1/transfer/import", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		file, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 500<<20))
+		if err != nil || len(file) == 0 {
+			return nil, &app.Error{Code: app.CodeInvalid, Msg: "أرفق ملف نقل البيانات"}
+		}
+		return a.ImportTransfer(r.Context(), actor, file)
+	}))
 	mux.HandleFunc("GET /api/v1/import/{entity}/export", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
 		b, name, err := a.ExportData(r.Context(), actor, r.PathValue("entity"), q(r, "lang"))
 		if err != nil {

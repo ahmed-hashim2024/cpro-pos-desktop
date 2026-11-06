@@ -12,10 +12,12 @@ import { ImagePick } from '@/components/ImagePick';
 import { T } from '@/lib/i18n';
 import { openExternal, copyText } from '@/lib/open';
 import { makeAppIcons } from '@/lib/image';
+import { overlayGradient } from '@/lib/overlay';
 
 // Recommended picture sizes (they match how the guest page shows them).
 export const SIZES = {
-  offer: { side: 1600, hint: '1200 × 900 px — خلي الأكل في نص الصورة' },
+  slider: { side: 1600, hint: '1200 × 700 px — الصورة بتملى الكارت كله' },
+  family: { side: 1600, hint: '1200 × 480 px — الصورة بتملى البانر كله' },
   category: { side: 512, hint: '400 × 400 px — مربعة' },
   logo: { side: 512, hint: '400 × 400 px — مربعة' },
   appIcon: { hint: '512 × 512 px — مربعة، من غير كلام صغير' },
@@ -94,10 +96,10 @@ export default function EMenuDesigner() {
           <Swatches label={T('لون الخلفية')} list={d.adm.backgrounds} value={draft.background} onChange={set('background')} className="mt-4" big />
         </Card>
 
-        <OffersCard kind="single" offers={d.adm.offers.filter((o) => o.kind === 'single')} allOffers={d.adm.offers} items={d.items} onChanged={refresh} />
+        <OffersCard kind="single" offers={d.adm.offers.filter((o) => o.kind === 'single')} allOffers={d.adm.offers} items={d.items} overlays={d.adm.overlays} onChanged={refresh} />
         <CategoryImages cats={d.cats} onChanged={refresh} />
         <FeaturedCard featured={d.adm.featured} items={d.items} offers={d.adm.offers} onChanged={refresh} />
-        <OffersCard kind="family" offers={d.adm.offers.filter((o) => o.kind === 'family')} allOffers={d.adm.offers} items={d.items} onChanged={refresh} />
+        <OffersCard kind="family" offers={d.adm.offers.filter((o) => o.kind === 'family')} allOffers={d.adm.offers} items={d.items} overlays={d.adm.overlays} onChanged={refresh} />
 
         <Card title={T('الطلب من المنيو')} icon={ShoppingBag}>
           {!d.adm.status.ordering && (
@@ -246,7 +248,7 @@ function isLight(hex) {
 
 // ---- offers ---------------------------------------------------------------------------
 
-function OffersCard({ kind, offers, allOffers, items, onChanged }) {
+function OffersCard({ kind, offers, allOffers, items, overlays, onChanged }) {
   const [edit, setEdit] = useState(null);
   const open = (o, i) => setEdit({ ...o, price: minorInput(o.price_minor), sort: i + 1, prep: o.prep_minutes || '' });
   const family = kind === 'family';
@@ -255,7 +257,7 @@ function OffersCard({ kind, offers, allOffers, items, onChanged }) {
   };
   return (
     <Card title={family ? T('العروض المجمعة (للعيلة)') : T('عروض السلايدر (للفرد)')} icon={family ? Users : Images}
-      actions={<Button size="sm" icon={Plus} onClick={() => setEdit({ kind, name: '', description: '', price: '', badge: '', highlight: '', sort: offers.length + 1, prep: '', contents: [], active: true })}>{T('عرض جديد')}</Button>}>
+      actions={<Button size="sm" icon={Plus} onClick={() => setEdit({ kind, name: '', description: '', price: '', badge: '', highlight: '', sort: offers.length + 1, prep: '', contents: [], overlay_opacity: 75, overlay_color: 'black', active: true })}>{T('عرض جديد')}</Button>}>
       <p className="mb-3 text-sm text-muted">
         {family ? T('بانرات عريضة تحت الأصناف المميزة — للوجبات المجمعة والعروض العائلية.') : T('الصور المتحركة أعلى المنيو. الضيف يدوس «اطلب الآن» فيضاف العرض للسلة بنفس السعر اللي هنا.')}
       </p>
@@ -276,7 +278,7 @@ function OffersCard({ kind, offers, allOffers, items, onChanged }) {
           </div>
         ))}
       </div>
-      {edit && <OfferDialog offer={edit} count={offers.length + (edit.id ? 0 : 1)} allOffers={allOffers} items={items} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); onChanged(); }} />}
+      {edit && <OfferDialog offer={edit} count={offers.length + (edit.id ? 0 : 1)} allOffers={allOffers} items={items} overlays={overlays} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); onChanged(); }} />}
     </Card>
   );
 }
@@ -284,7 +286,9 @@ function OffersCard({ kind, offers, allOffers, items, onChanged }) {
 // «2 مارجريتا + 2 برجر»
 const contentsLabel = (list) => (list || []).map((c) => `${c.qty} ${c.name}`).join(' + ');
 
-function OfferDialog({ offer, count, allOffers, items, onClose, onSaved }) {
+const overlayNames = { black: 'أسود', brown: 'بني', navy: 'كحلي', green: 'أخضر', red: 'أحمر', purple: 'بنفسجي' };
+
+function OfferDialog({ offer, count, allOffers, items, overlays, onClose, onSaved }) {
   const [f, setF] = useState(offer);
   const [image, setImage] = useState('');
   const [busy, run] = useAction();
@@ -303,6 +307,7 @@ function OfferDialog({ offer, count, allOffers, items, onClose, onSaved }) {
     try { await api.del(`/emenu/offers/${f.id}`); toast(T('تم الحذف')); onSaved(); } catch (e) { toastError(e); }
   };
   const src = image || f.image;
+  const overlayHex = overlays.find((c) => c.id === f.overlay_color)?.hex || '#000000';
   return (
     <Modal open onClose={onClose} title={f.id ? f.name : family ? T('عرض مجمع جديد') : T('عرض سلايدر جديد')} size="lg"
       footer={<>{f.id && <Button variant="danger-soft" icon={Trash2} className="me-auto" onClick={remove}>{T('حذف')}</Button>}<Button variant="secondary" onClick={onClose}>{T('إلغاء')}</Button><Button busy={busy} onClick={save}>{T('حفظ')}</Button></>}>
@@ -314,7 +319,7 @@ function OfferDialog({ offer, count, allOffers, items, onClose, onSaved }) {
             <Field label={T('السعر')}><Input className="num" value={f.price} onChange={set('price')} inputMode="decimal" /></Field>
             <Field label={T('الترتيب')}><PositionSelect count={count} value={f.sort} onChange={(v) => setF({ ...f, sort: v })} /></Field>
             <Field label={T('شارة صغيرة')} hint={T('مثلاً: ساخن وطازة')}><Input value={f.badge} maxLength={20} onChange={set('badge')} /></Field>
-            {family && <Field label={T('ملصق دائري')} hint={T('مثلاً: وفّر 20%')}><Input value={f.highlight} maxLength={16} onChange={set('highlight')} /></Field>}
+            {family && <Field label={T('ملصق التوفير')} hint={T('شارة صغيرة في ركن الصورة، مثلاً: وفّر 20%')}><Input value={f.highlight} maxLength={16} onChange={set('highlight')} /></Field>}
             <Field label={T('وقت التحضير التقديري (دقيقة)')} hint={T('لو سبته فاضي هيتحسب من أطول صنف في العرض')}><Input className="num" type="number" min={0} max={240} value={f.prep} onChange={set('prep')} /></Field>
           </div>
           <OfferContents offer={f} items={items} allOffers={allOffers} onChange={(next) => setF(next)} />
@@ -322,10 +327,31 @@ function OfferDialog({ offer, count, allOffers, items, onClose, onSaved }) {
           <p className="text-xs text-muted">{T('العرض بيتسجل كصنف في قسم «العروض»، فيتباع من نقطة البيع ويطلع في التقارير والمطبخ زي أي صنف.')}</p>
         </div>
         <div className="grid content-start justify-items-center gap-2">
-          {src ? <img src={src} alt="" className="aspect-[4/3] w-full rounded-2xl border border-line object-cover" />
-            : <span className="flex aspect-[4/3] w-full items-center justify-center rounded-2xl bg-surface-2 text-sm text-muted">{T('بدون صورة')}</span>}
-          <ImagePick label={src ? T('تغيير الصورة') : T('اختيار صورة')} onPick={setImage} maxSide={SIZES.offer.side} shape="wide" />
-          <span className="text-center text-xs text-muted" dir="auto">{T('المقاس المناسب')}: {T(SIZES.offer.hint)}</span>
+          <div className={cx('relative w-full overflow-hidden rounded-2xl border border-line', family ? 'aspect-[5/2]' : 'aspect-[12/7]')} style={{ backgroundColor: overlayHex }}>
+            {src && <img src={src} alt="" className="absolute inset-0 size-full object-cover" />}
+            <div className="absolute inset-0 flex flex-col justify-end p-2.5 text-white" style={{ backgroundImage: overlayGradient(overlayHex, f.overlay_opacity) }}>
+              <span className="line-clamp-1 text-sm font-black drop-shadow" dir="auto">{f.name || T('اسم العرض')}</span>
+              {f.price && <span className="num text-xs font-bold drop-shadow">{f.price}</span>}
+            </div>
+          </div>
+          <ImagePick label={src ? T('تغيير الصورة') : T('اختيار صورة')} onPick={setImage} maxSide={1600} shape={family ? 'family' : 'slider'} />
+          <label className="grid w-full gap-1 text-sm font-semibold">
+            <span className="flex justify-between">{T('درجة الغمقان')}<span className="num text-muted">{f.overlay_opacity}%</span></span>
+            <input type="range" min={0} max={100} step={5} value={f.overlay_opacity} onChange={(e) => setF({ ...f, overlay_opacity: Number(e.target.value) })} className="accent-[var(--primary)]" />
+          </label>
+          <div className="w-full">
+            <div className="mb-1.5 text-sm font-semibold">{T('لون الخلفية')}</div>
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={T('لون الخلفية')}>
+              {overlays.map((c) => (
+                <button key={c.id} type="button" role="radio" aria-checked={f.overlay_color === c.id} aria-label={T(overlayNames[c.id] || c.id)} title={T(overlayNames[c.id] || c.id)}
+                  onClick={() => setF({ ...f, overlay_color: c.id })}
+                  className={cx('flex size-8 items-center justify-center rounded-full border border-black/10 shadow-inner', f.overlay_color === c.id && 'ring-2 ring-primary ring-offset-2 ring-offset-surface')} style={{ background: c.hex }}>
+                  {f.overlay_color === c.id && <Check className="size-4 text-white" aria-hidden />}
+                </button>
+              ))}
+            </div>
+          </div>
+          <span className="text-center text-xs text-muted" dir="auto">{T('المقاس المناسب')}: {T(SIZES[family ? 'family' : 'slider'].hint)}</span>
         </div>
       </div>
     </Modal>

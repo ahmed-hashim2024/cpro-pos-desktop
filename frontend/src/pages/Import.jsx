@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react';
 import {
   FileSpreadsheet, Download, Paperclip, Upload, CheckCircle2, AlertTriangle, UtensilsCrossed, Layers, Wheat,
-  Users, Store, Armchair, FilePlus2, FilePen, X, FileDown, Loader2,
+  Users, Store, Armchair, FilePlus2, FilePen, X, FileDown, Loader2, Truck,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { lang } from '@/lib/i18n';
-import { toast, toastError } from '@/lib/store';
+import { toast, toastError, useApp } from '@/lib/store';
 import { useTab } from '@/lib/useTab';
 import { exportCSV } from '@/lib/csv';
 import { Button, Card, Empty, PageHeader, Spinner, Table, Td, Tabs, cx, useAction, useLoad } from '@/components/ui';
@@ -26,10 +26,13 @@ const issueText = {
   already_exists: T('موجود بالفعل — استخدم تبويب التحديث'),
   not_found: T('غير موجود — استخدم تبويب الإضافة'),
   too_long: T('النص أطول من المسموح'),
+  invalid_json: T('صيغة البيانات في الخلية غير صحيحة'),
+  db_rule: T('قاعدة البيانات رفضت القيمة دي'),
 };
 
 export default function Import() {
   const targets = useLoad(() => api.get('/import/targets', { lang }));
+  const owner = useApp((s) => s.me?.role === 'owner');
   const [mode, setMode] = useTab('insert');
   const [entity, setEntity] = useState(null);
   const [file, setFile] = useState(null);
@@ -58,9 +61,9 @@ export default function Import() {
   return (
     <div>
       <PageHeader title={T('استيراد وتصدير البيانات')} icon={FileSpreadsheet} subtitle={T('أضف أو حدّث أو نزّل بياناتك دفعة واحدة في ملف Excel')} crumb={T('استيراد وتصدير البيانات')} />
-      <Tabs value={mode} onChange={switchMode} tabs={[['insert', T('إضافة بيانات جديدة'), FilePlus2], ['update', T('تحديث بيانات موجودة'), FilePen], ['export', T('تصدير البيانات'), FileDown]]} />
+      <Tabs value={mode} onChange={switchMode} tabs={[['insert', T('إضافة بيانات جديدة'), FilePlus2], ['update', T('تحديث بيانات موجودة'), FilePen], ['export', T('تصدير البيانات'), FileDown], ...(owner ? [['transfer', T('نقل البيانات'), Truck]] : [])]} />
 
-      {targets.loading && !targets.data ? <Spinner /> : !list.length ? (
+      {mode === 'transfer' && owner ? <Transfer /> : targets.loading && !targets.data ? <Spinner /> : !list.length ? (
         <Empty icon={FileSpreadsheet} title={T('لا توجد صلاحية')}>{T('ليس لديك صلاحية لاستيراد أي نوع من البيانات')}</Empty>
       ) : mode === 'export' ? <Export list={list} /> : (
         <div className="grid gap-4">
@@ -172,6 +175,91 @@ function Export({ list }) {
           );
         })}
       </div>
+    </Card>
+  );
+}
+
+// Moving the restaurant to another computer, for the owner.
+function Transfer() {
+  const summary = useLoad(() => api.get('/transfer', { lang }));
+  const [busy, setBusy] = useState('');
+  const [result, setResult] = useState(null);
+  const input = useRef(null);
+  const d = summary.data;
+
+  const act = async (key, fn) => {
+    setBusy(key);
+    try { await fn(); } catch (e) { toastError(e); } finally { setBusy(''); }
+  };
+  const download = () => act('down', async () => {
+    if (await api.download('/transfer/export', 'cpro-transfer.zip')) toast(T('تم تجهيز ملف النقل'));
+  });
+  const upload = (file) => act('up', async () => {
+    const r = await api.upload('/transfer/import', file);
+    setResult(r);
+    if (!r.issues.length) {
+      toast(T('تم نقل البيانات'));
+      summary.reload(true);
+    }
+  });
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Card title={T('من الجهاز القديم')} icon={Download}>
+        <p className="mb-3 text-sm text-muted">{T('نزّل ملف واحد فيه بيانات المطعم وصور المنيو، وانقله للجهاز الجديد.')}</p>
+        {d && (
+          <ul className="mb-3 divide-y divide-line rounded-xl bg-surface-2 px-3 text-sm">
+            {d.groups.map((g) => <li key={g.label} className="flex justify-between py-2"><span>{g.label}</span><span className="num text-muted">{g.rows}</span></li>)}
+            <li className="flex justify-between py-2"><span>{T('الصور')}</span><span className="num text-muted">{d.images}</span></li>
+          </ul>
+        )}
+        {d?.open_shifts > 0 && <p className="mb-3 rounded-xl bg-warning-soft p-2.5 text-sm text-warning">{T('فيه وردية مفتوحة. اقفلها الأول علشان حساباتها تتنقل كاملة.')}</p>}
+        <Button icon={Download} busy={busy === 'down'} disabled={!!busy} onClick={download}>{T('تنزيل ملف النقل')}</Button>
+      </Card>
+
+      <Card title={T('على الجهاز الجديد')} icon={Upload}>
+        <ol className="mb-3 grid list-decimal gap-1.5 ps-5 text-sm text-muted">
+          <li>{T('احذف الجهاز القديم من حسابك على المنصة لو عدد الأجهزة في باقتك جهاز واحد.')}</li>
+          <li>{T('افتح البرنامج على الجهاز الجديد، ودوس Continue with Google، وجهّز حساب المالك.')}</li>
+          <li>{T('ارفع ملف النقل من هنا.')}</li>
+        </ol>
+        <input ref={input} type="file" accept=".zip,.xlsx" className="hidden"
+          onChange={(e) => { const f = e.target.files[0]; e.target.value = ''; if (f) upload(f); }} />
+        <Button icon={Upload} busy={busy === 'up'} disabled={!!busy} onClick={() => input.current?.click()}>{T('رفع ملف النقل')}</Button>
+        <p className="mt-3 text-xs text-muted">{T('بتتاخد نسخة احتياطية قبل الرفع، ولو فيه خطأ في صف واحد مش بيتحفظ أي حاجة. رفع نفس الملف مرتين مش بيكرر البيانات.')}</p>
+      </Card>
+
+      <p className="rounded-xl bg-surface-2 p-3 text-sm text-muted lg:col-span-2">{T('المستخدمين والأجهزة والترخيص مش بيتنقلوا. الطلبات والورديات القديمة بتتسجل باسم المالك اللي عمل النقل، فتقارير الكاشير القديمة هتظهر باسمه.')}</p>
+
+      {result && <div className="lg:col-span-2"><TransferResult result={result} /></div>}
+    </div>
+  );
+}
+
+function TransferResult({ result }) {
+  if (!result.issues.length) {
+    return (
+      <div className="flex items-center gap-3 rounded-card border border-success/30 bg-success-soft p-4 text-success">
+        <CheckCircle2 className="size-7 shrink-0" aria-hidden />
+        <div>
+          <div className="text-lg font-bold">{T('تمت إضافة {0} وتعديل {1} صف، ونقل {2} صورة', [result.inserted, result.updated, result.images])}</div>
+          <div className="text-sm" dir="auto">{T('نسخة احتياطية قبل الرفع')}: {result.backup}</div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <Card title={<span className="flex items-center gap-2 text-danger"><AlertTriangle className="size-5" />{T('لم يتم حفظ أي بيانات — يوجد')} {result.issues.length} {T('خطأ')}</span>}>
+      <Table head={[T('الصف'), T('العمود'), T('المشكلة'), T('القيمة')]}>
+        {result.issues.map((i, k) => (
+          <tr key={k} className="bg-danger-soft/30">
+            <Td className="num font-bold">{i.row}</Td>
+            <Td className="font-semibold" dir="ltr">{i.column}</Td>
+            <Td className="text-danger">{issueText[i.code] || i.code}</Td>
+            <Td className="text-muted">{i.value}</Td>
+          </tr>
+        ))}
+      </Table>
     </Card>
   );
 }

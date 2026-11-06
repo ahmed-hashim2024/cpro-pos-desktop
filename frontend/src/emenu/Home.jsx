@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Search, SlidersHorizontal, Bell, BellRing, Plus, ArrowLeft, ArrowRight, Languages, ChevronDown, Utensils, Phone, MapPin, MessageCircle, Globe, Link as LinkIcon } from 'lucide-react';
-import { cx, Thumb, Badge, PriceTag, SectionTitle, safeHref, social, waLink } from './lib';
+import { cx, Thumb, Badge, PriceTag, SectionTitle, offerShade, safeHref, social, waLink } from './lib';
 import { langNames } from './i18n';
 
 // ---- header ----------------------------------------------------------------------
@@ -103,21 +103,17 @@ export function HeroSlider({ offers, t, money, showPrices, onPick }) {
     <section className="mt-4" aria-roledescription="carousel" aria-label={t('offers')}>
       <div ref={ref} onPointerDown={hold} onTouchStart={hold} className="no-scrollbar flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth px-4">
         {offers.map((o, n) => (
-          <article key={o.id} data-i={n} className="relative h-52 w-full shrink-0 snap-start overflow-hidden rounded-[26px] text-white shadow-xl"
-            style={{ background: 'radial-gradient(120% 120% at 100% 0%, #3a2a1f 0%, #16100c 55%, #0d0907 100%)' }}>
-            {o.item.image && (
-              <img src={o.item.image} alt="" className="absolute inset-y-0 end-0 h-full w-[58%] object-cover"
-                style={{ maskImage: 'linear-gradient(to var(--fade), transparent 0%, #000 40%)', WebkitMaskImage: 'linear-gradient(to var(--fade), transparent 0%, #000 40%)' }} />
-            )}
-            <div className="relative flex h-full w-[62%] flex-col items-start justify-center gap-1.5 p-5">
+          <article key={o.id} data-i={n} className="relative aspect-[12/7] w-full shrink-0 snap-start overflow-hidden rounded-[26px] text-white shadow-xl" style={offerShade(o).card}>
+            {o.item.image && <img src={o.item.image} alt="" className="absolute inset-0 size-full object-cover" />}
+            <div className="relative flex h-full flex-col items-start justify-end gap-1 p-4" style={offerShade(o).shade}>
               {o.badge && <span className="rounded-full bg-p/90 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-onp">{o.badge}</span>}
-              <h2 className="line-clamp-2 text-xl font-black leading-tight">{o.item.name}</h2>
-              {o.item.description && <p className="line-clamp-2 text-xs leading-relaxed text-white/75">{o.item.description}</p>}
-              <div className="mt-1.5 flex items-center gap-2">
+              <h2 className="line-clamp-2 text-xl font-black leading-tight drop-shadow">{o.item.name}</h2>
+              {o.item.description && <p className="line-clamp-1 text-xs leading-relaxed text-white/85 drop-shadow">{o.item.description}</p>}
+              <div className="mt-1 flex items-center gap-2">
                 <button onClick={() => onPick(o.item)} className="flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-p px-4 text-xs font-bold uppercase text-onp shadow-lg transition active:scale-95">
                   {t('orderNow')}<Arrow />
                 </button>
-                {showPrices && <PriceTag item={o.item} money={money} className="whitespace-nowrap text-sm font-bold" wasClassName="text-white/60" />}
+                {showPrices && <PriceTag item={o.item} money={money} className="whitespace-nowrap text-sm font-bold drop-shadow" wasClassName="text-white/70" />}
               </div>
             </div>
           </article>
@@ -203,22 +199,16 @@ export function Popular({ featured, t, money, showPrices, canOrder, inCart, onPi
 export function FamilyBanner({ offer, t, money, showPrices, onPick }) {
   const it = offer.item;
   return (
-    <button onClick={() => onPick(it)} className="relative flex h-36 w-full overflow-hidden rounded-[22px] text-start text-white shadow-lg transition active:scale-[.99]"
-      style={{ background: 'linear-gradient(100deg, #120d0a 0%, #241912 60%, #3a271b 100%)' }}>
-      {it.image && (
-        <img src={it.image} alt="" loading="lazy" className="absolute inset-y-0 end-0 h-full w-1/2 object-cover"
-          style={{ maskImage: 'linear-gradient(to var(--fade), transparent 0%, #000 45%)', WebkitMaskImage: 'linear-gradient(to var(--fade), transparent 0%, #000 45%)' }} />
-      )}
-      <div className="relative flex w-[58%] flex-col justify-center gap-1 p-4">
-        {offer.badge && <span className="text-[10px] font-bold uppercase tracking-wider text-p">{offer.badge}</span>}
-        <h3 className="line-clamp-2 text-lg font-black leading-tight">{it.name}</h3>
-        {it.description && <p className="line-clamp-1 text-[11px] text-white/70">{it.description}</p>}
-        {showPrices && <span className="mt-0.5"><PriceTag item={it} money={money} className="text-sm font-bold" wasClassName="text-white/60" /></span>}
+    <button onClick={() => onPick(it)} className="relative block aspect-[5/2] w-full overflow-hidden rounded-[22px] text-start text-white shadow-lg transition active:scale-[.99]" style={offerShade(offer).card}>
+      {it.image && <img src={it.image} alt="" loading="lazy" className="absolute inset-0 size-full object-cover" />}
+      <div className="relative flex h-full flex-col justify-end gap-0.5 p-3.5" style={offerShade(offer).shade}>
+        {offer.badge && <span className="text-[10px] font-bold uppercase tracking-wider text-white/90 drop-shadow">{offer.badge}</span>}
+        <h3 className="line-clamp-1 text-lg font-black leading-tight drop-shadow">{it.name}</h3>
+        {it.description && <p className="line-clamp-1 text-[11px] text-white/85 drop-shadow">{it.description}</p>}
+        {showPrices && <span className="mt-0.5"><PriceTag item={it} money={money} className="text-sm font-bold drop-shadow" wasClassName="text-white/70" /></span>}
       </div>
       {offer.highlight && (
-        <span className="anim-float absolute start-[52%] top-1/2 flex size-[68px] -translate-y-1/2 items-center justify-center rounded-full bg-p p-2 text-center text-[13px] font-black leading-tight text-onp shadow-xl rtl:translate-x-1/2 ltr:-translate-x-1/2">
-          {offer.highlight}
-        </span>
+        <span className="absolute end-2.5 top-2.5 max-w-[45%] truncate rounded-full bg-p px-2.5 py-1 text-[11px] font-bold leading-none text-onp shadow">{offer.highlight}</span>
       )}
     </button>
   );
