@@ -25,10 +25,10 @@
 
 :root { --p: #e8590c; --onp: #ffffff; --a: #e8590c; --fade: right; }
 [dir="rtl"] { --fade: left; }
-:root, [data-theme="cream"] {
+[data-theme="cream"] {
   --bg: #f7efe4; --card: #ffffff; --card2: #f1e6d7; --fg: #22180f; --mut: #7a6a5a; --line: #eadccb; color-scheme: light;
 }
-[data-theme="white"] {
+:root, [data-theme="white"] {
   --bg: #f4f4f6; --card: #ffffff; --card2: #ececf0; --fg: #17171c; --mut: #6b6b76; --line: #e2e2e8; color-scheme: light;
 }
 [data-theme="midnight"] {

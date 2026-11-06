@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Globe, Loader2, X } from 'lucide-react';
 import { api } from '@/lib/api';
-import { useApp, toast, toastError } from '@/lib/store';
+import { useApp, toastError } from '@/lib/store';
 import { Button, Field, Input, cx } from '@/components/ui';
 import { T } from '@/lib/i18n';
 
@@ -24,7 +24,7 @@ export function DomainField({ value, onChange, onStatus }) {
       try {
         const r = await api.post('/platform/domain/check', { subdomain: value });
         if (stale) return;
-        update(r.available ? { status: 'free', domain: r.domain } : { status: r.reason === 'taken' ? 'taken' : 'invalid', domain: '' });
+        update(r.available ? { status: 'free', domain: r.domain } : { status: ['taken', 'has_tunnel'].includes(r.reason) ? r.reason : 'invalid', domain: r.domain || '' });
       } catch {
         if (!stale) update({ status: 'error', domain: '' });
       }
@@ -38,10 +38,11 @@ export function DomainField({ value, onChange, onStatus }) {
     checking: [T('بنشوف الاسم متاح ولا لأ…'), 'text-muted'],
     free: [`${T('متاح')}: ${domain}`, 'text-success'],
     taken: [T('الاسم ده محجوز، اختار اسم تاني'), 'text-danger'],
+    has_tunnel: [`${T('حسابك عنده رابط بالفعل')}: ${domain}`, 'text-danger'],
     invalid: [T('استخدم حروف إنجليزي وأرقام وشرطة (-) بس'), 'text-danger'],
     error: [T('تعذر التحقق من الاسم، اتأكد من الإنترنت'), 'text-danger'],
   }[status];
-  const Icon = { checking: Loader2, free: Check, taken: X, invalid: X, error: X }[status];
+  const Icon = { checking: Loader2, free: Check, taken: X, has_tunnel: X, invalid: X, error: X }[status];
   return (
     <Field label={T('رابط المنيو الإلكتروني')}>
       <Input dir="ltr" value={value} maxLength={63} placeholder="pizza-house" aria-label={T('رابط المنيو الإلكتروني')}
@@ -53,29 +54,51 @@ export function DomainField({ value, onChange, onStatus }) {
   );
 }
 
-// For an account connected before it had a domain (Settings → Subscription).
+// How long to wait for the Platform's background job before saying so.
+const CLAIM_TIMEOUT = 90_000;
+
+// For an account connected without a domain (Settings → Subscription). The
+// Platform builds the tunnel in the background, so "created" isn't known yet:
+// this waits until the domain arrives, a failure arrives, or time runs out.
 export function DomainForm({ name }) {
-  const loadPlatform = useApp((s) => s.loadPlatform);
+  const { platform, loadPlatform } = useApp();
   const [value, setValue] = useState(() => slugify(name));
   const [status, setStatus] = useState('idle');
   const [busy, setBusy] = useState(false);
-  const [claimed, setClaimed] = useState(false);
+  const [waiting, setWaiting] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
+  const failed = platform?.domain_error;
+
+  useEffect(() => {
+    if (!waiting) return undefined;
+    const poll = setInterval(loadPlatform, 5000);
+    const stop = setTimeout(() => { setWaiting(false); setTimedOut(true); }, CLAIM_TIMEOUT);
+    return () => { clearInterval(poll); clearTimeout(stop); };
+  }, [waiting, loadPlatform]);
+  useEffect(() => { if (failed) setWaiting(false); }, [failed]);
+
   const claim = async () => {
     setBusy(true);
+    setTimedOut(false);
     try {
-      await api.post('/platform/domain', { subdomain: value });
-      setClaimed(true);
-      toast(T('جاري تجهيز رابط المنيو، هيشتغل لوحده خلال دقيقة'));
-      setTimeout(loadPlatform, 20000);
+      const r = await api.post('/platform/domain', { subdomain: value });
+      if (r.available) {
+        await loadPlatform(); // clears the last failure before waiting
+        setWaiting(true);
+      } else toastError(new Error(T('الاسم ده محجوز، اختار اسم تاني')));
     } catch (e) {
       toastError(e);
     } finally {
       setBusy(false);
     }
   };
-  if (claimed) return <p className="text-sm text-muted">{T('جاري تجهيز رابط المنيو، هيشتغل لوحده خلال دقيقة')}</p>;
+  if (waiting) {
+    return <p className="flex items-center gap-2 text-sm text-muted"><Loader2 className="size-4 animate-spin" aria-hidden />{T('جاري تجهيز رابط المنيو، هيشتغل لوحده خلال دقيقة')}</p>;
+  }
   return (
     <div className="grid gap-3">
+      {failed && <p role="alert" className="rounded-xl bg-danger-soft p-2.5 text-sm text-danger" dir="auto">{T('تعذر إنشاء الرابط')}: {failed}</p>}
+      {timedOut && <p role="alert" className="rounded-xl bg-warning-soft p-2.5 text-sm text-warning">{T('الرابط لسه ما اتجهزش. حاول تاني، ولو المشكلة استمرت تواصل مع الدعم.')}</p>}
       <DomainField value={value} onChange={setValue} onStatus={setStatus} />
       <div><Button icon={Globe} busy={busy} disabled={status !== 'free'} onClick={claim}>{T('إنشاء الرابط')}</Button></div>
     </div>

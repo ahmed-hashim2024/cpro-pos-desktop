@@ -164,8 +164,10 @@ type Tunnel struct {
 // Sync is the unsigned config the owner manages on the Platform. EMenu is
 // kept raw; the app decodes the fields it knows.
 type Sync struct {
-	Tunnel *Tunnel         `json:"tunnel"`
-	EMenu  json.RawMessage `json:"emenu"`
+	Tunnel *Tunnel `json:"tunnel"`
+	// TunnelError says why the latest attempt to create the tunnel failed.
+	TunnelError string          `json:"tunnel_error"`
+	EMenu       json.RawMessage `json:"emenu"`
 	// Integrations holds each enabled add-on's settings by feature key
 	// (e.g. "whatsapp_ai"); the module owning the key reads its own entry.
 	Integrations map[string]json.RawMessage `json:"integrations"`
@@ -241,23 +243,6 @@ func (c *Client) Hello(ctx context.Context, base string) error {
 	return c.call(ctx, base, "hello", map[string]any{}, nil)
 }
 
-func (c *Client) Activate(ctx context.Context, base, code string, info DeviceInfo) (Reply, error) {
-	// Never send the activation key to a server that isn't the Platform.
-	if err := c.Hello(ctx, base); err != nil {
-		return Reply{}, err
-	}
-	body := map[string]any{
-		"activation_code": strings.ToUpper(strings.TrimSpace(code)),
-		"public_key":      c.ID.PublicKey(),
-		"device_name":     info.Name,
-		"os":              info.OS,
-		"app_version":     info.AppVersion,
-		"fingerprint":     info.Fingerprint,
-	}
-	var r Reply
-	return r, c.call(ctx, base, "activate", body, &r)
-}
-
 // ActivateLink links the device with the one-time token the Platform gave
 // the signed-in owner's browser («Continue with Google»).
 func (c *Client) ActivateLink(ctx context.Context, base, token string, info DeviceInfo) (Reply, error) {
@@ -280,7 +265,7 @@ func (c *Client) ActivateLink(ctx context.Context, base, token string, info Devi
 type Subdomain struct {
 	Available bool   `json:"available"`
 	Domain    string `json:"domain"`
-	Reason    string `json:"reason"` // invalid | taken
+	Reason    string `json:"reason"` // invalid | taken | has_tunnel
 }
 
 // CheckSubdomain asks whether a menu address is free.
@@ -327,10 +312,6 @@ func (c *Client) Version(ctx context.Context, base string) (ver int64, revoked b
 	}
 	err = c.call(ctx, base, "version", map[string]any{}, &r)
 	return r.Ver, r.Revoked, err
-}
-
-func (c *Client) Deactivate(ctx context.Context, base string) error {
-	return c.call(ctx, base, "deactivate", map[string]any{}, nil)
 }
 
 func (c *Client) call(ctx context.Context, base, method string, payload any, out any) error {

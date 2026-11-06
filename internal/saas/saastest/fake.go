@@ -25,6 +25,7 @@ type Tenant struct {
 	MaxDevices              int
 	EMenu, Ordering, Remote bool
 	Tunnel                  *saas.Tunnel
+	TunnelError             string // why the background job failed
 	EMenuSettings           map[string]any
 	Extra                   map[string]bool           // add-on features
 	Integrations            map[string]map[string]any // add-on settings
@@ -228,10 +229,11 @@ func (f *Fake) handle(method, deviceID string, ts int64, nonce, body, sig string
 		if e := f.verify(key, deviceID, ts, nonce, body, sig); e != nil {
 			return nil, e
 		}
-		code, _ := data["activation_code"].(string)
-		if token, _ := data["link_token"].(string); token != "" {
-			code = f.linkTokens[token]
-			delete(f.linkTokens, token) // single use
+		// A link token, single use. Tests may pass the tenant's code directly.
+		code, _ := data["link_token"].(string)
+		if c, ok := f.linkTokens[code]; ok {
+			delete(f.linkTokens, code)
+			code = c
 		}
 		t := f.Tenants[strings.ToUpper(code)]
 		if t == nil {
@@ -273,6 +275,8 @@ func (f *Fake) handle(method, deviceID string, ts int64, nonce, body, sig string
 		switch {
 		case sub == "" || strings.ContainsAny(sub, " _."):
 			out["reason"] = "invalid"
+		case t.Tunnel != nil:
+			out["domain"], out["reason"] = t.Tunnel.Domain, "has_tunnel"
 		case f.takenSubdomains[sub]:
 			out["reason"] = "taken"
 		default:
@@ -294,10 +298,6 @@ func (f *Fake) handle(method, deviceID string, ts int64, nonce, body, sig string
 			return map[string]any{"revoked": true}, nil
 		}
 		return map[string]any{"ver": t.Ver}, nil
-	case "deactivate":
-		d.revoked = true
-		t.Ver++
-		return map[string]any{"ok": true}, nil
 	}
 	return nil, &frappeErr{404, "Not found"}
 }
@@ -322,7 +322,7 @@ func (f *Fake) reply(t *Tenant, deviceID, key string) map[string]any {
 	}
 	return map[string]any{
 		"license": f.Sign(claims),
-		"sync": map[string]any{"tunnel": t.Tunnel, "emenu": t.EMenuSettings, "integrations": t.Integrations,
+		"sync": map[string]any{"tunnel": t.Tunnel, "tunnel_error": t.TunnelError, "emenu": t.EMenuSettings, "integrations": t.Integrations,
 			"ver": t.Ver, "server_time": now.Unix()},
 	}
 }

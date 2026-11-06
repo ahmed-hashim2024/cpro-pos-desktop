@@ -91,7 +91,7 @@ type EMenuSettings struct {
 
 func defaultEMenuSettings() EMenuSettings {
 	return EMenuSettings{
-		Enabled: true, ButtonColor: "ember", Background: "cream", DefaultLanguage: "ar", LangAR: true, LangEN: true,
+		Enabled: true, ButtonColor: "ember", Background: "white", DefaultLanguage: "ar", LangAR: true, LangEN: true,
 		ShowPrices: true, AllowCallWaiter: true, InstallPrompt: true,
 	}
 }
@@ -145,7 +145,7 @@ func (a *App) emenuConfig() EMenuSettings {
 		c.ButtonColor = "ember"
 	}
 	if _, ok := presetHex(backgrounds, c.Background); !ok {
-		c.Background = "cream"
+		c.Background = "white"
 	}
 	return c
 }

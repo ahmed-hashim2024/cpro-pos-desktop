@@ -42,6 +42,7 @@ type platformState struct {
 	URL         string          `json:"url"` // override of saas.DefaultURL
 	License     string          `json:"license"`
 	Tunnel      *saas.Tunnel    `json:"tunnel"`
+	TunnelError string          `json:"tunnel_error"`
 	EMenu       json.RawMessage `json:"emenu"`
 	Ver         int64           `json:"ver"`
 	Revoked     bool            `json:"revoked"`
@@ -226,6 +227,7 @@ func (a *App) applyReply(ctx context.Context, r saas.Reply) error {
 		p.st.License = r.License
 		p.st.Revoked = false
 		p.st.Tunnel = r.Sync.Tunnel
+		p.st.TunnelError = r.Sync.TunnelError
 		if len(r.Sync.EMenu) > 0 {
 			p.st.EMenu = r.Sync.EMenu
 		}
@@ -345,10 +347,10 @@ type PlatformInfo struct {
 	GraceUntil  string           `json:"grace_until"`
 	DeviceID    string           `json:"device_id"`
 	URL         string           `json:"url"`
-	DefaultURL  string           `json:"default_url"`
 	LastSync    string           `json:"last_sync"`
 	LastError   string           `json:"last_error"`
 	Domain      string           `json:"domain"`
+	DomainError string           `json:"domain_error"` // why creating the domain failed
 	MenuURL     string           `json:"menu_url"`
 	MenuEnabled bool             `json:"menu_enabled"`
 	Tunnel      TunnelStatus     `json:"tunnel"`
@@ -368,7 +370,7 @@ func (a *App) SetTunnelStatusFunc(fn func() TunnelStatus) { a.tunnelStatus = fn 
 // PlatformInfo is readable by every signed-in user: the POS shows the
 // activation screen from it.
 func (a *App) PlatformInfo(ctx context.Context, actor Actor) (PlatformInfo, error) {
-	info := PlatformInfo{Version: Version, DefaultURL: saas.DefaultURL, Update: a.updateInfo()}
+	info := PlatformInfo{Version: Version, Update: a.updateInfo()}
 	p := a.platform
 	if p == nil {
 		info.State = license.Active
@@ -392,6 +394,7 @@ func (a *App) PlatformInfo(ctx context.Context, actor Actor) (PlatformInfo, erro
 	info.DeviceID = p.client.ID.DeviceID
 	info.URL = p.baseURL()
 	info.LastSync, info.LastError = p.st.LastSync, p.st.LastError
+	info.DomainError = p.st.TunnelError
 	if p.st.Tunnel != nil {
 		info.Domain = p.st.Tunnel.Domain
 		info.MenuURL = "https://" + p.st.Tunnel.Domain
@@ -443,54 +446,17 @@ func (a *App) platformRequired() (*platformLink, error) {
 	return a.platform, nil
 }
 
-// ActivateDevice links this computer to the owner's account with the
-// activation code shown on the Platform.
-// ActivateDevice links this computer with an account's activation key. The
-// app connects through StartConnect; this stays for tools and tests.
-func (a *App) ActivateDevice(ctx context.Context, actor Actor, code, deviceName string) (PlatformInfo, error) {
-	if err := actor.require(rbac.SettingsManage); err != nil {
-		return PlatformInfo{}, err
-	}
-	p, err := a.platformRequired()
+// SyncPlatform refreshes the license and settings now. Any signed-in user may
+// ask: it's the «try now» button on the offline screen, and it changes nothing
+// but this device's copy of what the Platform already says.
+func (a *App) SyncPlatform(ctx context.Context, actor Actor) (PlatformInfo, error) {
+	p, err := a.linkedPlatform()
 	if err != nil {
 		return PlatformInfo{}, err
-	}
-	code = strings.ToUpper(strings.TrimSpace(code))
-	if len(code) < 6 || len(code) > 40 {
-		return PlatformInfo{}, invalid("اكتب كود التفعيل كما يظهر في حسابك على المنصة")
 	}
 	p.mu.RLock()
 	base := p.baseURL()
 	p.mu.RUnlock()
-	if base == "" {
-		return PlatformInfo{}, invalid("عنوان المنصة غير مضبوط")
-	}
-	r, err := p.client.Activate(ctx, base, code, deviceInfo(strings.TrimSpace(deviceName)))
-	if err != nil {
-		return PlatformInfo{}, platformErr(err)
-	}
-	if err := a.applyReply(ctx, r); err != nil {
-		return PlatformInfo{}, err
-	}
-	a.audit(ctx, a.db.Write, actor, "platform.activate", "settings", platformKey, map[string]string{"device_id": p.client.ID.DeviceID})
-	return a.PlatformInfo(ctx, actor)
-}
-
-// SyncPlatform refreshes now (the "sync" button).
-func (a *App) SyncPlatform(ctx context.Context, actor Actor) (PlatformInfo, error) {
-	if err := actor.require(rbac.SettingsManage); err != nil {
-		return PlatformInfo{}, err
-	}
-	p, err := a.platformRequired()
-	if err != nil {
-		return PlatformInfo{}, err
-	}
-	p.mu.RLock()
-	linked, base := p.claims != nil, p.baseURL()
-	p.mu.RUnlock()
-	if !linked {
-		return PlatformInfo{}, conflict("الجهاز غير مفعّل")
-	}
 	r, err := p.client.Refresh(ctx, base)
 	if err != nil {
 		a.recordPlatformError(ctx, err)
@@ -502,9 +468,6 @@ func (a *App) SyncPlatform(ctx context.Context, actor Actor) (PlatformInfo, erro
 	return a.PlatformInfo(ctx, actor)
 }
 
-// UnlinkDevice frees this computer's slot on the account. With force, the
-// local link is removed even if the Platform can't be reached (the owner
-// can then revoke the device from the Platform).
 // SetPlatformURL overrides the Platform address, for the dev server and
 // tests. The app itself always uses the built-in address. Empty restores it.
 func (a *App) SetPlatformURL(ctx context.Context, actor Actor, raw string) error {

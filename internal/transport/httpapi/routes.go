@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"bytes"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -505,13 +507,22 @@ func (s *server) routes(mux *http.ServeMux) {
 		return written{}, nil
 	}))
 	mux.HandleFunc("POST /api/v1/import/{entity}", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
-		r.Body = http.MaxBytesReader(w, r.Body, 20<<20)
-		file, _, err := r.FormFile("file")
-		if err != nil {
+		// The file is the raw body (see api.upload in the frontend).
+		file, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 20<<20))
+		if err != nil || len(file) == 0 {
 			return nil, &app.Error{Code: app.CodeInvalid, Msg: "أرفق ملف Excel"}
 		}
-		defer file.Close()
-		return a.Import(r.Context(), actor, r.PathValue("entity"), app.ImportMode(q(r, "mode")), file, q(r, "lang"))
+		return a.Import(r.Context(), actor, r.PathValue("entity"), app.ImportMode(q(r, "mode")), bytes.NewReader(file), q(r, "lang"))
+	}))
+	mux.HandleFunc("GET /api/v1/import/{entity}/export", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		b, name, err := a.ExportData(r.Context(), actor, r.PathValue("entity"), q(r, "lang"))
+		if err != nil {
+			return nil, err
+		}
+		w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+		w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+		w.Write(b)
+		return written{}, nil
 	}))
 
 	// ---- reports ----
@@ -530,16 +541,6 @@ func (s *server) routes(mux *http.ServeMux) {
 	// ---- platform link (activation, license, domain) ----
 	mux.HandleFunc("GET /api/v1/platform", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
 		return a.PlatformInfo(r.Context(), actor)
-	}))
-	mux.HandleFunc("POST /api/v1/platform/activate", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
-		var in struct {
-			Code       string `json:"code"`
-			DeviceName string `json:"device_name"`
-		}
-		if err := decode(r, &in); err != nil {
-			return nil, err
-		}
-		return a.ActivateDevice(r.Context(), actor, in.Code, in.DeviceName)
 	}))
 	// The connect flow runs before the first user exists, so it's open to the
 	// desktop window only (never the network or the tunnel).

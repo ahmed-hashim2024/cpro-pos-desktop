@@ -62,7 +62,7 @@ export default function MenuApp() {
     root.lang = lang;
     root.dir = t.dir;
     if (!menu) return;
-    root.dataset.theme = menu.theme.background || 'cream';
+    root.dataset.theme = menu.theme.background || 'white';
     if (validHex(menu.theme.primary)) {
       root.style.setProperty('--p', menu.theme.primary);
       root.style.setProperty('--onp', onColor(menu.theme.primary));

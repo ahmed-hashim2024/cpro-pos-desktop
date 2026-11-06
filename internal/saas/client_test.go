@@ -91,7 +91,7 @@ func TestImpostorPlatformRejected(t *testing.T) {
 	defer real.Close()
 	id, _ := saas.LoadIdentity(filepath.Join(t.TempDir(), "d.json"))
 	c := saas.NewClient(id, real.Public)
-	if _, err := c.Activate(context.Background(), srv.URL, "ACT-TEST", saas.DeviceInfo{}); !errors.Is(err, saas.ErrNotPlatform) {
+	if _, err := c.ActivateLink(context.Background(), srv.URL, "ACT-TEST", saas.DeviceInfo{}); !errors.Is(err, saas.ErrNotPlatform) {
 		t.Fatalf("impostor: %v", err)
 	}
 	if sawCode {
@@ -100,7 +100,7 @@ func TestImpostorPlatformRejected(t *testing.T) {
 	// The real Platform, but the app expects a different key.
 	other := saastest.New("ACT-TEST")
 	defer other.Close()
-	if _, err := c.Activate(context.Background(), other.URL, "ACT-TEST", saas.DeviceInfo{}); !errors.Is(err, saas.ErrNotPlatform) {
+	if _, err := c.ActivateLink(context.Background(), other.URL, "ACT-TEST", saas.DeviceInfo{}); !errors.Is(err, saas.ErrNotPlatform) {
 		t.Fatalf("wrong key: %v", err)
 	}
 }
@@ -130,13 +130,13 @@ func TestClientAgainstFakePlatform(t *testing.T) {
 	id, _ := saas.LoadIdentity(filepath.Join(t.TempDir(), "d.json"))
 	c := saas.NewClient(id, f.Public)
 
-	_, err := c.Activate(ctx, f.URL, "act-wrong", saas.DeviceInfo{Name: "x"})
+	_, err := c.ActivateLink(ctx, f.URL, "act-wrong", saas.DeviceInfo{Name: "x"})
 	var se *saas.Error
 	if !errors.As(err, &se) || se.Message != "Invalid activation code." {
 		t.Fatalf("bad code: %v", err)
 	}
 
-	r, err := c.Activate(ctx, f.URL, "act-test", saas.DeviceInfo{Name: "الكاشير"})
+	r, err := c.ActivateLink(ctx, f.URL, "act-test", saas.DeviceInfo{Name: "الكاشير"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestClientAgainstFakePlatform(t *testing.T) {
 
 	// A second device exceeds the limit of one.
 	id2, _ := saas.LoadIdentity(filepath.Join(t.TempDir(), "d2.json"))
-	if _, err := saas.NewClient(id2, f.Public).Activate(ctx, f.URL, "ACT-TEST", saas.DeviceInfo{}); !errors.As(err, &se) || se.Status != 403 {
+	if _, err := saas.NewClient(id2, f.Public).ActivateLink(ctx, f.URL, "ACT-TEST", saas.DeviceInfo{}); !errors.As(err, &se) || se.Status != 403 {
 		t.Fatalf("device limit: %v", err)
 	}
 

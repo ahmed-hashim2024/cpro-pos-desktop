@@ -198,7 +198,7 @@ func connectPage(w http.ResponseWriter, title, body string) {
 type DomainCheck struct {
 	Available bool   `json:"available"`
 	Domain    string `json:"domain"` // full address, when valid
-	Reason    string `json:"reason"` // invalid | taken
+	Reason    string `json:"reason"` // invalid | taken | has_tunnel
 }
 
 // CheckDomain asks the Platform whether subdomain is free. It works before
@@ -236,8 +236,11 @@ func (a *App) ClaimDomain(ctx context.Context, actor Actor, subdomain string) (D
 		return DomainCheck{}, platformErr(err)
 	}
 	if !r.Available {
-		return DomainCheck{Available: false, Reason: r.Reason}, nil
+		return DomainCheck{Available: false, Domain: r.Domain, Reason: r.Reason}, nil
 	}
+	p.mu.Lock()
+	p.st.TunnelError = "" // a new attempt: forget the last failure
+	p.mu.Unlock()
 	for _, after := range []time.Duration{5, 15, 40} {
 		time.AfterFunc(after*time.Second, func() {
 			select {

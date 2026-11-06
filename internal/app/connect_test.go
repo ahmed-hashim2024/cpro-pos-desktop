@@ -74,6 +74,22 @@ func TestContinueWithGoogle(t *testing.T) {
 	}
 }
 
+func TestSyncNow(t *testing.T) {
+	f, fake := linkedFixture(t)
+	a, ctx, owner := f.app, f.ctx, f.owner
+	if _, err := a.SyncPlatform(ctx, owner); code(err) != CodeInvalid {
+		t.Fatalf("sync before connecting: %v", err)
+	}
+	_, err := a.ActivateDevice(ctx, owner, "ACT-TEST", "")
+	f.must(err)
+	fake.Update("ACT-TEST", func(t *saastest.Tenant) { t.TunnelError = "new from the Platform" })
+	info, err := a.SyncPlatform(ctx, f.login(rbac.Cashier, "cashier")) // the offline screen is for everyone
+	f.must(err)
+	if info.DomainError != "new from the Platform" {
+		t.Fatalf("not refreshed: %+v", info)
+	}
+}
+
 func TestConnectFailureIsReported(t *testing.T) {
 	f, fake := linkedFixture(t)
 	a := f.app
@@ -122,6 +138,31 @@ func TestDomainFromTheApp(t *testing.T) {
 	a.syncOnce(ctx, true)
 	if _, domain := a.TunnelConfig(); domain != "pizza-house.menu.test" {
 		t.Fatalf("tunnel not installed: %q", domain)
+	}
+	// One tunnel per account: another name is refused, and says why.
+	if c, _ := a.CheckDomain(ctx, "another"); c.Available || c.Reason != "has_tunnel" || c.Domain != "pizza-house.menu.test" {
+		t.Fatalf("second domain: %+v", c)
+	}
+}
+
+// The tunnel is built in the background; a failure there must reach the owner.
+func TestDomainFailureReachesTheApp(t *testing.T) {
+	f, fake := linkedFixture(t)
+	a, ctx, owner := f.app, f.ctx, f.owner
+	_, err := a.ActivateDevice(ctx, owner, "ACT-TEST", "")
+	f.must(err)
+	fake.Update("ACT-TEST", func(t *saastest.Tenant) { t.TunnelError = "Cloudflare said no" })
+	a.syncOnce(ctx, true)
+	info, err := a.PlatformInfo(ctx, owner)
+	f.must(err)
+	if info.DomainError != "Cloudflare said no" {
+		t.Fatalf("error not shown: %+v", info)
+	}
+	// Trying again clears it while the new attempt runs.
+	_, err = a.ClaimDomain(ctx, owner, "second-try")
+	f.must(err)
+	if info, _ := a.PlatformInfo(ctx, owner); info.DomainError != "" {
+		t.Fatalf("old error kept: %q", info.DomainError)
 	}
 }
 

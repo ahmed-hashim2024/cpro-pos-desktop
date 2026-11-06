@@ -444,6 +444,77 @@ func (a *App) ImportTemplate(ctx context.Context, actor Actor, key string, mode 
 	return buf.Bytes(), fmt.Sprintf("cpro-%s-%s.xlsx", e.key, mode), nil
 }
 
+// exportAll is the entity key for one workbook with everything.
+const exportAll = "all"
+
+// ExportData returns the current records as an .xlsx, one sheet per entity.
+// Its headers are the same labels the importer reads, so a sheet can be
+// edited and uploaded back on the update tab.
+func (a *App) ExportData(ctx context.Context, actor Actor, key, lang string) ([]byte, string, error) {
+	var list []importEntity
+	if key == exportAll {
+		for _, e := range a.importEntities() {
+			if actor.Can(e.perm) {
+				list = append(list, e)
+			}
+		}
+		if len(list) == 0 {
+			return nil, "", errForbidden
+		}
+	} else {
+		e, err := a.importEntity(actor, key)
+		if err != nil {
+			return nil, "", err
+		}
+		list = []importEntity{e}
+	}
+	f := excelize.NewFile()
+	defer f.Close()
+	head, err := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Color: "1E1B4B", Size: 11},
+		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"EEF0FF"}},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	rtl := lang == "" || lang == "ar"
+	for i, e := range list {
+		sheet := e.label.in(lang)
+		if i == 0 {
+			f.SetSheetName("Sheet1", sheet)
+		} else if _, err := f.NewSheet(sheet); err != nil {
+			return nil, "", err
+		}
+		f.SetSheetView(sheet, 0, &excelize.ViewOptions{RightToLeft: &rtl})
+		cols := e.columns(ModeInsert)
+		for c, col := range cols {
+			cell, _ := excelize.CoordinatesToCellName(c+1, 1)
+			f.SetCellStr(sheet, cell, col.label.in(lang))
+			f.SetCellStyle(sheet, cell, cell, head)
+			name, _ := excelize.ColumnNumberToName(c + 1)
+			f.SetColWidth(sheet, name, name, 22)
+		}
+		f.SetPanes(sheet, &excelize.Panes{Freeze: true, YSplit: 1, TopLeftCell: "A2", ActivePane: "bottomLeft"})
+		if err := a.prefill(ctx, f, sheet, e, cols, lang); err != nil {
+			return nil, "", err
+		}
+	}
+	f.SetActiveSheet(0)
+	var buf bytes.Buffer
+	if err := f.Write(&buf); err != nil {
+		return nil, "", err
+	}
+	if err := a.audit(ctx, a.db.Write, actor, "data.export", "import", key, nil); err != nil {
+		return nil, "", err
+	}
+	name := key
+	if key == exportAll {
+		name = "data"
+	}
+	return buf.Bytes(), fmt.Sprintf("cpro-%s-%s.xlsx", name, a.now().Format("2006-01-02")), nil
+}
+
 func (a *App) prefill(ctx context.Context, f *excelize.File, sheet string, e importEntity, cols []importField, lang string) error {
 	rows, err := a.db.Read.QueryContext(ctx, e.query)
 	if err != nil {

@@ -157,3 +157,77 @@ func TestImportNeedsPermission(t *testing.T) {
 		t.Fatalf("cashier targets %v", got)
 	}
 }
+
+func TestExportRoundTrip(t *testing.T) {
+	f := newFixture(t)
+	a, ctx, owner := f.app, f.ctx, f.owner
+	m := f.menu()
+	b, name, err := a.ExportData(ctx, owner, "items", "ar")
+	f.must(err)
+	if !strings.HasPrefix(name, "cpro-items-") || !strings.HasSuffix(name, ".xlsx") {
+		t.Fatalf("name %q", name)
+	}
+	x, err := excelize.OpenReader(bytes.NewReader(b))
+	f.must(err)
+	sheet := x.GetSheetList()[0]
+	rows, err := x.GetRows(sheet)
+	f.must(err)
+	if len(rows) != 3 { // header + «برجر» + the hidden item
+		t.Fatalf("rows: %v", rows)
+	}
+
+	// An edited export goes straight back in on the update tab.
+	col := -1
+	for i, h := range rows[0] {
+		if h == "السعر" {
+			col = i
+		}
+	}
+	for r, row := range rows {
+		if r > 0 && strings.Contains(strings.Join(row, " "), "برجر") {
+			cell, _ := excelize.CoordinatesToCellName(col+1, r+1)
+			f.must(x.SetCellValue(sheet, cell, 200))
+		}
+	}
+	var buf bytes.Buffer
+	f.must(x.Write(&buf))
+	res, err := a.Import(ctx, owner, "items", ModeUpdate, bytes.NewReader(buf.Bytes()), "ar")
+	f.must(err)
+	if len(res.Issues) != 0 || res.Updated != 2 {
+		t.Fatalf("import: %+v", res)
+	}
+	items, _ := a.Items(ctx, owner)
+	for _, it := range items {
+		if it.ID == m.burger && it.Price != 20000 {
+			t.Fatalf("price: %d", it.Price)
+		}
+	}
+}
+
+func TestExportEverythingRespectsPermissions(t *testing.T) {
+	f := newFixture(t)
+	a, ctx, owner := f.app, f.ctx, f.owner
+	f.menu()
+	b, name, err := a.ExportData(ctx, owner, exportAll, "ar")
+	f.must(err)
+	if !strings.HasPrefix(name, "cpro-data-") {
+		t.Fatalf("name %q", name)
+	}
+	x, err := excelize.OpenReader(bytes.NewReader(b))
+	f.must(err)
+	if got := len(x.GetSheetList()); got != len(a.importEntities()) {
+		t.Fatalf("sheets: %v", x.GetSheetList())
+	}
+	cashier := f.login(rbac.Cashier, "cashier")
+	if _, _, err := a.ExportData(ctx, cashier, "customers", "ar"); code(err) != CodeForbidden {
+		t.Fatalf("cashier exported customers: %v", err)
+	}
+	if b, _, err := a.ExportData(ctx, cashier, exportAll, "ar"); err == nil {
+		c, _ := excelize.OpenReader(bytes.NewReader(b))
+		for _, s := range c.GetSheetList() {
+			if s == "العملاء" {
+				t.Fatal("cashier got the customers sheet")
+			}
+		}
+	}
+}

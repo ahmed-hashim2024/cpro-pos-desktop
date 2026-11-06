@@ -48,7 +48,7 @@ export const navTree = [
     { to: '/reports?tab=voids', label: T('الإلغاءات والهالك'), icon: Ban, perm: 'reports.view' },
   ] },
   { to: '/customers', label: T('العملاء'), icon: Users, perm: 'pos.sell' },
-  { to: '/import', label: T('استيراد البيانات'), icon: FileSpreadsheet, perm: ['catalog.manage', 'inventory.manage'] },
+  { to: '/import', label: T('استيراد وتصدير البيانات'), icon: FileSpreadsheet, perm: ['catalog.manage', 'inventory.manage'] },
   { label: T('الإدارة'), icon: UserCog, children: [
     { to: '/users', label: T('المستخدمون'), icon: UserCog, perm: 'users.manage' },
     { to: '/audit', label: T('سجل النشاط'), icon: ScrollText, perm: 'audit.view' },

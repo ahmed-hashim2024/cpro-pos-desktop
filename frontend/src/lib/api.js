@@ -94,13 +94,17 @@ export const api = {
     return saveBlob(await res.blob(), name);
   },
 
-  // Multipart upload of one file under the field name "file".
+  // Uploads one file as the raw request body. It must be an ArrayBuffer:
+  // the macOS window (WKWebView) silently drops FormData and Blob bodies.
   async upload(path, file, params) {
-    const body = new FormData();
-    body.append('file', file);
     let res;
     try {
-      res = await fetch(`/api/v1${path}${qs(params)}`, { method: 'POST', headers: { Authorization: `Bearer ${session.token}` }, body });
+      const body = await file.arrayBuffer();
+      res = await fetch(`/api/v1${path}${qs(params)}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.token}`, 'Content-Type': 'application/octet-stream' },
+        body,
+      });
     } catch {
       throw new ApiError(0, 'تعذر الاتصال بالنظام');
     }

@@ -40,7 +40,7 @@ func TestEMenuSettings(t *testing.T) {
 	}
 
 	s := f.emenuSettings()
-	if s.ButtonColor != "ember" || s.Background != "cream" || !bool(s.Enabled) {
+	if s.ButtonColor != "ember" || s.Background != "white" || !bool(s.Enabled) {
 		t.Fatalf("defaults: %+v", s)
 	}
 	bad := []func(*EMenuSettings){

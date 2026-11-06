@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react';
 import {
   FileSpreadsheet, Download, Paperclip, Upload, CheckCircle2, AlertTriangle, UtensilsCrossed, Layers, Wheat,
-  Users, Store, Armchair, FilePlus2, FilePen, X,
+  Users, Store, Armchair, FilePlus2, FilePen, X, FileDown, Loader2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { lang } from '@/lib/i18n';
-import { toast } from '@/lib/store';
+import { toast, toastError } from '@/lib/store';
 import { useTab } from '@/lib/useTab';
 import { exportCSV } from '@/lib/csv';
 import { Button, Card, Empty, PageHeader, Spinner, Table, Td, Tabs, cx, useAction, useLoad } from '@/components/ui';
@@ -57,12 +57,12 @@ export default function Import() {
 
   return (
     <div>
-      <PageHeader title={T('استيراد البيانات')} icon={FileSpreadsheet} subtitle={T('أضف أو حدّث بياناتك دفعة واحدة من ملف Excel')} crumb={T('استيراد البيانات')} />
-      <Tabs value={mode} onChange={switchMode} tabs={[['insert', T('إضافة بيانات جديدة'), FilePlus2], ['update', T('تحديث بيانات موجودة'), FilePen]]} />
+      <PageHeader title={T('استيراد وتصدير البيانات')} icon={FileSpreadsheet} subtitle={T('أضف أو حدّث أو نزّل بياناتك دفعة واحدة في ملف Excel')} crumb={T('استيراد وتصدير البيانات')} />
+      <Tabs value={mode} onChange={switchMode} tabs={[['insert', T('إضافة بيانات جديدة'), FilePlus2], ['update', T('تحديث بيانات موجودة'), FilePen], ['export', T('تصدير البيانات'), FileDown]]} />
 
       {targets.loading && !targets.data ? <Spinner /> : !list.length ? (
         <Empty icon={FileSpreadsheet} title={T('لا توجد صلاحية')}>{T('ليس لديك صلاحية لاستيراد أي نوع من البيانات')}</Empty>
-      ) : (
+      ) : mode === 'export' ? <Export list={list} /> : (
         <div className="grid gap-4">
           <Step n={1} title={T('اختر نوع البيانات')}>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
@@ -137,6 +137,42 @@ export default function Import() {
         </div>
       )}
     </div>
+  );
+}
+
+// Downloads the current records as Excel, one type or everything.
+function Export({ list }) {
+  const [busy, setBusy] = useState('');
+  const download = async (key) => {
+    setBusy(key);
+    try {
+      const saved = await api.download(`/import/${key}/export`, `cpro-${key}.xlsx`, { lang });
+      if (saved) toast(T('تم تصدير البيانات'));
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setBusy('');
+    }
+  };
+  return (
+    <Card title={T('تصدير البيانات')} icon={FileDown}
+      actions={<Button icon={Download} busy={busy === 'all'} disabled={!!busy} onClick={() => download('all')}>{T('تصدير كل البيانات')}</Button>}>
+      <p className="mb-4 text-sm text-muted">{T('نزّل بياناتك الحالية في ملف Excel. تقدر تعدّل الملف وترفعه من تبويب «تحديث بيانات موجودة». ملف «كل البيانات» فيه ورقة لكل نوع، ولرفع التعديلات استخدم ملف كل نوع لوحده.')}</p>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {list.map((t) => {
+          const Icon = icons[t.key] || FileSpreadsheet;
+          return (
+            <button key={t.key} disabled={!!busy} onClick={() => download(t.key)} aria-busy={busy === t.key}
+              className="flex flex-col items-center gap-2 rounded-2xl border-2 border-line bg-surface p-4 font-semibold transition hover:border-primary/40 disabled:opacity-60">
+              <span className="flex size-11 items-center justify-center rounded-xl bg-surface-2 text-primary">
+                {busy === t.key ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <Icon className="size-5" aria-hidden />}
+              </span>
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+    </Card>
   );
 }
 

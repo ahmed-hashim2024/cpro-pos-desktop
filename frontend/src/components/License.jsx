@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ShieldAlert, ShieldCheck, ExternalLink, LogOut, Loader2, WifiOff, CalendarClock } from 'lucide-react';
+import { ShieldAlert, ExternalLink, LogOut, Loader2, WifiOff, CalendarClock } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp, toast, toastError } from '@/lib/store';
 import { openExternal } from '@/lib/open';
@@ -140,31 +139,19 @@ function SyncButton({ label = T('مزامنة الآن') }) {
   return <Button type="button" busy={busy} onClick={sync}>{label}</Button>;
 }
 
-// Thin strip above every screen when the license needs attention.
+// Counts down, one day at a time, once the app has been offline too long.
 export function LicenseBanner() {
-  const { platform, can } = useApp();
-  if (!platform?.enabled) return null;
-  const { state } = platform;
-  let tone, icon, text;
-  if (state === 'grace') {
-    // Counts down one day at a time until the app stops.
-    const days = daysLeft(platform.grace_until);
-    tone = days <= 2 ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning';
-    icon = CalendarClock;
-    text = days > 1
-      ? T('جهازك مش متصل بالإنترنت من فترة. وصّله في أقرب وقت علشان البرنامج يفضل شغال — باقي {0} أيام', [days])
-      : T('جهازك مش متصل بالإنترنت من فترة. وصّله النهارده علشان البرنامج يفضل شغال — ده آخر يوم');
-  } else if (state === 'trial' && platform.expires_at) {
-    tone = 'bg-info-soft text-info';
-    icon = ShieldCheck;
-    text = T('الفترة التجريبية تنتهي خلال {0} يوم', [daysLeft(platform.expires_at)]);
-  } else return null;
-  const Icon = icon;
+  const platform = useApp((s) => s.platform);
+  if (!platform?.enabled || platform.state !== 'grace') return null;
+  const days = daysLeft(platform.grace_until);
   return (
-    <div className={cx('flex items-center gap-2 px-4 py-2 text-sm font-semibold', tone)} role="status">
-      <Icon className="size-4 shrink-0" aria-hidden />
-      <span className="flex-1">{text}</span>
-      {state === 'trial' && can('settings.manage') && <Link to="/settings?tab=platform" className="underline underline-offset-2">{T('الاشتراك')}</Link>}
+    <div className={cx('flex items-center gap-2 px-4 py-2 text-sm font-semibold', days <= 2 ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning')} role="status">
+      <CalendarClock className="size-4 shrink-0" aria-hidden />
+      <span className="flex-1">
+        {days > 1
+          ? T('جهازك مش متصل بالإنترنت من فترة. وصّله في أقرب وقت علشان البرنامج يفضل شغال — باقي {0} أيام', [days])
+          : T('جهازك مش متصل بالإنترنت من فترة. وصّله النهارده علشان البرنامج يفضل شغال — ده آخر يوم')}
+      </span>
     </div>
   );
 }
