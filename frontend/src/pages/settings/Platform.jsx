@@ -1,13 +1,14 @@
 import { Link } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import {
-  RefreshCw, ExternalLink, Copy, Printer, QrCode, Globe, ShieldCheck, RotateCcw, Info, MonitorSmartphone,
+  RefreshCw, ExternalLink, Copy, Printer, QrCode, Globe, ShieldCheck, RotateCcw, Info, MonitorSmartphone, Download, Earth, UserCog,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp, toast, toastError } from '@/lib/store';
 import { dateTime } from '@/lib/format';
 import { printTableQRs } from '@/lib/print';
 import { qrSVG } from '@/lib/qr';
+import { downloadQR, downloadQRZip } from '@/lib/qrimage';
 import { openExternal, copyText } from '@/lib/open';
 import { confirm } from '@/components/Confirm';
 import { ConnectGoogle, licenseReason, openAccount } from '@/components/License';
@@ -80,6 +81,7 @@ export default function Platform() {
       </Card>
 
       <EMenuCard platform={platform} />
+      {platform.linked && <RemoteCard platform={platform} />}
       {platform.linked && <TableQRs platform={platform} />}
       <AboutCard platform={platform} />
     </div>
@@ -92,20 +94,20 @@ function EMenuCard({ platform }) {
   const url = platform.menu_url;
   const copy = async () => { if (await copyText(url)) toast(T('تم نسخ الرابط')); };
   return (
-    <Card title={T('المنيو الإلكتروني')} icon={Globe} actions={url && <Badge tone={tone} dot>{label}</Badge>}>
+    <Card title={T('قائمة الطعام الإلكترونية')} icon={Globe} actions={url && <Badge tone={tone} dot>{label}</Badge>}>
       {!platform.linked ? (
-        <p className="text-sm text-muted">{T('المنيو الإلكتروني يحتاج ربط البرنامج بحسابك.')}</p>
+        <p className="text-sm text-muted">{T('تتطلب قائمة الطعام الإلكترونية ربط البرنامج بحسابك.')}</p>
       ) : !platform.features?.emenu ? (
-        <p className="text-sm text-muted">{T('المنيو الإلكتروني غير متاح في اشتراكك الحالي')}</p>
+        <p className="text-sm text-muted">{T('قائمة الطعام الإلكترونية غير متاحة في اشتراكك الحالي')}</p>
       ) : !url ? (
         <DomainForm name={settings?.restaurant_name} />
       ) : (
         <div className="grid gap-3">
           <div className="flex items-center gap-3">
-            <div className="size-28 shrink-0 rounded-xl border border-line bg-white p-1.5 [&_svg]:size-full" dangerouslySetInnerHTML={{ __html: qrSVG(url, { margin: 1 }) }} />
+            <QRThumb url={url} title={T('قائمة الطعام الإلكترونية')} restaurant={settings?.restaurant_name} className="size-28 rounded-xl border border-line p-1.5" />
             <div className="min-w-0 flex-1 space-y-2">
               <a dir="ltr" className="block truncate font-bold text-primary" href={url} onClick={(e) => { e.preventDefault(); openExternal(url); }}>{url}</a>
-              <p className="text-xs text-muted">{T('رابط عام للتيك أواي ومشاركته على السوشيال. لكل طاولة كود خاص بالأسفل.')}</p>
+              <p className="text-xs text-muted">{T('رابط عام للطلبات الخارجية وللمشاركة على وسائل التواصل الاجتماعي، ولكل طاولة رمز خاص أدناه.')}</p>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="secondary" icon={Copy} onClick={copy}>{T('نسخ')}</Button>
                 <Button size="sm" variant="secondary" icon={ExternalLink} onClick={() => openExternal(url)}>{T('فتح')}</Button>
@@ -114,10 +116,10 @@ function EMenuCard({ platform }) {
             </div>
           </div>
           {platform.tunnel?.state === 'error' && <p className="rounded-xl bg-danger-soft p-2 text-xs text-danger" dir="auto">{platform.tunnel.error}</p>}
-          {!platform.menu_enabled && <p className="rounded-xl bg-warning-soft p-2 text-xs text-warning">{T('المنيو مقفول للضيوف — افتحه من المنيو ← المنيو الإلكتروني')}</p>}
+          {!platform.menu_enabled && <p className="rounded-xl bg-warning-soft p-2 text-xs text-warning">{T('قائمة الطعام مغلقة أمام الضيوف — افتحها من: قائمة الطعام ← قائمة الطعام الإلكترونية')}</p>}
           <div className="flex flex-wrap items-center gap-2">
-            <p className="flex-1 text-xs text-muted">{T('الشكل والألوان والعروض والطلب أونلاين ونداء الويتر تتظبط من المنيو ← المنيو الإلكتروني')}</p>
-            <Link to="/menu?tab=emenu" className="text-sm font-bold text-primary hover:underline">{T('تصميم المنيو')}</Link>
+            <p className="flex-1 text-xs text-muted">{T('تُضبط الألوان والعروض والطلب الإلكتروني ونداء النادل من: قائمة الطعام ← قائمة الطعام الإلكترونية')}</p>
+            <Link to="/menu?tab=emenu" className="text-sm font-bold text-primary hover:underline">{T('تصميم قائمة الطعام')}</Link>
           </div>
         </div>
       )}
@@ -134,15 +136,29 @@ function TableQRs({ platform }) {
   if (!platform.features?.emenu || !base) return null;
   const link = (t) => `${base}/t/${t.qr_token}`;
   const hallLink = `${base}/hall`;
-  const printHall = () => printTableQRs(settings?.restaurant_name || '', [{ title: T('منيو الصالة'), svg: qrSVG(hallLink) }]);
+  const printHall = () => printTableQRs(settings?.restaurant_name || '', [{ title: T('قائمة طعام الصالة'), svg: qrSVG(hallLink) }]);
   const printAll = () => printTableQRs(settings?.restaurant_name || '', list.map((t) => ({ title: t.name, svg: qrSVG(link(t)) })));
+  // One ZIP: the hall code and a PNG card per table.
+  const saveAll = async () => {
+    const restaurant = settings?.restaurant_name || '';
+    const hint = T('امسح الرمز لعرض قائمة الطعام والطلب');
+    setBusy('zip');
+    try {
+      const cards = [{ url: hallLink, title: T('قائمة طعام الصالة'), restaurant, hint }, ...list.map((t) => ({ url: link(t), title: t.name, restaurant, hint }))];
+      if (await downloadQRZip(cards, T('رموز الطاولات') + (restaurant ? ` - ${restaurant}` : ''))) toast(T('تم حفظ الرموز'));
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setBusy('');
+    }
+  };
   const regenerate = async (t) => {
-    if (!await confirm({ title: T('تجديد كود {0}', [t.name]), message: T('الكود المطبوع حالياً لن يعمل بعد التجديد. اطبع الكود الجديد.'), action: T('تجديد') })) return;
+    if (!await confirm({ title: T('تجديد رمز {0}', [t.name]), message: T('لن يعمل الرمز المطبوع حالياً بعد التجديد، فاطبع الرمز الجديد.'), action: T('تجديد') })) return;
     setBusy(t.id);
     try {
       await api.post(`/tables/${t.id}/qr`);
       tables.reload(true);
-      toast(T('تم تجديد الكود'));
+      toast(T('تم تجديد الرمز'));
     } catch (e) {
       toastError(e);
     } finally {
@@ -150,31 +166,102 @@ function TableQRs({ platform }) {
     }
   };
   return (
-    <Card title={T('أكواد الطاولات')} icon={QrCode} className="xl:col-span-2"
-      actions={list.length > 0 && <Button size="sm" icon={Printer} onClick={printAll}>{T('طباعة كل الأكواد')}</Button>}>
+    <Card title={T('رموز الطاولات')} icon={QrCode} className="xl:col-span-2"
+      actions={list.length > 0 && (
+        <div className="flex gap-2">
+          <Button size="sm" variant="secondary" icon={Download} busy={busy === 'zip'} onClick={saveAll}>{T('تنزيل جميع الرموز')}</Button>
+          <Button size="sm" icon={Printer} onClick={printAll}>{T('طباعة جميع الرموز')}</Button>
+        </div>
+      )}>
       <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl bg-surface-2 p-3">
-        <div className="size-14 shrink-0 rounded-lg bg-white p-0.5 [&_svg]:size-full" dangerouslySetInnerHTML={{ __html: qrSVG(hallLink, { margin: 1 }) }} />
+        <QRThumb url={hallLink} title={T('قائمة طعام الصالة')} restaurant={settings?.restaurant_name} className="size-14 rounded-lg p-0.5" />
         <div className="min-w-0 flex-1">
-          <div className="font-bold">{T('كود الصالة (واحد لكل الترابيزات)')}</div>
-          <p className="text-sm text-muted">{T('الضيف بيختار ترابيزته من قايمة. كود الترابيزة بيحددها لوحده، واللينك العادي للتوصيل والتصفح بس.')}</p>
+          <div className="font-bold">{T('رمز الصالة (رمز واحد لجميع الطاولات)')}</div>
+          <p className="text-sm text-muted">{T('يختار الضيف طاولته من قائمة. أما رمز الطاولة فيحددها تلقائياً، والرابط العام مخصص للتوصيل والتصفح فقط.')}</p>
           <span dir="ltr" className="num block truncate text-xs text-muted">{hallLink}</span>
         </div>
+        <Button size="sm" variant="secondary" icon={Download} onClick={() => saveQR({ url: hallLink, title: T('قائمة طعام الصالة'), restaurant: settings?.restaurant_name })}>{T('تنزيل')}</Button>
         <Button size="sm" variant="secondary" icon={Printer} onClick={printHall}>{T('طباعة')}</Button>
       </div>
       {tables.loading && !tables.data ? <Spinner /> : (
-        <Table head={[T('الطاولة'), T('الكود'), T('الرابط'), '']} empty={T('لا توجد طاولات — أضفها من المنيو ← الطاولات')}>
+        <Table head={[T('الطاولة'), T('الرمز'), T('الرابط'), '']} empty={T('لا توجد طاولات — أضفها من: قائمة الطعام ← الطاولات')}>
           {list.map((t) => (
             <tr key={t.id} className="border-t border-line">
               <Td className="font-bold">{t.name}</Td>
-              <Td><div className="size-14 rounded-lg bg-white p-0.5 [&_svg]:size-full" dangerouslySetInnerHTML={{ __html: qrSVG(link(t), { margin: 1 }) }} /></Td>
+              <Td><QRThumb url={link(t)} title={t.name} restaurant={settings?.restaurant_name} className="size-14 rounded-lg p-0.5" /></Td>
               <Td><span dir="ltr" className="num text-xs text-muted">{link(t)}</span></Td>
               <Td className="text-end">
+                <Button size="sm" variant="ghost" icon={Download} onClick={() => saveQR({ url: link(t), title: t.name, restaurant: settings?.restaurant_name })}>{T('تنزيل')}</Button>
                 <Button size="sm" variant="ghost" icon={Printer} onClick={() => printTableQRs(settings?.restaurant_name || '', [{ title: t.name, svg: qrSVG(link(t)) }])}>{T('طباعة')}</Button>
                 <Button size="sm" variant="ghost" icon={RotateCcw} busy={busy === t.id} onClick={() => regenerate(t)}>{T('تجديد')}</Button>
               </Td>
             </tr>
           ))}
         </Table>
+      )}
+    </Card>
+  );
+}
+
+// Saves a QR code as a PNG card (restaurant, title, code, «scan me»).
+async function saveQR({ url, title, restaurant }) {
+  try {
+    if (await downloadQR({ url, title, restaurant: restaurant || '', hint: T('امسح الرمز لعرض قائمة الطعام والطلب') })) toast(T('تم حفظ الرمز'));
+  } catch (e) {
+    toastError(e);
+  }
+}
+
+// A QR code that downloads itself as a picture when clicked.
+function QRThumb({ url, title, restaurant, className }) {
+  return (
+    <button type="button" onClick={() => saveQR({ url, title, restaurant })} title={T('اضغط لتنزيل الرمز صورةً')} aria-label={T('تنزيل رمز {0}', [title])}
+      className={`group relative block shrink-0 cursor-pointer bg-white transition hover:ring-2 hover:ring-primary [&_svg]:size-full ${className}`}>
+      <span className="block size-full" dangerouslySetInnerHTML={{ __html: qrSVG(url, { margin: 1 }) }} />
+      <span className="absolute inset-0 flex items-center justify-center rounded-[inherit] bg-black/45 text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
+        <Download className="size-5" aria-hidden />
+      </span>
+    </button>
+  );
+}
+
+// Signing in to the whole system from anywhere, through the same tunnel on
+// its own address («<name>-pos»). Who may do it is set per user.
+function RemoteCard({ platform }) {
+  const me = useApp((s) => s.me);
+  const users = useLoad(() => (me?.role === 'owner' ? api.get('/users') : Promise.resolve([])), [me?.role]);
+  const url = platform.remote_url;
+  const allowed = (users.data || []).filter((u) => u.active && u.remote_access);
+  const copy = async () => { if (await copyText(url)) toast(T('تم نسخ الرابط')); };
+  const [tone, label] = !platform.features?.remote_access ? ['gray', T('غير مشمول في الاشتراك')] : url ? tunnelBadge[platform.tunnel?.state] || tunnelBadge.off : ['amber', T('جارٍ التجهيز')];
+  return (
+    <Card title={T('الدخول عن بُعد')} icon={Earth} actions={<Badge tone={tone} dot>{label}</Badge>}>
+      {!platform.features?.remote_access ? (
+        <p className="text-sm text-muted">{T('استخدم النظام بالكامل (التقارير والطلبات والإعدادات) من أي مكان في العالم عبر عنوان خاص بك. هذه الخدمة غير مشمولة في اشتراكك الحالي، ويمكنك تفعيلها من حسابك على المنصة.')}</p>
+      ) : !url ? (
+        <p className="text-sm text-muted">{platform.domain ? T('جارٍ تجهيز عنوان الدخول عن بُعد، وسيظهر هنا خلال دقيقة.') : T('اختر أولاً عنوان قائمة الطعام من بطاقة قائمة الطعام الإلكترونية؛ إذ يُنشأ عنوان الدخول عن بُعد معه.')}</p>
+      ) : (
+        <div className="grid gap-3">
+          <div>
+            <a dir="ltr" className="block truncate font-bold text-primary" href={url} onClick={(e) => { e.preventDefault(); openExternal(url); }}>{url}</a>
+            <p className="mt-1 text-xs text-muted">{T('افتحه من أي هاتف محمول أو حاسوب، وسجّل الدخول باسم المستخدم وكلمة المرور. لا يعمل الرقم السري (PIN) من خارج المطعم، ويجب أن يكون هذا الجهاز قيد التشغيل ومتصلاً بالإنترنت.')}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" icon={Copy} onClick={copy}>{T('نسخ')}</Button>
+              <Button size="sm" variant="secondary" icon={ExternalLink} onClick={() => openExternal(url)}>{T('فتح')}</Button>
+            </div>
+          </div>
+          {me?.role === 'owner' && (
+            <div className="rounded-xl bg-surface-2 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-bold">{T('المأذون لهم بالدخول عن بُعد')}</span>
+                <Link to="/users" className="flex items-center gap-1 text-sm font-bold text-primary hover:underline"><UserCog className="size-4" aria-hidden />{T('المستخدمون')}</Link>
+              </div>
+              {allowed.length ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">{allowed.map((u) => <Badge key={u.id} tone="blue">{u.full_name}</Badge>)}</div>
+              ) : <p className="mt-1 text-xs text-muted">{T('لا يوجد أحد بعد، ولا حتى أنت. افتح المستخدم وحدّد «يمكنه الدخول إلى النظام من خارج المطعم».')}</p>}
+            </div>
+          )}
+        </div>
       )}
     </Card>
   );

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Home as HomeIcon, LayoutGrid, ShoppingBag, Tag, UserRound, Utensils, Clock3, Eye } from 'lucide-react';
+import { Home as HomeIcon, LayoutGrid, ShoppingBag, Tag, UserRound, Utensils, Clock3, Eye, MessagesSquare } from 'lucide-react';
 import { menuApi } from './api';
 import { makeT, pickLang, saveLang } from './i18n';
 import { cx, store, tableToken, hallLink, PREVIEW, validHex, onColor, loadContact, saveContact, emptyContact, orderModes } from './lib';
@@ -7,6 +7,7 @@ import { Header, SearchBar, HeroSlider, CategoryRail, Popular, FamilyOffers, Inf
 import { FullMenu, OffersPage, ItemModal, FilterSheet, emptyFilters, isFiltered } from './Browse';
 import { CartPage, StatusSheet, ServiceButton, useOrderTracker, orderFinished } from './Order';
 import { ProfilePage } from './Profile';
+import { ContactPage } from './Contact';
 import { useAppLinks, useInstallOffer, InstallPopup } from './Install';
 
 const ORDER_KEY = `cpro.menu.order.${tableToken || (hallLink ? 'hall' : 'web')}`;
@@ -106,6 +107,10 @@ export default function MenuApp() {
   if (!menu) return <Skeleton />;
 
   const canOrder = orderModes(menu).length > 0;
+  // At a table (its QR or the hall QR) «My details» becomes «Contact»: the
+  // table is known, so the guest calls the staff and reaches the restaurant.
+  const atTable = !!menu.table || menu.tables?.length > 0;
+  const page = tab === 'profile' && atTable ? 'contact' : tab;
   const count = cart.reduce((s, l) => s + l.qty, 0);
   const badgeOf = (id) => menu.featured.find((f) => f.item.id === id)?.badge || '';
   const pick = (item) => setPicked({ item, badge: badgeOf(item.id) });
@@ -130,12 +135,12 @@ export default function MenuApp() {
   const family = menu.offers.filter((o) => o.kind === 'family');
 
   return (
-    <div className="mx-auto min-h-dvh max-w-md pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
+    <div className="mx-auto min-h-dvh max-w-md pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:max-w-3xl md:px-2 lg:max-w-6xl lg:px-4">
       {menu.preview && (
         <div className="sticky top-0 z-40 flex items-center justify-center gap-1.5 bg-fg py-1 text-[11px] font-bold text-bg"><Eye className="size-3.5" aria-hidden />{t('previewBanner')}</div>
       )}
 
-      {tab === 'home' && (
+      {page === 'home' && (
         <>
           <Header menu={menu} t={t} lang={lang} onLang={(l) => { saveLang(l); setLang(l); }} order={order} tracking={!!orderToken} onBell={() => setStatusOpen(true)} />
           <TableChip menu={menu} t={t} />
@@ -157,32 +162,37 @@ export default function MenuApp() {
           <Info menu={menu} t={t} />
         </>
       )}
-      {tab === 'menu' && (
+      {page === 'menu' && (
         <FullMenu menu={menu} t={t} money={money} canOrder={canOrder} inCart={inCart} filters={filters} setFilters={setFilters}
           onFilter={() => setFilterOpen(true)} onPick={pick} />
       )}
-      {tab === 'offers' && <OffersPage menu={menu} t={t} money={money} onPick={pick} />}
-      {tab === 'cart' && (
+      {page === 'offers' && <OffersPage menu={menu} t={t} money={money} onPick={pick} />}
+      {page === 'cart' && (
         <CartPage menu={menu} t={t} money={money} cart={cart} setCart={setCart} contact={contact} flash={flash} onPlaced={placed}
           onBrowse={() => browse(emptyFilters)} onDetails={() => { setBackToCart(true); setTab('profile'); }} />
       )}
-      {tab === 'profile' && (
+      {page === 'contact' && (
+        <ContactPage menu={menu} t={t} money={money} flash={flash} contact={contact} setContact={setContact} tracking={!!orderToken} order={order}
+          onStatus={() => setStatusOpen(true)}
+          onDone={backToCart && cart.length ? () => { setBackToCart(false); setTab('cart'); } : undefined} />
+      )}
+      {page === 'profile' && (
         <ProfilePage key={menu.preview ? JSON.stringify(menu.ordering) : 'p'} menu={menu} t={t} contact={contact} setContact={setContact} flash={flash}
           onDone={backToCart && cart.length ? () => { setBackToCart(false); setTab('cart'); } : undefined} />
       )}
 
-      {menu.ordering.call_waiter && (menu.table || menu.tables?.length > 0) && (
+      {menu.ordering.call_waiter && atTable && page !== 'contact' && (
         <ServiceButton menu={menu} t={t} flash={flash} contact={contact}
           onTable={(table) => { const next = { ...contact, table }; if (!PREVIEW) saveContact(next); setContact(next); }} />
       )}
-      {orderToken && !statusOpen && (
+      {orderToken && !statusOpen && page !== 'contact' && (
         <button onClick={() => setStatusOpen(true)}
-          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] start-[max(1rem,calc(50%-14rem+1rem))] z-30 flex items-center gap-2 rounded-full bg-card px-4 py-2.5 text-sm font-semibold shadow-xl">
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] start-[max(1rem,calc(50%-14rem+1rem))] z-30 flex items-center gap-2 rounded-full bg-card px-4 py-2.5 md:start-[max(1rem,calc(50%-24rem+1rem))] lg:start-[max(1rem,calc(50%-36rem+1rem))] text-sm font-semibold shadow-xl">
           <Clock3 className="size-4 text-p" aria-hidden />{order?.stage === 'ready' ? t('orderReady') : t('yourOrder')}
         </button>
       )}
 
-      <BottomNav t={t} tab={tab} setTab={setTab} count={count} />
+      <BottomNav t={t} tab={tab} setTab={setTab} count={count} atTable={atTable} />
 
       {picked && (
         <ItemModal item={picked.item} badge={picked.badge} t={t} money={money} canOrder={canOrder} showPrices={menu.show_prices}
@@ -197,7 +207,7 @@ export default function MenuApp() {
   );
 }
 
-function BottomNav({ t, tab, setTab, count }) {
+function BottomNav({ t, tab, setTab, count, atTable }) {
   const item = (key, Icon, label) => (
     <button key={key} onClick={() => setTab(key)} aria-current={tab === key ? 'page' : undefined}
       className={cx('flex flex-1 flex-col items-center gap-0.5 text-[10px] font-semibold transition', tab === key ? 'text-p' : 'text-mut')}>
@@ -205,7 +215,7 @@ function BottomNav({ t, tab, setTab, count }) {
     </button>
   );
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-md px-3 pb-[max(.5rem,env(safe-area-inset-bottom))]" aria-label={t('menu')}>
+    <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-md px-3 pb-[max(.5rem,env(safe-area-inset-bottom))] md:max-w-lg md:pb-4" aria-label={t('menu')}>
       <div className="flex h-14 items-center rounded-[22px] bg-card px-1.5 shadow-[0_-4px_24px_rgba(0,0,0,.10)]">
         {item('home', HomeIcon, t('home'))}
         {item('menu', LayoutGrid, t('menuTab'))}
@@ -216,7 +226,7 @@ function BottomNav({ t, tab, setTab, count }) {
           </span>
         </button>
         {item('offers', Tag, t('offers'))}
-        {item('profile', UserRound, t('profile'))}
+        {atTable ? item('profile', MessagesSquare, t('contactTab')) : item('profile', UserRound, t('profile'))}
       </div>
     </nav>
   );
@@ -235,7 +245,7 @@ function Fallback({ t, kind, onRetry }) {
 
 function Skeleton() {
   return (
-    <div className="mx-auto max-w-md px-4 pt-5" aria-busy="true">
+    <div className="mx-auto max-w-md px-4 pt-5 md:max-w-3xl lg:max-w-6xl" aria-busy="true">
       <div className="skeleton h-8 w-1/2 rounded-lg" />
       <div className="skeleton mt-4 h-12 rounded-2xl" />
       <div className="skeleton mt-4 h-52 rounded-[26px]" />

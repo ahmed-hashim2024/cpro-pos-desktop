@@ -1,18 +1,20 @@
-// Prepares a picture for upload: under 1 MB, in high quality. Pictures that
-// already fit are sent untouched; larger ones are resized to at most maxSide
-// pixels and re-encoded (WEBP where the WebView can, else JPEG, or PNG when
-// the picture has transparency), lowering quality only as far as needed.
+// Prepares a picture for upload: at most 2 MB (what the server takes), in the
+// best quality that fits. Pictures that already fit are sent untouched;
+// larger ones are re-encoded (WEBP where the WebView can, else JPEG, or PNG
+// when the picture has transparency) at the highest quality under 2 MB,
+// found by a binary search. Only if even quality 0.80 is too big does the
+// picture get smaller, a step at a time.
 
 import { T } from '@/lib/i18n';
 
-export const MAX_UPLOAD = 1000 * 1024;
+export const MAX_UPLOAD = 2 * 1024 * 1024; // the server's limit (catalog.go decodeImage)
 const MAX_SOURCE = 30 * 1024 * 1024;
 const TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
 const readAsDataURL = (blob) => new Promise((resolve, reject) => {
   const r = new FileReader();
   r.onload = () => resolve(r.result);
-  r.onerror = () => reject(new Error(T('تعذر قراءة الصورة')));
+  r.onerror = () => reject(new Error(T('تعذّرت قراءة الصورة')));
   r.readAsDataURL(blob);
 });
 
@@ -21,7 +23,7 @@ function loadImage(file) {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(T('تعذر قراءة الصورة'))); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(T('تعذّرت قراءة الصورة'))); };
     img.src = url;
   });
 }
@@ -38,7 +40,7 @@ export function openImage(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => { URL.revokeObjectURL(img.src); reject(new Error(T('تعذر قراءة الصورة'))); };
+    img.onerror = () => { URL.revokeObjectURL(img.src); reject(new Error(T('تعذّرت قراءة الصورة'))); };
     img.src = URL.createObjectURL(file);
   });
 }
@@ -68,8 +70,35 @@ export async function cropImage(img, box, { maxSide = 1600, type = 'image/png' }
   g.imageSmoothingQuality = 'high';
   g.drawImage(img, box.x, box.y, box.w, box.h, 0, 0, c.width, c.height);
   const blob = await toBlob(c, type === 'image/jpeg' ? 'image/jpeg' : 'image/png', 0.95);
-  if (!blob) throw new Error(T('تعذر قراءة الصورة'));
+  if (!blob) throw new Error(T('تعذّرت قراءة الصورة'));
   return new File([blob], 'picture', { type: blob.type });
+}
+
+// The highest-quality encoding of canvas as type that fits MAX_UPLOAD: null
+// when even the lowest acceptable quality is too big, false when the
+// WebView can't write this type at all.
+async function bestFit(canvas, type) {
+  const encode = async (q) => {
+    const blob = await toBlob(canvas, type, q);
+    return blob && blob.type === type ? blob : false;
+  };
+  if (type === 'image/png') {
+    const blob = await encode();
+    return blob && (blob.size <= MAX_UPLOAD ? blob : null);
+  }
+  const top = await encode(0.97);
+  if (top === false) return false;
+  if (top.size <= MAX_UPLOAD) return top;
+  let lo = 0.8;
+  let hi = 0.97;
+  let best = await encode(lo);
+  if (best.size > MAX_UPLOAD) return null;
+  for (let i = 0; i < 6; i++) { // to within ~0.003 of the best quality
+    const mid = (lo + hi) / 2;
+    const blob = await encode(mid);
+    if (blob.size <= MAX_UPLOAD) { best = blob; lo = mid; } else hi = mid;
+  }
+  return best;
 }
 
 export async function prepareImage(file, { maxSide = 1600 } = {}) {
@@ -83,7 +112,7 @@ export async function prepareImage(file, { maxSide = 1600 } = {}) {
   const formats = alpha ? ['image/webp', 'image/png'] : ['image/webp', 'image/jpeg'];
   let scale = Math.min(1, maxSide / Math.max(w0, h0));
   const canvas = document.createElement('canvas');
-  for (let round = 0; round < 6; round++) {
+  for (let round = 0; round < 8; round++) {
     canvas.width = Math.max(1, Math.round(w0 * scale));
     canvas.height = Math.max(1, Math.round(h0 * scale));
     const g = canvas.getContext('2d');
@@ -91,15 +120,13 @@ export async function prepareImage(file, { maxSide = 1600 } = {}) {
     g.clearRect(0, 0, canvas.width, canvas.height);
     g.drawImage(img, 0, 0, canvas.width, canvas.height);
     for (const type of formats) {
-      for (const q of type === 'image/png' ? [undefined] : [0.92, 0.88, 0.84, 0.8]) {
-        const blob = await toBlob(canvas, type, q);
-        if (!blob || blob.type !== type) break; // this WebView can't encode it
-        if (blob.size <= MAX_UPLOAD) return readAsDataURL(blob);
-      }
+      const blob = await bestFit(canvas, type);
+      if (blob === false) continue; // this WebView can't encode it
+      if (blob) return readAsDataURL(blob);
     }
-    scale *= 0.82;
+    scale *= 0.85;
   }
-  throw new Error(T('تعذر تصغير الصورة لأقل من 1 ميجا'));
+  throw new Error(T('تعذّر تصغير الصورة إلى أقل من 2 ميجابايت'));
 }
 
 // App (PWA) icon: the picture cropped to a centred square and drawn at

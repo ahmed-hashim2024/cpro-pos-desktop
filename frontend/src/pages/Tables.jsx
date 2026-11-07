@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeftRight, Combine, Users, LayoutGrid, BellRing, Receipt } from 'lucide-react';
+import { ArrowLeftRight, Combine, Users, LayoutGrid } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast, toastError } from '@/lib/store';
 import { money, minutesSince } from '@/lib/format';
 import { Button, PageHeader, Spinner, Badge, cx, useLoad } from '@/components/ui';
 import { T } from '@/lib/i18n';
-import { useInbox, InboxButton, InboxPanel } from '@/components/Inbox';
+import { useInbox, InboxButton, InboxPanel, requestKinds } from '@/components/Inbox';
 
 export default function Tables() {
   const navigate = useNavigate();
@@ -69,7 +69,7 @@ export default function Tables() {
           <Button variant="secondary" size="sm" onClick={() => setAction(null)}>{T('إلغاء')}</Button>
         </div>
       )}
-      {!data.data.tables.length && <div className="rounded-xl bg-surface p-10 text-center text-muted/70">{T('لا توجد طاولات — أضفها من المنيو ← الطاولات')}</div>}
+      {!data.data.tables.length && <div className="rounded-xl bg-surface p-10 text-center text-muted/70">{T('لا توجد طاولات — أضفها من: قائمة الطعام ← الطاولات')}</div>}
       {areas.map(([area, tables]) => (
         <div key={area} className="mb-4">
           <h2 className="mb-2 font-bold text-muted">{area}</h2>
@@ -80,13 +80,7 @@ export default function Tables() {
               return (
                 <div key={t.id} className={cx('relative rounded-2xl border-2 p-3 transition',
                   o ? 'border-primary bg-primary-soft' : 'border-line bg-surface', action && 'ring-2 ring-warning/40', calls[t.id] && 'ring-4 ring-warning/60')}>
-                  {calls[t.id] && (
-                    <button type="button" onClick={() => setInboxOpen(true)} title={T('نداء من الطاولة')}
-                      className="absolute -top-3 end-3 flex items-center gap-1 rounded-full bg-warning px-2 py-0.5 text-xs font-bold text-white shadow-pop">
-                      {calls[t.id].some((r) => r.kind === 'bill') ? <Receipt className="size-3.5" aria-hidden /> : <BellRing className="size-3.5" aria-hidden />}
-                      {calls[t.id].some((r) => r.kind === 'bill') ? T('الحساب') : T('نداء')}
-                    </button>
-                  )}
+                  {calls[t.id] && <CallBadge calls={calls[t.id]} onClick={() => setInboxOpen(true)} />}
                   <button onClick={() => pick(t)} className="block w-full text-start">
                     <div className="flex items-center justify-between">
                       <span className="text-xl font-black">{t.name}</span>
@@ -128,5 +122,24 @@ export default function Tables() {
         </div>
       )}
     </div>
+  );
+}
+
+// The most pressing call on a table, and how many are waiting there.
+const callOrder = ['issue', 'late', 'bill', 'order', 'extras', 'other', 'waiter'];
+const callShort = {
+  issue: () => T('مشكلة'), late: () => T('متأخر'), bill: () => T('الحساب'), order: () => T('جاهزون للطلب'),
+  extras: () => T('طلبات'), other: () => T('طلب'), waiter: () => T('نداء'),
+};
+
+function CallBadge({ calls, onClick }) {
+  const top = callOrder.find((k) => calls.some((r) => r.kind === k)) || 'waiter';
+  const kind = requestKinds[top] || requestKinds.waiter;
+  return (
+    <button type="button" onClick={onClick} title={calls.map((r) => (requestKinds[r.kind] || kind).label()).join(' · ')}
+      className={cx('absolute -top-3 end-3 flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold text-white shadow-pop', kind.urgent ? 'bg-danger' : 'bg-warning')}>
+      <kind.icon className="size-3.5" aria-hidden />{callShort[top]()}
+      {calls.length > 1 && <span className="num rounded-full bg-white/25 px-1">{calls.length}</span>}
+    </button>
   );
 }

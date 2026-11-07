@@ -31,17 +31,20 @@ func NewPublic(a *app.App, log *slog.Logger, static fs.FS) http.Handler {
 		if err := decodeSmall(w, r, &in); err != nil {
 			return nil, err
 		}
-		return nil, a.CallWaiter(r.Context(), in, remoteIP(r))
+		return nil, a.CallWaiter(r.Context(), in, s.clientIP(r))
 	}))
 	mux.HandleFunc("POST /api/public/v1/orders", s.public(func(w http.ResponseWriter, r *http.Request) (any, error) {
 		var in app.OnlineOrderInput
 		if err := decodeSmall(w, r, &in); err != nil {
 			return nil, err
 		}
-		return a.SubmitOnlineOrder(r.Context(), in, remoteIP(r))
+		return a.SubmitOnlineOrder(r.Context(), in, s.clientIP(r))
 	}))
 	mux.HandleFunc("GET /api/public/v1/orders/{token}", s.public(func(w http.ResponseWriter, r *http.Request) (any, error) {
 		return a.GuestOrderStatus(r.Context(), r.PathValue("token"))
+	}))
+	mux.HandleFunc("GET /api/public/v1/bill", s.public(func(w http.ResponseWriter, r *http.Request) (any, error) {
+		return a.PublicBill(r.Context(), r.URL.Query().Get("table"))
 	}))
 	mux.HandleFunc("GET /api/public/v1/images/{name}", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := a.ImagePath(r.PathValue("name"))

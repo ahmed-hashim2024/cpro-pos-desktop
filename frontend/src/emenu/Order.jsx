@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Trash2, Loader2, Utensils, Clock3, CheckCircle2, XCircle, Bell, BellRing, Receipt, ShoppingCart, Bike, ConciergeBell, TriangleAlert, ChefHat, Heart } from 'lucide-react';
+import { Trash2, Loader2, Utensils, Clock3, CheckCircle2, XCircle, Bell, BellRing, Receipt, ShoppingCart, Bike, ConciergeBell, TriangleAlert, ChefHat, Heart, NotebookPen, GlassWater, Hourglass, MessageSquareMore, Banknote, CreditCard } from 'lucide-react';
 import { menuApi } from './api';
 import { cx, Thumb, Stepper, Sheet, SheetHeader, lineTotal, tableToken, effectiveMode, contactReady } from './lib';
 
@@ -51,7 +51,7 @@ export function CartPage({ menu, t, money, cart, setCart, contact, onPlaced, onB
   }
 
   return (
-    <form onSubmit={submit} className="px-4 pt-[max(1rem,env(safe-area-inset-top))]">
+    <form onSubmit={submit} className="px-4 pt-[max(1rem,env(safe-area-inset-top))] md:mx-auto md:max-w-2xl md:pt-6">
       <h1 className="mb-3 text-2xl font-black">{t('cart')}</h1>
       <ul className="grid gap-2.5">
         {cart.map((l) => (
@@ -91,7 +91,9 @@ export function CartPage({ menu, t, money, cart, setCart, contact, onPlaced, onB
               </>
             ) : <div className="font-bold">{mode === 'hall' ? t('needTable') : t('needAddress')}</div>}
           </div>
-          <button type="button" onClick={onDetails} className="shrink-0 text-sm font-bold text-p">{ready ? t('edit') : t('addDetails')}</button>
+          {!(mode === 'hall' && menu.table) && ( // a table QR leaves nothing to edit
+            <button type="button" onClick={onDetails} className="shrink-0 text-sm font-bold text-p">{ready ? t('edit') : t('addDetails')}</button>
+          )}
         </div>
       )}
       {mode && (
@@ -229,79 +231,150 @@ export function StatusSheet({ order: o, tracking, t, money, onClose, onDone }) {
   );
 }
 
-// ---- help: waiter, bill or a problem with the food (table and hall QR) ------------------------
+// ---- calling the staff from the table (table and hall QR) ----------------------------------
 
+// The reasons a table calls the staff. Some send at a tap; the others open a
+// short step first (how they'll pay, what they need, what went wrong).
+// The kinds and codes match the server (app/emenu.go serviceKinds).
+const REASONS = [
+  { kind: 'waiter', icon: BellRing, label: 'callWaiter', sent: 'waiterComing' },
+  { kind: 'order', icon: NotebookPen, label: 'readyToOrder', sent: 'orderComing' },
+  { kind: 'bill', icon: Receipt, label: 'askBill', sent: 'billComing', step: true },
+  { kind: 'extras', icon: GlassWater, label: 'needExtras', sent: 'extrasComing', step: true },
+  { kind: 'late', icon: Hourglass, label: 'orderLate', sent: 'lateSent' },
+  { kind: 'issue', icon: TriangleAlert, label: 'foodIssue', sent: 'issueSent', step: true },
+  { kind: 'other', icon: MessageSquareMore, label: 'otherRequest', sent: 'otherSent', step: true, wide: true },
+];
+const EXTRAS = ['water', 'napkins', 'cutlery', 'ice', 'plates', 'clean'];
+
+// Floating «Need help?» button: the same panel as the Contact tab, in a sheet.
 export function ServiceButton({ menu, t, flash, contact, onTable }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button onClick={() => setOpen(true)}
-        className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] end-[max(1rem,calc(50%-14rem+1rem))] z-30 flex h-11 items-center gap-2 rounded-full bg-fg px-4 text-sm font-bold text-bg shadow-xl transition active:opacity-70">
+        className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] end-[max(1rem,calc(50%-14rem+1rem))] md:end-[max(1rem,calc(50%-24rem+1rem))] lg:end-[max(1rem,calc(50%-36rem+1rem))] z-30 flex h-11 items-center gap-2 rounded-full bg-fg px-4 text-sm font-bold text-bg shadow-xl transition active:opacity-70">
         <ConciergeBell className="size-5" aria-hidden />{t('needHelp')}
       </button>
-      {open && <ServiceSheet menu={menu} t={t} flash={flash} contact={contact} onTable={onTable} onClose={() => setOpen(false)} />}
+      {open && (
+        <Sheet onClose={() => setOpen(false)} label={t('needHelp')}>
+          <SheetHeader title={t('needHelp')} onClose={() => setOpen(false)} t={t} />
+          <div className="overflow-y-auto px-5 py-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <ServicePanel menu={menu} t={t} flash={flash} contact={contact} onTable={onTable} onSent={() => setOpen(false)} />
+          </div>
+        </Sheet>
+      )}
     </>
   );
 }
 
-function ServiceSheet({ menu, t, flash, contact, onTable, onClose }) {
-  const [table, setTable] = useState(() => (menu.tables?.includes(contact.table) ? contact.table : ''));
-  const [issue, setIssue] = useState(false);
+// The reasons as tiles. onSent runs after a call reaches the restaurant. On
+// the hall QR the guest picks the table here, unless the page passes it in.
+export function ServicePanel({ menu, t, flash, contact, onTable, onSent, onBill, table: given }) {
+  const [own, setTable] = useState(() => (menu.tables?.includes(contact.table) ? contact.table : ''));
+  const table = given ?? own;
+  const [step, setStep] = useState(''); // the reason whose extra step is open
+  const [picks, setPicks] = useState([]);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
+  const [sent, setSent] = useState({}); // kind → true, to mark the tile
 
-  const send = async (kind) => {
+  const open = (r) => {
+    setErr('');
+    if (!r.step) { send(r.kind); return; }
+    setStep(step === r.kind ? '' : r.kind);
+    setPicks([]);
+    setNote('');
+  };
+  const send = async (kind, details = [], text = '') => {
     if (menu.preview) { flash(t('previewOnly')); return; }
     if (!menu.table && !table) { setErr(t('chooseTable')); return; }
     setBusy(kind);
     setErr('');
     try {
-      await menuApi.call({ table: tableToken, table_number: menu.table ? '' : table, kind, note: kind === 'issue' ? note.trim() : '' });
+      await menuApi.call({ table: tableToken, table_number: menu.table ? '' : table, kind, details, note: text.trim() });
       if (!menu.table) onTable(table);
-      flash(t({ waiter: 'waiterComing', bill: 'billComing', issue: 'issueSent' }[kind]));
-      onClose();
+      flash(t(REASONS.find((r) => r.kind === kind).sent));
+      navigator.vibrate?.(60);
+      setSent((s) => ({ ...s, [kind]: true }));
+      setStep('');
+      onSent?.();
     } catch (ex) {
       setErr(ex.status === 0 ? t('error') : ex.message);
     } finally {
       setBusy('');
     }
   };
-  const option = (kind, Icon, label, onClick) => (
-    <button key={kind} onClick={onClick} disabled={!!busy} aria-expanded={kind === 'issue' ? issue : undefined}
-      className="flex min-h-14 items-center gap-3 rounded-2xl bg-card px-4 text-start font-bold shadow-sm transition active:scale-[.98] disabled:opacity-50">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-p/15 text-p">
-        {busy === kind ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <Icon className="size-5" aria-hidden />}
-      </span>
-      {label}
-    </button>
-  );
+  const toggle = (code) => setPicks((p) => (p.includes(code) ? p.filter((c) => c !== code) : [...p, code]));
+  const field = 'w-full rounded-2xl border border-line bg-card px-4 py-3 outline-none focus:border-p';
+  const primary = 'flex h-12 items-center justify-center gap-2 rounded-2xl bg-p font-bold text-onp shadow-lg transition active:scale-[.98] disabled:opacity-40';
+
   return (
-    <Sheet onClose={onClose} label={t('needHelp')}>
-      <SheetHeader title={t('needHelp')} onClose={onClose} t={t} />
-      <div className="grid gap-2.5 overflow-y-auto px-5 py-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-        {!menu.table && (
-          <label className="grid gap-1.5">
-            <span className="text-sm font-bold">{t('tableNumber')} *</span>
-            <select value={table} onChange={(e) => setTable(e.target.value)} className="h-12 w-full rounded-2xl border border-line bg-card px-4 outline-none focus:border-p">
-              <option value="">{t('chooseTable')}</option>
-              {menu.tables.map((name) => <option key={name} value={name}>{name}</option>)}
-            </select>
-          </label>
-        )}
-        {option('waiter', BellRing, t('callWaiter'), () => send('waiter'))}
-        {option('bill', Receipt, t('askBill'), () => send('bill'))}
-        {option('issue', TriangleAlert, t('foodIssue'), () => setIssue(!issue))}
-        {issue && (
-          <div className="anim-fade grid gap-2">
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('issuePh')} aria-label={t('foodIssue')} maxLength={200} rows={2} autoFocus
-              className="w-full rounded-2xl border border-line bg-card px-4 py-3 outline-none focus:border-p" />
-            <button onClick={() => send('issue')} disabled={!!busy} className="h-12 rounded-2xl bg-p font-bold text-onp shadow-lg disabled:opacity-40">{t('sendIssue')}</button>
-          </div>
-        )}
-        {err && <p role="alert" className="rounded-2xl bg-red-500/15 px-4 py-3 text-sm font-semibold text-red-500">{err}</p>}
+    <div className="grid gap-3">
+      {!menu.table && given === undefined && (
+        <label className="grid gap-1.5">
+          <span className="text-sm font-bold">{t('tableNumber')} *</span>
+          <select value={table} onChange={(e) => { setTable(e.target.value); setErr(''); }} className={`h-12 ${field} py-0`}>
+            <option value="">{t('chooseTable')}</option>
+            {menu.tables.map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+        </label>
+      )}
+      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+        {REASONS.map((r) => (
+          <button key={r.kind} onClick={() => open(r)} disabled={!!busy} aria-expanded={r.step ? step === r.kind : undefined}
+            className={cx('relative flex rounded-2xl bg-card p-3 text-start text-sm font-bold shadow-sm ring-2 transition active:scale-[.97] disabled:opacity-50',
+              step === r.kind ? 'ring-p' : 'ring-transparent',
+              r.wide ? 'col-span-2 md:col-span-3 min-h-14 flex-row items-center gap-3' : 'min-h-[4.5rem] flex-col items-start justify-center gap-1.5')}>
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-p/15 text-p">
+              {busy === r.kind ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <r.icon className="size-5" aria-hidden />}
+            </span>
+            {t(r.label)}
+            {sent[r.kind] && <CheckCircle2 className="absolute end-2.5 top-2.5 size-4 text-emerald-500" aria-label={t('sentMark')} />}
+          </button>
+        ))}
       </div>
-    </Sheet>
+
+      {step === 'bill' && (
+        <div className="anim-fade grid gap-2 rounded-2xl bg-card p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-bold">{t('payHow')}</p>
+            {onBill && <button type="button" onClick={onBill} className="text-sm font-bold text-p">{t('seeBill')}</button>}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {[['cash', Banknote, 'payCash'], ['card', CreditCard, 'payCard']].map(([code, Icon, label]) => (
+              <button key={code} onClick={() => send('bill', [code])} disabled={!!busy}
+                className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-p font-bold text-onp shadow transition active:scale-[.98] disabled:opacity-40">
+                <Icon className="size-5" aria-hidden />{t(label)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {step === 'extras' && (
+        <div className="anim-fade grid gap-3 rounded-2xl bg-card p-4 shadow-sm">
+          <p className="text-sm font-bold">{t('extrasWhat')}</p>
+          <div className="flex flex-wrap gap-2">
+            {EXTRAS.map((code) => (
+              <button key={code} type="button" onClick={() => toggle(code)} aria-pressed={picks.includes(code)}
+                className={cx('rounded-full border px-3.5 py-2 text-sm font-semibold transition', picks.includes(code) ? 'border-p bg-p text-onp' : 'border-line bg-card2')}>
+                {t(`extra_${code}`)}
+              </button>
+            ))}
+          </div>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('extrasPh')} maxLength={200} className={field} aria-label={t('extrasPh')} />
+          <button onClick={() => send('extras', picks, note)} disabled={!!busy || (!picks.length && !note.trim())} className={primary}>{t('sendIssue')}</button>
+        </div>
+      )}
+      {(step === 'issue' || step === 'other') && (
+        <div className="anim-fade grid gap-2">
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t(step === 'issue' ? 'issuePh' : 'otherPh')}
+            aria-label={t(step === 'issue' ? 'foodIssue' : 'otherRequest')} maxLength={200} rows={2} autoFocus className={field} />
+          <button onClick={() => send(step, [], note)} disabled={!!busy || (step === 'other' && !note.trim())} className={primary}>{t('sendIssue')}</button>
+        </div>
+      )}
+      {err && <p role="alert" className="rounded-2xl bg-red-500/15 px-4 py-3 text-sm font-semibold text-red-500">{err}</p>}
+    </div>
   );
 }
-

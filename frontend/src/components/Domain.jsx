@@ -34,18 +34,18 @@ export function DomainField({ value, onChange, onStatus }) {
 
   const { status, domain } = state;
   const message = {
-    idle: [T('اكتب اسم المطعم بالإنجليزي، ده اللي هيظهر في رابط المنيو'), 'text-muted'],
-    checking: [T('بنشوف الاسم متاح ولا لأ…'), 'text-muted'],
+    idle: [T('اكتب اسم المطعم بالأحرف الإنجليزية؛ فهو الذي يظهر في رابط قائمة الطعام'), 'text-muted'],
+    checking: [T('جارٍ التحقق من توفر الاسم…'), 'text-muted'],
     free: [`${T('متاح')}: ${domain}`, 'text-success'],
-    taken: [T('الاسم ده محجوز، اختار اسم تاني'), 'text-danger'],
-    has_tunnel: [`${T('حسابك عنده رابط بالفعل')}: ${domain}`, 'text-danger'],
-    invalid: [T('استخدم حروف إنجليزي وأرقام وشرطة (-) بس'), 'text-danger'],
-    error: [T('تعذر التحقق من الاسم، اتأكد من الإنترنت'), 'text-danger'],
+    taken: [T('هذا الاسم محجوز، اختر اسماً آخر'), 'text-danger'],
+    has_tunnel: [`${T('لحسابك رابط بالفعل')}: ${domain}`, 'text-danger'],
+    invalid: [T('استخدم الحروف الإنجليزية والأرقام والشَّرطة (-) فقط'), 'text-danger'],
+    error: [T('تعذّر التحقق من الاسم، تأكد من الاتصال بالإنترنت'), 'text-danger'],
   }[status];
   const Icon = { checking: Loader2, free: Check, taken: X, has_tunnel: X, invalid: X, error: X }[status];
   return (
-    <Field label={T('رابط المنيو الإلكتروني')}>
-      <Input dir="ltr" value={value} maxLength={63} placeholder="pizza-house" aria-label={T('رابط المنيو الإلكتروني')}
+    <Field label={T('رابط قائمة الطعام الإلكترونية')}>
+      <Input dir="ltr" value={value} maxLength={63} placeholder="pizza-house" aria-label={T('رابط قائمة الطعام الإلكترونية')}
         onChange={(e) => onChange(e.target.value.toLowerCase().trim())} />
       <span role="status" className={cx('mt-1 flex items-center gap-1 text-xs', message[1])} dir="auto">
         {Icon && <Icon className={cx('size-3.5 shrink-0', status === 'checking' && 'animate-spin')} aria-hidden />}{message[0]}
@@ -85,7 +85,7 @@ export function DomainForm({ name }) {
       if (r.available) {
         await loadPlatform(); // clears the last failure before waiting
         setWaiting(true);
-      } else toastError(new Error(T('الاسم ده محجوز، اختار اسم تاني')));
+      } else toastError(new Error(T('هذا الاسم محجوز، اختر اسماً آخر')));
     } catch (e) {
       toastError(e);
     } finally {
@@ -93,12 +93,12 @@ export function DomainForm({ name }) {
     }
   };
   if (waiting) {
-    return <p className="flex items-center gap-2 text-sm text-muted"><Loader2 className="size-4 animate-spin" aria-hidden />{T('جاري تجهيز رابط المنيو، هيشتغل لوحده خلال دقيقة')}</p>;
+    return <p className="flex items-center gap-2 text-sm text-muted"><Loader2 className="size-4 animate-spin" aria-hidden />{T('جارٍ تجهيز رابط قائمة الطعام، وسيعمل تلقائياً خلال دقيقة')}</p>;
   }
   return (
     <div className="grid gap-3">
-      {failed && <p role="alert" className="rounded-xl bg-danger-soft p-2.5 text-sm text-danger" dir="auto">{T('تعذر إنشاء الرابط')}: {failed}</p>}
-      {timedOut && <p role="alert" className="rounded-xl bg-warning-soft p-2.5 text-sm text-warning">{T('الرابط لسه ما اتجهزش. حاول تاني، ولو المشكلة استمرت تواصل مع الدعم.')}</p>}
+      {failed && <p role="alert" className="rounded-xl bg-danger-soft p-2.5 text-sm text-danger" dir="auto">{T('تعذّر إنشاء الرابط')}: {failed}</p>}
+      {timedOut && <p role="alert" className="rounded-xl bg-warning-soft p-2.5 text-sm text-warning">{T('لم يُجهَّز الرابط بعد. أعد المحاولة، وإن استمرت المشكلة فتواصل مع الدعم الفني.')}</p>}
       <DomainField value={value} onChange={setValue} onStatus={setStatus} />
       <div><Button icon={Globe} busy={busy} disabled={status !== 'free'} onClick={claim}>{T('إنشاء الرابط')}</Button></div>
     </div>

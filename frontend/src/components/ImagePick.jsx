@@ -11,7 +11,7 @@ const ASPECT = { wide: 4 / 3, slider: 12 / 7, family: 5 / 2, square: 1, round: 1
 const MAX_ZOOM = 4;
 
 // Picks a picture, lets the owner frame it, then prepares it for upload
-// (under 1 MB, high quality). `prepare` replaces that last step.
+// (at most 2 MB, in the best quality that fits). `prepare` replaces that last step.
 export function ImagePick({ onPick, label = T('صورة'), size = 'md', maxSide = 1600, shape = 'wide', prepare, hint }) {
   const [busy, setBusy] = useState(false);
   const [source, setSource] = useState(null); // {file, img}
@@ -111,10 +111,10 @@ function CropDialog({ img, shape, busy, onCancel, onDone }) {
   const confirm = () => onDone({ x: -view.x / s, y: -view.y / s, w: W / s, h: H / s });
 
   return (
-    <Modal open onClose={onCancel} title={T('ظبط الصورة')} subtitle={T('اسحب الصورة وكبّرها لحد ما يظهر الجزء اللي عايزه')}
+    <Modal open onClose={onCancel} title={T('ضبط الصورة')} subtitle={T('اسحب الصورة وكبّرها حتى يظهر الجزء المطلوب')}
       footer={<><Button variant="secondary" onClick={onCancel}>{T('إلغاء')}</Button><Button busy={busy} onClick={confirm}>{T('استخدام الصورة')}</Button></>}>
       <div className="grid justify-items-center gap-3">
-        <div ref={frame} dir="ltr" tabIndex={0} role="application" aria-label={T('ظبط الصورة')}
+        <div ref={frame} dir="ltr" tabIndex={0} role="application" aria-label={T('ضبط الصورة')}
           onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); drag.current = { x: e.clientX, y: e.clientY }; }}
           onPointerMove={(e) => {
             if (!drag.current) return;
@@ -133,7 +133,7 @@ function CropDialog({ img, shape, busy, onCancel, onDone }) {
             <span className="pointer-events-none absolute inset-y-0 start-1/2 -translate-x-1/2 border-x-2 border-dashed border-white/80" style={{ width: H }} aria-hidden />
           )}
         </div>
-        {shape === 'wide' && <p className="text-center text-xs text-muted">{T('الجزء اللي بين الخطين هو اللي بيظهر في الكروت المربعة')}</p>}
+        {shape === 'wide' && <p className="text-center text-xs text-muted">{T('الجزء الواقع بين الخطين هو ما يظهر في البطاقات المربعة')}</p>}
         <label className="flex w-full max-w-sm items-center gap-3 text-sm font-semibold">
           {T('تكبير')}
           <input type="range" min={1} max={MAX_ZOOM} step={0.01} value={view.z} onChange={(e) => zoomTo(Number(e.target.value))} className="flex-1 accent-[var(--primary)]" />

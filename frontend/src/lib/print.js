@@ -57,7 +57,7 @@ export function printReceipt(order, settings, { change = 0, copy = false } = {})
       <tr><td>${T('فاتورة')}</td><td class="n">${esc(order.invoice_number || '—')}</td></tr>
       <tr><td>${T('طلب رقم')}</td><td class="n big">${order.number}</td></tr>
       <tr><td>${orderTypes[order.type]}${order.table_name ? ' — ' + esc(order.table_name) : ''}</td><td class="n">${dateTime(order.closed_at || order.created_at)}</td></tr>
-      <tr><td>${T('الكاشير')}</td><td class="n">${esc(order.payments[0]?.user_name || order.user_name)}</td></tr>
+      <tr><td>${T('أمين الصندوق')}</td><td class="n">${esc(order.payments[0]?.user_name || order.user_name)}</td></tr>
       ${order.customer_name ? `<tr><td>${T('العميل')}</td><td class="n">${esc(order.customer_name)} ${esc(order.customer_phone)}</td></tr>` : ''}
       ${order.type === 'delivery' && order.customer_address ? `<tr><td colspan="2">${T('العنوان')}: ${esc(order.customer_address)}</td></tr>` : ''}
     </table>
@@ -115,6 +115,6 @@ export function printTableQRs(restaurant, cards) {
   `;
   const body = `<div class="grid">${cards.map((c) => `
     <div class="card"><div class="r">${esc(restaurant)}</div><div class="t">${esc(c.title)}</div>${c.svg}
-    <div class="h">${esc(T('امسح الكود لعرض المنيو والطلب'))}</div></div>`).join('')}</div>`;
+    <div class="h">${esc(T('امسح الرمز لعرض قائمة الطعام والطلب'))}</div></div>`).join('')}</div>`;
   printHTML(body, style);
 }

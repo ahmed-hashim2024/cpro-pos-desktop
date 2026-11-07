@@ -10,7 +10,7 @@ function Restarting() {
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-bg">
       <Spinner />
-      <p className="font-bold">{T('تم الاسترجاع، البرنامج بيعيد التشغيل…')}</p>
+      <p className="font-bold">{T('تم الاسترجاع، وجارٍ إعادة تشغيل البرنامج…')}</p>
     </div>
   );
 }
@@ -41,8 +41,8 @@ export function RestoreFirstRun() {
   return (
     <div className="grid gap-2 rounded-card border border-line bg-surface p-4 shadow-card">
       <div>
-        <h3 className="font-bold">{T('عندك نسخة احتياطية؟')}</h3>
-        <p className="text-sm text-muted">{T('ارفعها وكمّل شغلك بكل بياناتك ومستخدمينك زي ما كنت.')}</p>
+        <h3 className="font-bold">{T('هل لديك نسخة احتياطية؟')}</h3>
+        <p className="text-sm text-muted">{T('ارفعها لمتابعة العمل بجميع بياناتك ومستخدميك كما كانت.')}</p>
       </div>
       <PickButton busy={state === 'busy'} onPick={upload}>{T('رفع نسخة احتياطية')}</PickButton>
       {state === 'done' && <Restarting />}
@@ -53,7 +53,7 @@ export function RestoreFirstRun() {
 export function RestoreCard({ onPick }) {
   return (
     <Card title={T('استرجاع نسخة احتياطية')} icon={RotateCcw}>
-      <p className="mb-3 text-sm text-muted">{T('ارفع ملف نسخة احتياطية (.db) من الجهاز ده أو من جهاز تاني، زي فلاشة أو فولدر النسخ.')}</p>
+      <p className="mb-3 text-sm text-muted">{T('ارفع ملف نسخة احتياطية (‎.db) من هذا الجهاز أو من وسيط آخر، مثل ذاكرة USB أو مجلد النسخ الاحتياطية.')}</p>
       <PickButton onPick={onPick}>{T('رفع نسخة احتياطية')}</PickButton>
     </Card>
   );
@@ -83,7 +83,7 @@ export function RestoreConfirm({ target, onClose }) {
       </>
     )}>
       <p dir="auto" className="num mb-2 font-bold">{target?.file?.name || target?.name}</p>
-      <p>{T('كل بيانات الجهاز ده هتتبدل ببيانات النسخة دي. هناخد نسخة من البيانات الحالية الأول، فتقدر ترجع لها من نفس الشاشة.')}</p>
+      <p>{T('ستُستبدل جميع بيانات هذا الجهاز ببيانات هذه النسخة. وستُنشأ أولاً نسخة من البيانات الحالية، فيمكنك الرجوع إليها من الشاشة نفسها.')}</p>
     </Modal>
   );
 }

@@ -28,7 +28,7 @@ owner's own domain.
 - **Users:** roles (owner, manager, cashier, waiter, kitchen) checked on the
   server. Quick PIN switching, manager-PIN approval for voids, discounts and
   refunds, login throttling, revocable sessions, and an append-only audit log.
-- **Data import:** Excel templates for items, categories, raw materials,
+- **Data import:** Excel templates for items, kitchen stations, categories, raw materials,
   customers, suppliers and tables, with required columns marked by a red `*`,
   dropdowns and an instructions sheet. Insert and update modes are separate;
   the update template comes prefilled with current data. Every row is
@@ -39,7 +39,9 @@ owner's own domain.
   restaurant's settings. Users, devices and the license stay behind; old sales
   arrive under the owner doing the move. A backup comes first, one bad row
   saves nothing, and uploading the same file twice adds nothing.
-- **Languages:** Arabic (RTL), English and French (LTR), chosen per device.
+- **Languages:** Arabic (RTL, Modern Standard Arabic), English and French (LTR), chosen per device. Numbers are always Latin digits (0-9), in every language.
+- **Help:** the «?» button in the header (every user) opens Settings → Help and glossary: step-by-step guides to how the system works and a searchable glossary of business terms in Arabic, English and French, each with a link to its screen. Users without the settings permission see only Help and My account there.
+- **Pictures:** at most 2 MB each. A larger picture is re-encoded at the highest quality that fits (found by a binary search), and is made smaller only if even quality 0.80 doesn't fit.
 - **Connecting and license:** the first screen is «Continue with Google».
   It opens the Platform in the browser (sign up or log in), and once the
   owner is signed in the app activates by itself: no key to type. It needs
@@ -82,18 +84,46 @@ owner's own domain.
     sees the contents and stock is deducted from their recipes.
   - Featured items carry a short note, and a hot deal an e-menu price shown
     against the normal one struck out. The POS keeps the normal price.
+  - A family offer's savings sticker («وفّر 20%») is dragged anywhere on its
+    picture in the editor, sized from 60% to 200%, and moves on the guest
+    menu (pulse, bounce, wiggle, shine or none; still when the phone asks
+    for reduced motion). Its place is a share of the picture, so it lands
+    on the same spot on every screen and in every language.
   - Every picture is framed by the owner when picked (drag and zoom).
   - Lists have unique positions: saving one in a taken place moves the rest.
   - Three ways in: the online link (browsing and delivery), each table's QR
     code (printable, regenerable; the table is known) and one shared hall QR
     at `/hall` (the guest picks the table from a list).
-  - From the QR codes, a help button calls the waiter, asks for the bill or
-    reports a problem with the food.
+  - Each code downloads as a PNG card (restaurant, table, code, «scan me»)
+    by clicking it in Settings → Subscription and e-menu, or all of them in
+    one ZIP.
+  - A table's own QR shows the guest its bill (open orders, service, tax,
+    what's left to pay) and asks for it with the payment method. The hall
+    QR never shows a bill: anyone there could pick any table.
+  - Reports → Table calls: calls per reason, wait until «done», who
+    answered, and calls by hour. Urgent calls (food problem, late order)
+    ring with a sharper sound.
+  - From the QR codes, the «Contact» tab (it replaces «My details» at a
+    table) and a floating help button call the staff: the waiter, ready to
+    order, the bill (cash or card, so the machine comes along), something
+    needed (water, napkins, cutlery, ice, plates, cleaning), a late order, a
+    problem with the food, or anything else in the guest's words. The staff
+    screen shows the picks in its own language; one open call per reason per
+    table, and the tables screen badges the most pressing one.
   - After ordering, guests see the estimated time (longest item, plus the
     delivery time) and a bell that changes when the kitchen finishes.
   - Online orders wait in the POS inbox until staff accept them. Accepted
     orders become normal orders and go to the kitchen. Prices always come
     from the menu.
+- **Remote access:** the whole staff system from anywhere, on its own address
+  next to the menu («tajroba-pos.<base>» beside «tajroba.<base>»), through
+  the same Cloudflare tunnel. The plan must include remote access, and the
+  owner allows each account in Users (off by default, the owner included).
+  From outside it's password only: no PINs and no list of accounts. Taking
+  the permission or the plan away ends open remote sessions at the next
+  request, and remote tokens never work on the LAN or the window, nor the
+  other way round. Settings → Subscription shows the address and who may
+  use it; the activity log marks remote sign-ins and refusals.
 - **Operations:**
   - Automatic and on-exit backups with an integrity check.
   - An automatic backup before every schema migration.
@@ -129,6 +159,13 @@ The restaurant's domain reaches a second listener on `127.0.0.1:8788`
 (`httpapi.NewPublic`). It serves only the guest menu page, its assets, item
 images and `/api/public/v1`. The staff API is not routed there at all.
 
+The same tunnel's second hostname («<name>-pos») reaches a third listener on
+`127.0.0.1:8789`: the staff UI and API on the `tunnel` channel (remote
+access). Cloudflare's `Cf-Connecting-Ip` header is trusted only on these
+tunnel listeners. The Platform creates that hostname's DNS record only while
+the plan includes remote access (saas `tasks/tunnel.py` `sync_remote_route`),
+and menu names ending in `-pos` are reserved for it.
+
 All totals are computed on the server from catalog prices. Money is stored as
 `int64` piasters and quantities as thousandths (`0.150 kg` = `150`). Every
 stock change is a row in `stock_movements`.
@@ -150,6 +187,8 @@ wails build                            # build/bin/
 go run ./cmd/devserver -addr 127.0.0.1:8787 -ui frontend/dist
 # …with a fake Platform (activation code ACT-DEMO) and the guest menu on :8788
 go run ./cmd/devserver -addr 127.0.0.1:8787 -ui frontend/dist -fake-saas -public 127.0.0.1:8788
+# …and remote access (the staff system on the tunnel channel) on :8789
+go run ./cmd/devserver -addr 127.0.0.1:8787 -ui frontend/dist -fake-saas -public 127.0.0.1:8788 -remote 127.0.0.1:8789
 cd frontend && CPRO_API=http://127.0.0.1:8787 npm run dev   # hot reload in the browser
 ```
 

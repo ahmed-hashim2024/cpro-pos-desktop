@@ -60,16 +60,16 @@ func (a *App) SetBackupDir(ctx context.Context, actor Actor, dir string) (Backup
 		return BackupLocationInfo{}, err
 	}
 	if actor.Channel != ChannelApp {
-		return BackupLocationInfo{}, &Error{CodeForbidden, "مكان النسخ بيتغير من جهاز الكاشير الرئيسي فقط"}
+		return BackupLocationInfo{}, &Error{CodeForbidden, "يُغيَّر موقع النسخ من الجهاز الرئيسي لنقطة البيع فقط"}
 	}
 	dir = strings.TrimSpace(dir)
 	if dir != "" {
 		if !filepath.IsAbs(dir) {
-			return BackupLocationInfo{}, invalid("اختار فولدر من الجهاز")
+			return BackupLocationInfo{}, invalid("اختر مجلداً من الجهاز")
 		}
 		dir = filepath.Clean(dir)
 		if err := checkWritable(dir); err != nil {
-			return BackupLocationInfo{}, invalid("البرنامج مش قادر يكتب في الفولدر ده، اختار مكان تاني")
+			return BackupLocationInfo{}, invalid("لا يستطيع البرنامج الكتابة في هذا المجلد، فاختر موقعاً آخر")
 		}
 	}
 	err := a.tx(ctx, func(tx *sql.Tx) error {
@@ -115,7 +115,7 @@ func (a *App) copyBackup(path string, s Settings) {
 	res := BackupCopy{At: sqlite.FormatTime(a.now())}
 	if err := copyFile(path, filepath.Join(s.BackupDir, filepath.Base(path))); err != nil {
 		a.log.Error("backup copy failed", "dir", s.BackupDir, "err", err)
-		res.Error = "الفولدر مش متاح. النسخة محفوظة على الجهاز، ووصّل الهارد أو الفلاشة أو اختار مكان تاني."
+		res.Error = "المجلد غير متاح. حُفظت النسخة على الجهاز؛ صِل القرص الصلب أو ذاكرة USB، أو اختر موقعاً آخر."
 	} else {
 		pruneDir(s.BackupDir, s.BackupKeep)
 	}

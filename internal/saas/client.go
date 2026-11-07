@@ -159,6 +159,9 @@ func VerifyReply(platformKey, deviceID, nonce, data, sig string) bool {
 type Tunnel struct {
 	Domain         string `json:"domain"`
 	ConnectorToken string `json:"connector_token"`
+	// RemoteDomain is the staff system's address on the same tunnel
+	// («<name>-pos.<base>»), sent only while the plan has remote access.
+	RemoteDomain string `json:"remote_domain"`
 }
 
 // Sync is the unsigned config the owner manages on the Platform. EMenu is

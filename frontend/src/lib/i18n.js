@@ -18,7 +18,9 @@ export const languages = [
 const stored = (() => { try { return localStorage.getItem(KEY); } catch { return null; } })();
 export const lang = languages.some(([k]) => k === stored) ? stored : 'ar';
 export const dir = lang === 'ar' ? 'rtl' : 'ltr';
-export const locale = { ar: 'ar-EG', en: 'en-GB', fr: 'fr-FR' }[lang];
+// Latin digits (0-9) in every language: «-u-nu-latn» keeps Arabic dates and
+// names but not the Hindi digits.
+export const locale = { ar: 'ar-EG-u-nu-latn', en: 'en-GB', fr: 'fr-FR' }[lang];
 
 const catalog = { en, fr }[lang] || {};
 

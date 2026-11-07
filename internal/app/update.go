@@ -275,11 +275,11 @@ func (a *App) downloadAndLaunch(ctx context.Context, r saas.Release) error {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("تعذر تحميل التحديث: %w", err)
+		return fmt.Errorf("تعذّر تنزيل التحديث: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("تعذر تحميل التحديث (%d)", resp.StatusCode)
+		return fmt.Errorf("تعذّر تنزيل التحديث (%d)", resp.StatusCode)
 	}
 	tmp, err := os.CreateTemp(dir, "dl-*")
 	if err != nil {
@@ -290,7 +290,7 @@ func (a *App) downloadAndLaunch(ctx context.Context, r saas.Release) error {
 	n, err := io.Copy(io.MultiWriter(tmp, h), io.LimitReader(resp.Body, maxUpdateSize+1))
 	tmp.Close()
 	if err != nil {
-		return fmt.Errorf("تعذر تحميل التحديث: %w", err)
+		return fmt.Errorf("تعذّر تنزيل التحديث: %w", err)
 	}
 	if n > maxUpdateSize {
 		return errors.New("ملف التحديث أكبر من المسموح")

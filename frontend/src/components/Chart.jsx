@@ -5,7 +5,7 @@ import { T } from '@/lib/i18n';
 const toneVar = { primary: 'var(--primary)', success: 'var(--success)', warning: 'var(--warning)', danger: 'var(--danger)', info: 'var(--info)' };
 
 // Bar chart: one series, labels underneath, exact value on hover/focus.
-export function Bars({ data, height = 200, tone = 'primary' }) {
+export function Bars({ data, height = 200, tone = 'primary', format = money }) {
   const max = Math.max(1, ...data.map((d) => d.value));
   if (!data.length) return <div className="flex items-center justify-center text-muted" style={{ height }}>{T('لا توجد بيانات للفترة')}</div>;
   return (
@@ -15,7 +15,7 @@ export function Bars({ data, height = 200, tone = 'primary' }) {
           <div tabIndex={0} className="relative w-full max-w-12 rounded-t-lg opacity-85 transition group-hover:opacity-100 focus:opacity-100"
             style={{ height: `${Math.max(2, (d.value / max) * 86)}%`, background: `linear-gradient(180deg, ${toneVar[tone]}, color-mix(in srgb, ${toneVar[tone]} 55%, transparent))` }}>
             <div className="num pointer-events-none absolute -top-8 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-fg px-2 py-1 text-xs text-bg shadow-pop group-hover:block">
-              {money(d.value)}
+              {format(d.value)}
             </div>
           </div>
           <div className="num truncate text-xs text-muted">{d.label}</div>

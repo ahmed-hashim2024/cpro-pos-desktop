@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Send, PauseCircle, Percent, Trash2, User, Printer, Plus, Minus, ChefHat, ClipboardList, X, Utensils,
-  LayoutDashboard, LayoutGrid, RefreshCw, ShoppingBag, CreditCard, Store, Lock, Unlock, Timer, Wallet,
+  LayoutGrid, RefreshCw, ShoppingBag, CreditCard, Store, Lock, Unlock, Timer, Wallet,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp, toast, toastError } from '@/lib/store';
 import { money, moneyC, orderTypes, qty, kitchenStatus, currencyLabel, toMinor } from '@/lib/format';
 import { printReceipt, printKitchenTicket } from '@/lib/print';
-import { Button, Badge, Modal, Select, Spinner, Empty, IconButton, SearchInput, Segmented, cx, useLoad } from '@/components/ui';
+import { BackIcon, Button, Badge, Modal, Select, Spinner, Empty, IconButton, SearchInput, Segmented, cx, useLoad } from '@/components/ui';
 import { withApproval } from '@/components/Approval';
 import { ModifierDialog, LineDialog, VoidDialog, DiscountDialog, CustomerDialog, OpenShiftDialog, PayDialog } from './dialogs';
 import { T } from '@/lib/i18n';
@@ -169,8 +169,8 @@ export default function POS() {
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="space-y-3 border-b border-line bg-surface px-4 py-3">
           <div className="flex items-center gap-2">
-            <SearchInput className="flex-1" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={T('ابحث عن صنف بالاسم أو الكود…')} aria-label={T('بحث في الأصناف')} />
-            <IconButton icon={LayoutDashboard} label={T('الرجوع للوحة التحكم')} onClick={() => navigate('/')} />
+            <SearchInput className="flex-1" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={T('ابحث عن صنف بالاسم أو الرمز…')} aria-label={T('بحث في الأصناف')} />
+            <IconButton icon={BackIcon} label={T('الرجوع للوحة التحكم')} onClick={() => navigate('/')} />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ShiftPill shift={shift} canCash={can('shift.cash')} onOpen={() => setDialog({ kind: 'shift' })} onGo={() => navigate('/shift')} />
@@ -181,7 +181,7 @@ export default function POS() {
                 {T('الطلبات المفتوحة')} <span className="num rounded-full bg-warning-soft px-2 text-warning">{openOrders.data?.length || 0}</span>
               </Button>
               <IconButton icon={LayoutGrid} label={T('الطاولات')} onClick={() => navigate('/tables')} />
-              <IconButton icon={RefreshCw} label={T('تحديث المنيو')} onClick={() => { menu.reload(); openOrders.reload(true); }} />
+              <IconButton icon={RefreshCw} label={T('تحديث قائمة الطعام')} onClick={() => { menu.reload(); openOrders.reload(true); }} />
             </div>
           </div>
         </div>
@@ -209,7 +209,7 @@ export default function POS() {
               </div>
             </button>
           ))}
-          {!items.length && <div className="col-span-full"><Empty icon={Utensils} title={T('لا توجد أصناف')}>{search ? T('لا نتائج للبحث') : T('أضف الأصناف من صفحة المنيو')}</Empty></div>}
+          {!items.length && <div className="col-span-full"><Empty icon={Utensils} title={T('لا توجد أصناف')}>{search ? T('لا نتائج للبحث') : T('أضف الأصناف من صفحة قائمة الطعام')}</Empty></div>}
         </div>
       </div>
 
@@ -441,14 +441,14 @@ function ShiftGate({ onBack }) {
           <p className="text-sm text-white/85">{T('لا يمكن البيع أو تحصيل المدفوعات بدون وردية مفتوحة')}</p>
         </div>
         <div className="grid gap-4 p-6">
-          <div className="text-sm text-muted">{T('الكاشير')}: <span className="font-bold text-fg">{me?.name}</span></div>
+          <div className="text-sm text-muted">{T('أمين الصندوق')}: <span className="font-bold text-fg">{me?.name}</span></div>
           <label className="block">
             <span className="mb-1 block text-sm font-semibold">{T('النقدية في الدرج عند البداية')}</span>
             <input autoFocus inputMode="decimal" value={float} onChange={(e) => setFloat(e.target.value)} placeholder="0"
               className="num h-12 w-full rounded-xl border border-line bg-surface px-3 text-xl outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
           <Button size="lg" busy={busy} icon={Unlock}>{T('فتح الوردية')}</Button>
-          <Button type="button" variant="ghost" icon={LayoutDashboard} onClick={onBack}>{T('الرجوع للوحة التحكم')}</Button>
+          <Button type="button" variant="ghost" icon={BackIcon} onClick={onBack}>{T('الرجوع للوحة التحكم')}</Button>
         </div>
       </form>
     </div>

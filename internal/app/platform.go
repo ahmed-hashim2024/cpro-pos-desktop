@@ -362,10 +362,13 @@ type PlatformInfo struct {
 	Domain      string           `json:"domain"`
 	DomainError string           `json:"domain_error"` // why creating the domain failed
 	MenuURL     string           `json:"menu_url"`
-	MenuEnabled bool             `json:"menu_enabled"`
-	Tunnel      TunnelStatus     `json:"tunnel"`
-	Version     string           `json:"app_version"`
-	Update      UpdateInfo       `json:"update"`
+	// RemoteURL is where staff sign in from outside the restaurant, while
+	// the plan includes remote access.
+	RemoteURL   string       `json:"remote_url"`
+	MenuEnabled bool         `json:"menu_enabled"`
+	Tunnel      TunnelStatus `json:"tunnel"`
+	Version     string       `json:"app_version"`
+	Update      UpdateInfo   `json:"update"`
 }
 
 // TunnelStatus is reported by the tunnel supervisor.
@@ -408,6 +411,9 @@ func (a *App) PlatformInfo(ctx context.Context, actor Actor) (PlatformInfo, erro
 	if p.st.Tunnel != nil {
 		info.Domain = p.st.Tunnel.Domain
 		info.MenuURL = "https://" + p.st.Tunnel.Domain
+		if f.RemoteAccess() && p.st.Tunnel.RemoteDomain != "" {
+			info.RemoteURL = "https://" + p.st.Tunnel.RemoteDomain
+		}
 	}
 	p.mu.RUnlock()
 	info.MenuEnabled = a.menuOpen()
@@ -442,7 +448,7 @@ func platformErr(err error) error {
 	case errors.As(err, &se):
 		return &Error{CodeConflict, "رد المنصة: " + se.Message}
 	case errors.Is(err, saas.ErrUnreachable):
-		return &Error{CodeConflict, "تعذر الاتصال بالمنصة. تأكد من الإنترنت وحاول مرة أخرى"}
+		return &Error{CodeConflict, "تعذّر الاتصال بالمنصة. تأكد من الاتصال بالإنترنت وأعد المحاولة"}
 	case errors.Is(err, saas.ErrNotPlatform):
 		return &Error{CodeConflict, "العنوان المضبوط ليس منصة CPro الرسمية. راجع عنوان المنصة من الإعدادات ← الاشتراك ← متقدم"}
 	}

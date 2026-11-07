@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -78,7 +79,7 @@ func (l *rateLimiter) allow(key string, n int, window time.Duration, now time.Ti
 	return true
 }
 
-var errTooMany = &Error{CodeConflict, "طلبات كثيرة، حاول بعد قليل"}
+var errTooMany = &Error{CodeConflict, "طلبات كثيرة، أعد المحاولة بعد قليل"}
 
 // ---- configuration -----------------------------------------------------------------
 
@@ -101,7 +102,7 @@ func (a *App) menuOpen() bool {
 	return a.features().EMenu() && bool(a.emenuConfig().Enabled)
 }
 
-var errMenuClosed = &Error{CodeNotFound, "المنيو غير متاح حالياً"}
+var errMenuClosed = &Error{CodeNotFound, "قائمة الطعام غير متاحة حالياً"}
 
 // ---- public menu -----------------------------------------------------------------
 
@@ -153,6 +154,12 @@ type PublicOffer struct {
 	Badge     string     `json:"badge"`
 	Highlight string     `json:"highlight"`
 	Item      PublicItem `json:"item"`
+	// The sticker: centre on the picture (% from left and top), size (% of
+	// normal) and motion.
+	HighlightX      int    `json:"highlight_x"`
+	HighlightY      int    `json:"highlight_y"`
+	HighlightSize   int    `json:"highlight_size"`
+	HighlightMotion string `json:"highlight_motion"`
 	// The shade over the picture: a hex colour and 0-100.
 	OverlayColor   string `json:"overlay_color"`
 	OverlayOpacity int    `json:"overlay_opacity"`
@@ -488,7 +495,8 @@ func publicCatalog(ctx context.Context, q sqlite.Querier, img string) ([]PublicC
 
 	offers := []PublicOffer{}
 	isOffer := map[string]bool{}
-	rows, err = q.QueryContext(ctx, `SELECT id, kind, item_id, badge, highlight, overlay_color, overlay_opacity FROM emenu_offers ORDER BY kind, sort, created_at`)
+	rows, err = q.QueryContext(ctx, `SELECT id, kind, item_id, badge, highlight, overlay_color, overlay_opacity,
+		highlight_x, highlight_y, highlight_size, highlight_motion FROM emenu_offers ORDER BY kind, sort, created_at`)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -496,7 +504,8 @@ func publicCatalog(ctx context.Context, q sqlite.Querier, img string) ([]PublicC
 		var o PublicOffer
 		var itemID string
 		var overlay string
-		if err := rows.Scan(&o.ID, &o.Kind, &itemID, &o.Badge, &o.Highlight, &overlay, &o.OverlayOpacity); err != nil {
+		if err := rows.Scan(&o.ID, &o.Kind, &itemID, &o.Badge, &o.Highlight, &overlay, &o.OverlayOpacity,
+			&o.HighlightX, &o.HighlightY, &o.HighlightSize, &o.HighlightMotion); err != nil {
 			rows.Close()
 			return nil, nil, nil, err
 		}
@@ -560,33 +569,76 @@ func dealPrice(badge string, deal, price money.Minor) (money.Minor, bool) {
 
 // ---- call the waiter -------------------------------------------------------------
 
-// ServiceCall is a guest asking for the waiter, the bill or reporting a
-// problem with the food. Table is the table QR's token; on the hall QR the
-// guest names the table instead (TableNumber).
+// ServiceCall is a guest asking the staff for something from their table.
+// Table is the table QR's token; on the hall QR the guest names the table
+// instead (TableNumber).
 type ServiceCall struct {
-	Table       string `json:"table"`
-	TableNumber string `json:"table_number"`
-	Kind        string `json:"kind"` // waiter | bill | issue
-	Note        string `json:"note"` // issue: what went wrong
+	Table       string   `json:"table"`
+	TableNumber string   `json:"table_number"`
+	Kind        string   `json:"kind"`    // see serviceKinds
+	Details     []string `json:"details"` // bill: payment method; extras: what they need
+	Note        string   `json:"note"`    // extras, issue, other: in the guest's words
+}
+
+// serviceKinds are the reasons a table calls the staff, with the codes the
+// guest may pick for each (shown on the staff screen in its language) and
+// whether a note is kept or required.
+var serviceKinds = map[string]struct {
+	details  map[string]bool
+	note     bool
+	needNote bool
+}{
+	"waiter": {},
+	"order":  {},                                 // ready to order from the waiter
+	"bill":   {details: codeSet("cash", "card")}, // so the card machine comes along
+	"extras": {details: codeSet("water", "napkins", "cutlery", "ice", "plates", "clean"), note: true},
+	"late":   {},           // the order is taking too long
+	"issue":  {note: true}, // a problem with the food
+	"other":  {note: true, needNote: true},
+}
+
+func codeSet(v ...string) map[string]bool {
+	m := make(map[string]bool, len(v))
+	for _, s := range v {
+		m[s] = true
+	}
+	return m
 }
 
 // CallWaiter records a request from a table. A second call of the same kind
-// while one is open adds nothing (a problem's newer description replaces the
-// older one).
+// while one is open adds nothing, except that newer picks or a newer note
+// replace the older ones.
 func (a *App) CallWaiter(ctx context.Context, in ServiceCall, ip string) error {
 	if !a.menuOpen() {
 		return errMenuClosed
 	}
 	kind := in.Kind
-	if kind != "waiter" && kind != "bill" && kind != "issue" {
+	spec, ok := serviceKinds[kind]
+	if !ok {
 		return invalid("نوع الطلب غير صحيح")
 	}
+	var picked []string
+	for _, d := range in.Details {
+		if spec.details[d] && !slices.Contains(picked, d) {
+			picked = append(picked, d)
+		}
+	}
+	if kind == "bill" && len(picked) > 1 {
+		picked = picked[:1]
+	}
+	details := strings.Join(picked, ",")
 	note := ""
-	if kind == "issue" {
+	if spec.note {
 		note = clip(in.Note, 200)
 	}
+	if spec.needNote && note == "" {
+		return invalid("اكتب طلبك")
+	}
+	if kind == "extras" && details == "" && note == "" {
+		return invalid("اختر ما تحتاج إليه")
+	}
 	if !a.ordering(a.emenuConfig(), true, 0).CallWaiter {
-		return &Error{CodeForbidden, "نداء الويتر غير متاح"}
+		return &Error{CodeForbidden, "نداء النادل غير متاح"}
 	}
 	if !a.limits.allow("call:"+ip, callsPerIP, publicRateBurst, a.now()) {
 		return errTooMany
@@ -600,7 +652,7 @@ func (a *App) CallWaiter(ctx context.Context, in ServiceCall, ip string) error {
 		case strings.TrimSpace(in.TableNumber) != "":
 			tableID, err = tableByNumber(ctx, tx, clip(in.TableNumber, 20))
 		default:
-			err = invalid("اختار الترابيزة")
+			err = invalid("اختر الطاولة")
 		}
 		if err != nil {
 			return err
@@ -608,14 +660,16 @@ func (a *App) CallWaiter(ctx context.Context, in ServiceCall, ip string) error {
 		var open int
 		tx.QueryRowContext(ctx, `SELECT count(*) FROM service_requests WHERE table_id = ? AND kind = ? AND status = 'open'`, tableID, kind).Scan(&open)
 		if open > 0 {
-			if note == "" {
+			if note == "" && details == "" {
 				return nil
 			}
-			_, err = tx.ExecContext(ctx, `UPDATE service_requests SET note = ? WHERE table_id = ? AND kind = ? AND status = 'open'`, note, tableID, kind)
+			_, err = tx.ExecContext(ctx, `UPDATE service_requests SET details = CASE WHEN ? = '' THEN details ELSE ? END,
+				note = CASE WHEN ? = '' THEN note ELSE ? END WHERE table_id = ? AND kind = ? AND status = 'open'`,
+				details, details, note, note, tableID, kind)
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO service_requests(id, table_id, kind, note, created_at) VALUES (?,?,?,?,?)`,
-			sqlite.NewID(), tableID, kind, note, a.stamp())
+		_, err = tx.ExecContext(ctx, `INSERT INTO service_requests(id, table_id, kind, details, note, created_at) VALUES (?,?,?,?,?,?)`,
+			sqlite.NewID(), tableID, kind, details, note, a.stamp())
 		return err
 	})
 }
@@ -737,36 +791,36 @@ func (a *App) SubmitOnlineOrder(ctx context.Context, in OnlineOrderInput, ip str
 	switch typ {
 	case "dine_in":
 		if !ord.DineIn {
-			return GuestOrder{}, &Error{CodeForbidden, "الطلب من الصالة غير متاح، نادِ الويتر"}
+			return GuestOrder{}, &Error{CodeForbidden, "الطلب من الصالة غير متاح، يُرجى مناداة النادل"}
 		}
 		if in.TableToken == "" && in.TableNumber == "" {
-			return GuestOrder{}, invalid("اختار الترابيزة")
+			return GuestOrder{}, invalid("اختر الطاولة")
 		}
 		in.Address = ""
 		if in.Phone != "" && !validPhone(in.Phone) {
-			return GuestOrder{}, invalid("اكتب رقم تليفون صحيح")
+			return GuestOrder{}, invalid("أدخل رقم هاتف صحيحاً")
 		}
 	case "delivery":
 		if !ord.Delivery {
 			return GuestOrder{}, &Error{CodeForbidden, "التوصيل غير متاح حالياً"}
 		}
 		if in.CustomerName == "" {
-			return GuestOrder{}, invalid("اكتب الاسم")
+			return GuestOrder{}, invalid("أدخل الاسم")
 		}
 		if !validPhone(in.Phone) {
-			return GuestOrder{}, invalid("اكتب رقم تليفون صحيح")
+			return GuestOrder{}, invalid("أدخل رقم هاتف صحيحاً")
 		}
 		if in.Address == "" {
-			return GuestOrder{}, invalid("اكتب العنوان")
+			return GuestOrder{}, invalid("أدخل العنوان")
 		}
 	default:
-		return GuestOrder{}, invalid("اختار: في الصالة أو توصيل")
+		return GuestOrder{}, invalid("اختر: في الصالة أو توصيل")
 	}
 	if len(in.Lines) == 0 {
 		return GuestOrder{}, invalid("السلة فارغة")
 	}
 	if len(in.Lines) > maxOnlineLines {
-		return GuestOrder{}, invalid(fmt.Sprintf("الحد الأقصى %d صنف في الطلب", maxOnlineLines))
+		return GuestOrder{}, invalid(fmt.Sprintf("الحد الأقصى %d صنفاً في الطلب الواحد", maxOnlineLines))
 	}
 	if !a.limits.allow("order:"+ip, ordersPerIP, publicRateBurst, a.now()) {
 		return GuestOrder{}, errTooMany
@@ -790,7 +844,7 @@ func (a *App) SubmitOnlineOrder(ctx context.Context, in OnlineOrderInput, ip str
 			var pending int
 			tx.QueryRowContext(ctx, `SELECT count(*) FROM online_orders WHERE table_id = ? AND status = 'pending'`, tableID).Scan(&pending)
 			if pending > 0 {
-				return conflict("فيه طلب لسه بيتراجع على الطاولة دي، استنى لحظة")
+				return conflict("يوجد طلب على هذه الطاولة قيد المراجعة، يُرجى الانتظار قليلاً")
 			}
 		}
 		lines := make([]OnlineLine, 0, len(in.Lines))
@@ -931,12 +985,13 @@ func (a *App) orderStage(ctx context.Context, orderID string) (string, error) {
 // ---- staff side ---------------------------------------------------------------------
 
 type ServiceRequest struct {
-	ID        string `json:"id"`
-	TableID   string `json:"table_id"`
-	TableName string `json:"table_name"`
-	Kind      string `json:"kind"`
-	Note      string `json:"note"`
-	CreatedAt string `json:"created_at"`
+	ID        string   `json:"id"`
+	TableID   string   `json:"table_id"`
+	TableName string   `json:"table_name"`
+	Kind      string   `json:"kind"`
+	Details   []string `json:"details"`
+	Note      string   `json:"note"`
+	CreatedAt string   `json:"created_at"`
 }
 
 // Inbox is what the POS polls: pending online orders and open calls.
@@ -970,7 +1025,7 @@ func (a *App) Inbox(ctx context.Context, actor Actor) (Inbox, error) {
 	if err := rows.Err(); err != nil {
 		return in, err
 	}
-	rows, err = a.db.Read.QueryContext(ctx, `SELECT s.id, s.table_id, t.name, s.kind, s.note, s.created_at FROM service_requests s
+	rows, err = a.db.Read.QueryContext(ctx, `SELECT s.id, s.table_id, t.name, s.kind, s.details, s.note, s.created_at FROM service_requests s
 		JOIN dining_tables t ON t.id = s.table_id WHERE s.status = 'open' ORDER BY s.created_at`)
 	if err != nil {
 		return in, err
@@ -978,8 +1033,13 @@ func (a *App) Inbox(ctx context.Context, actor Actor) (Inbox, error) {
 	defer rows.Close()
 	for rows.Next() {
 		var r ServiceRequest
-		if err := rows.Scan(&r.ID, &r.TableID, &r.TableName, &r.Kind, &r.Note, &r.CreatedAt); err != nil {
+		var details string
+		if err := rows.Scan(&r.ID, &r.TableID, &r.TableName, &r.Kind, &details, &r.Note, &r.CreatedAt); err != nil {
 			return in, err
+		}
+		r.Details = []string{}
+		if details != "" {
+			r.Details = strings.Split(details, ",")
 		}
 		in.Requests = append(in.Requests, r)
 	}
@@ -1002,7 +1062,7 @@ func pendingOnline(ctx context.Context, tx *sql.Tx, id string) (OnlineOrder, err
 		return o, noRows(err, "الطلب")
 	}
 	if o.Status != "pending" {
-		return o, conflict("الطلب ده اتعامل معاه بالفعل")
+		return o, conflict("سبق التعامل مع هذا الطلب")
 	}
 	return o, nil
 }
@@ -1022,7 +1082,7 @@ func (a *App) AcceptOnlineOrder(ctx context.Context, actor Actor, id string) (Or
 		if err != nil {
 			return err
 		}
-		note := "طلب أونلاين"
+		note := "طلب إلكتروني"
 		if o.CustomerName != "" {
 			note += " — " + o.CustomerName
 		}
@@ -1080,7 +1140,7 @@ func (a *App) RejectOnlineOrder(ctx context.Context, actor Actor, id, reason str
 	}
 	reason = clip(reason, 200)
 	if reason == "" {
-		return invalid("اكتب سبب الرفض")
+		return invalid("أدخل سبب الرفض")
 	}
 	return a.tx(ctx, func(tx *sql.Tx) error {
 		if _, err := pendingOnline(ctx, tx, id); err != nil {
@@ -1141,9 +1201,9 @@ func tableByNumber(ctx context.Context, tx *sql.Tx, typed string) (string, error
 	case 1:
 		return byDigits[0], nil
 	case 0:
-		return "", &Error{CodeNotFound, "رقم الترابيزة ده مش موجود، اكتبه زي ما هو مكتوب على الترابيزة"}
+		return "", &Error{CodeNotFound, "رقم الطاولة غير موجود، فاكتبه كما هو مدوَّن على الطاولة"}
 	default:
-		return "", conflict("فيه أكتر من ترابيزة بالرقم ده، اكتب اسمها زي ما هو مكتوب على الترابيزة")
+		return "", conflict("توجد أكثر من طاولة بهذا الرقم، فاكتب اسمها كما هو مدوَّن على الطاولة")
 	}
 }
 
@@ -1208,7 +1268,7 @@ func (a *App) customerForOrder(ctx context.Context, tx *sql.Tx, o OnlineOrder) (
 	}
 	id = sqlite.NewID()
 	_, err = tx.ExecContext(ctx, `INSERT INTO customers(id, name, phone, address, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`,
-		id, o.CustomerName, phone, o.Address, "من المنيو الإلكتروني", a.stamp(), a.stamp())
+		id, o.CustomerName, phone, o.Address, "من قائمة الطعام الإلكترونية", a.stamp(), a.stamp())
 	if isUnique(err) {
 		return "", nil // a differently written copy of the number exists; leave the order unlinked
 	}

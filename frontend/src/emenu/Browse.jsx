@@ -89,7 +89,7 @@ export function FullMenu({ menu, t, money, canOrder, inCart, filters, setFilters
           <h2 className="mb-3 flex items-center gap-2.5 text-lg font-bold">
             {c.image ? <img src={c.image} alt="" className="size-8 rounded-full object-cover" /> : <span className="h-5 w-1.5 rounded-full bg-p" />}{c.name}
           </h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
             {c.items.map((i) => (
               <ItemCard key={i.id} item={i} t={t} money={money} showPrices={menu.show_prices} canOrder={canOrder} count={inCart[i.id]} onPick={onPick} />
             ))}
@@ -111,7 +111,7 @@ export function OffersPage({ menu, t, money, onPick }) {
       {!menu.offers.length && (
         <div className="flex flex-col items-center gap-2 px-8 py-16 text-center text-mut"><Tag className="size-10" aria-hidden /><p>{t('noOffers')}</p></div>
       )}
-      <div className="grid gap-3 px-4">
+      <div className="grid gap-3 px-4 md:grid-cols-2">
         {single.map((o) => (
           <button key={o.id} onClick={() => onPick(o.item)} className="flex gap-3 rounded-3xl bg-card p-2.5 text-start shadow-sm transition active:scale-[.99]">
             <Thumb item={o.item} className="size-24 shrink-0 rounded-2xl" />
@@ -123,7 +123,7 @@ export function OffersPage({ menu, t, money, onPick }) {
             </div>
           </button>
         ))}
-        {family.length > 0 && single.length > 0 && <h2 className="mt-3 text-lg font-bold">{t('familyOffers')}</h2>}
+        {family.length > 0 && single.length > 0 && <h2 className="mt-3 text-lg font-bold md:col-span-2">{t('familyOffers')}</h2>}
         {family.map((o) => <FamilyBanner key={o.id} offer={o} t={t} money={money} showPrices={menu.show_prices} onPick={onPick} />)}
       </div>
     </div>
@@ -163,7 +163,7 @@ export function ItemModal({ item, badge, t, money, canOrder, showPrices, onClose
   return (
     <div className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-[3px]" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={item.name} onClick={(e) => e.stopPropagation()}
-        className="anim-swal flex max-h-[88dvh] w-full max-w-sm flex-col overflow-hidden rounded-[28px] bg-bg shadow-2xl">
+        className="anim-swal flex max-h-[88dvh] w-full max-w-sm flex-col overflow-hidden rounded-[28px] bg-bg shadow-2xl md:max-w-md">
         <div className="overflow-y-auto">
           <div className="relative">
             <Thumb item={item} className="aspect-[4/3] w-full" />

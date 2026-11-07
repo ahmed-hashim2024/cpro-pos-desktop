@@ -102,7 +102,7 @@ function IngredientDialog({ g, onClose, onSaved }) {
         <Field label={T('الحد الأدنى للتنبيه')}><Input className="num" value={f.min} onChange={(e) => setF({ ...f, min: e.target.value })} /></Field>
         {!g.id && <>
           <Field label={T('الرصيد الافتتاحي')}><Input className="num" value={f.opening} onChange={(e) => setF({ ...f, opening: e.target.value })} /></Field>
-          <Field label={T('التكلفة لكل {0}', [units[f.unit]])} hint={T('تتحدث تلقائياً بمتوسط سعر المشتريات')}><Input className="num" value={f.cost} onChange={(e) => setF({ ...f, cost: e.target.value })} /></Field>
+          <Field label={T('التكلفة لكل {0}', [units[f.unit]])} hint={T('تُحدَّث تلقائياً وفق متوسط سعر المشتريات')}><Input className="num" value={f.cost} onChange={(e) => setF({ ...f, cost: e.target.value })} /></Field>
         </>}
         <Checkbox label={T('مفعّلة')} checked={f.active} onChange={(v) => setF({ ...f, active: v })} />
       </div>
@@ -317,7 +317,7 @@ function Counts() {
         {draft ? <Button onClick={() => setOpenId(draft.id)}><ClipboardCheck className="size-4" />{T('متابعة الجرد المفتوح')}</Button>
           : <Button busy={busy} onClick={start}><Plus className="size-4" />{T('بدء جرد جديد')}</Button>}
       </div>
-      <Table head={[T('التاريخ'), T('الحالة'), T('بدأه'), T('رحّله'), T('خامات معدودة'), T('قيمة الفروق')]}>
+      <Table head={[T('التاريخ'), T('الحالة'), T('المُنشئ'), T('المُرحِّل'), T('خامات معدودة'), T('قيمة الفروق')]}>
         {(list.data || []).map((c) => (
           <tr key={c.id} className="cursor-pointer hover:bg-surface-2" onClick={() => setOpenId(c.id)}>
             <Td>{dateTime(c.created_at)}</Td><Td><Badge tone={status[c.status][0]}>{status[c.status][1]}</Badge></Td>

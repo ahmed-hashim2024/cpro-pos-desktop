@@ -13,14 +13,16 @@ import { T } from '@/lib/i18n';
 import { openExternal, copyText } from '@/lib/open';
 import { makeAppIcons } from '@/lib/image';
 import { overlayGradient } from '@/lib/overlay';
+import { OfferSticker, STICKER_DEFAULT, STICKER_MOTIONS } from '@/lib/sticker';
+import { onColor } from '@/emenu/lib';
 
 // Recommended picture sizes (they match how the guest page shows them).
 export const SIZES = {
-  slider: { side: 1600, hint: '1200 × 700 px — الصورة بتملى الكارت كله' },
-  family: { side: 1600, hint: '1200 × 480 px — الصورة بتملى البانر كله' },
+  slider: { side: 1600, hint: '1200 × 700 px — تملأ الصورة البطاقة كاملة' },
+  family: { side: 1600, hint: '1200 × 480 px — تملأ الصورة اللافتة كاملة' },
   category: { side: 512, hint: '400 × 400 px — مربعة' },
   logo: { side: 512, hint: '400 × 400 px — مربعة' },
-  appIcon: { hint: '512 × 512 px — مربعة، من غير كلام صغير' },
+  appIcon: { hint: '512 × 512 px — مربعة، ودون نصوص صغيرة' },
 };
 
 export default function EMenuDesigner() {
@@ -52,7 +54,7 @@ export default function EMenuDesigner() {
     setAppIcon(null);
     await data.reload(true);
     setVersion((v) => v + 1);
-    toast(T('تم حفظ إعدادات المنيو الإلكتروني'));
+    toast(T('تم حفظ إعدادات قائمة الطعام الإلكترونية'));
   });
   const undo = () => { setDraft(saved); setLogo(''); setAppIcon(null); };
 
@@ -64,9 +66,9 @@ export default function EMenuDesigner() {
     <div className={cx('grid items-start gap-4', showPreview && 'lg:grid-cols-[minmax(0,1fr)_310px]')}>
       <div className="grid min-w-0 gap-4">
         <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-2 rounded-2xl border border-line bg-surface/95 px-3 py-2 shadow-card backdrop-blur">
-          <span className="text-sm text-muted">{dirty ? T('فيه تعديلات لم تُحفظ') : T('كل التعديلات محفوظة')}</span>
+          <span className="text-sm text-muted">{dirty ? T('توجد تعديلات لم تُحفظ') : T('كل التعديلات محفوظة')}</span>
           <div className="ms-auto flex flex-wrap gap-2">
-            <Button variant="secondary" icon={showPreview ? EyeOff : Eye} onClick={() => setShowPreview(!showPreview)}>{showPreview ? T('إخفاء المعاينة') : T('معاينة على الموبايل')}</Button>
+            <Button variant="secondary" icon={showPreview ? EyeOff : Eye} onClick={() => setShowPreview(!showPreview)}>{showPreview ? T('إخفاء المعاينة') : T('معاينة على الهاتف المحمول')}</Button>
             {dirty && <Button variant="secondary" icon={Undo2} onClick={undo}>{T('تراجع')}</Button>}
             <Button icon={Save} busy={busy} disabled={!dirty} onClick={save}>{T('حفظ الإعدادات')}</Button>
           </div>
@@ -76,7 +78,7 @@ export default function EMenuDesigner() {
 
         <Card title={T('الهوية')} icon={Store}>
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label={T('الاسم اللي فوق في المنيو')} hint={T('لو سبته فاضي هيظهر اسم المطعم من الإعدادات')}>
+            <Field label={T('الاسم الظاهر أعلى قائمة الطعام')} hint={T('إن تُرك فارغاً يظهر اسم المطعم المحدد في الإعدادات')}>
               <Input value={draft.display_name} maxLength={40} onChange={set('display_name')} />
             </Field>
             <Field label={T('سطر تحت الاسم')} hint={T('مثلاً: برجر هاوس')}>
@@ -84,7 +86,7 @@ export default function EMenuDesigner() {
             </Field>
             <div className="flex items-center gap-3 md:col-span-2">
               {logoSrc ? <img src={logoSrc} alt="" className="size-14 rounded-xl border border-line object-cover" /> : <span className="flex size-14 items-center justify-center rounded-xl bg-surface-2 text-xs text-muted">{T('بدون')}</span>}
-              <ImagePick label={T('لوجو (اختياري)')} onPick={setLogo} maxSide={SIZES.logo.side} shape="square" />
+              <ImagePick label={T('الشعار (اختياري)')} onPick={setLogo} maxSide={SIZES.logo.side} shape="square" />
               {logoSrc && <Button variant="ghost" icon={Trash2} onClick={() => setLogo('-')}>{T('إزالة')}</Button>}
               <span className="text-xs text-muted" dir="auto">{T(SIZES.logo.hint)}</span>
             </div>
@@ -99,20 +101,21 @@ export default function EMenuDesigner() {
         <OffersCard kind="single" offers={d.adm.offers.filter((o) => o.kind === 'single')} allOffers={d.adm.offers} items={d.items} overlays={d.adm.overlays} onChanged={refresh} />
         <CategoryImages cats={d.cats} onChanged={refresh} />
         <FeaturedCard featured={d.adm.featured} items={d.items} offers={d.adm.offers} onChanged={refresh} />
-        <OffersCard kind="family" offers={d.adm.offers.filter((o) => o.kind === 'family')} allOffers={d.adm.offers} items={d.items} overlays={d.adm.overlays} onChanged={refresh} />
+        <OffersCard kind="family" offers={d.adm.offers.filter((o) => o.kind === 'family')} allOffers={d.adm.offers} items={d.items} overlays={d.adm.overlays} onChanged={refresh}
+          stickerHex={d.adm.button_colors.find((c) => c.id === draft.button_color)?.hex} />
 
-        <Card title={T('الطلب من المنيو')} icon={ShoppingBag}>
+        <Card title={T('الطلب من قائمة الطعام')} icon={ShoppingBag}>
           {!d.adm.status.ordering && (
-            <p className="mb-3 flex items-center gap-2 rounded-xl bg-warning-soft p-2.5 text-sm text-warning"><CircleAlert className="size-4 shrink-0" />{T('الطلب أونلاين مش مفعّل في باقتك على المنصة — الضيوف هيقدروا يتصفحوا بس')}</p>
+            <p className="mb-3 flex items-center gap-2 rounded-xl bg-warning-soft p-2.5 text-sm text-warning"><CircleAlert className="size-4 shrink-0" />{T('الطلب الإلكتروني غير مفعّل في باقتك على المنصة، وسيقتصر الضيوف على التصفح')}</p>
           )}
           <div className="grid gap-2.5 sm:grid-cols-2">
-            <Toggle label={T('الطلب من الصالة (كود الترابيزة أو كود الصالة)')} checked={draft.allow_dine_in_orders} onChange={set('allow_dine_in_orders')} />
-            <Toggle label={T('الطلب توصيل (الاسم والتليفون والعنوان)')} checked={draft.allow_takeaway_orders} onChange={set('allow_takeaway_orders')} />
-            <Toggle label={T('زر المساعدة: الويتر والحساب ومشكلة في الأكل (من الأكواد فقط)')} checked={draft.allow_call_waiter} onChange={set('allow_call_waiter')} />
+            <Toggle label={T('الطلب من الصالة (رمز الطاولة أو رمز الصالة)')} checked={draft.allow_dine_in_orders} onChange={set('allow_dine_in_orders')} />
+            <Toggle label={T('طلب التوصيل (الاسم والهاتف والعنوان)')} checked={draft.allow_takeaway_orders} onChange={set('allow_takeaway_orders')} />
+            <Toggle label={T('زر المساعدة: نداء النادل وطلب الفاتورة وسائر طلبات الطاولة (من الرموز فقط)')} checked={draft.allow_call_waiter} onChange={set('allow_call_waiter')} />
             <Toggle label={T('إظهار الأسعار')} checked={draft.show_prices} onChange={set('show_prices')} />
           </div>
-          <p className="mt-3 text-xs text-muted">{T('كل الطلبات بتوصل لصندوق الطلبات الأونلاين في الكاشير ومش بتدخل المطبخ غير لما حد يقبلها. طلب التوصيل بيتسجل على العميل برقم تليفونه.')}</p>
-          <Field label={T('وقت التوصيل التقديري (دقيقة)')} hint={T('بيتضاف لوقت تحضير الطلب في طلبات التوصيل')} className="mt-3 max-w-xs">
+          <p className="mt-3 text-xs text-muted">{T('تصل جميع الطلبات إلى صندوق الطلبات الإلكترونية في نقطة البيع، ولا تُرسل إلى المطبخ إلا بعد قبولها. ويُسجَّل طلب التوصيل على العميل برقم هاتفه.')}</p>
+          <Field label={T('وقت التوصيل التقديري (دقيقة)')} hint={T('يُضاف إلى وقت تحضير الطلب في طلبات التوصيل')} className="mt-3 max-w-xs">
             <Input className="num" type="number" min={0} max={240} value={draft.delivery_minutes || ''} onChange={(e) => set('delivery_minutes')(Math.max(0, Number(e.target.value) || 0))} />
           </Field>
           <Field label={T('ملاحظة تظهر في السلة')} className="mt-3"><Textarea value={draft.order_note} maxLength={200} onChange={set('order_note')} /></Field>
@@ -131,9 +134,9 @@ export default function EMenuDesigner() {
           </div>
         </Card>
 
-        <Card title={T('تطبيق الموبايل')} icon={Download}>
-          <p className="mb-3 text-sm text-muted">{T('الضيف يقدر يثبّت المنيو كتطبيق على موبايله. لما يفتح اللينك بتظهرله رسالة تثبيت مرة واحدة في اليوم بس (على الآيفون بتشرحله الخطوتين لأن سفاري مفيهوش زرار تثبيت).')}</p>
-          <Toggle label={T('اقتراح تثبيت التطبيق للضيوف (مرة في اليوم)')} checked={draft.install_prompt} onChange={set('install_prompt')} />
+        <Card title={T('تطبيق الهاتف المحمول')} icon={Download}>
+          <p className="mb-3 text-sm text-muted">{T('يستطيع الضيف تثبيت قائمة الطعام تطبيقاً على هاتفه المحمول. عند فتح الرابط تظهر له رسالة التثبيت مرة واحدة يومياً على الأكثر (وتشرح له الخطوتين على iPhone لعدم وجود زر تثبيت في Safari).')}</p>
+          <Toggle label={T('اقتراح تثبيت التطبيق على الضيوف (مرة يومياً)')} checked={draft.install_prompt} onChange={set('install_prompt')} />
           <div className="mt-3 flex flex-wrap items-center gap-3">
             {appIconSrc
               ? <img src={appIconSrc} alt="" className="size-16 rounded-[22%] border border-line object-cover shadow" />
@@ -147,17 +150,17 @@ export default function EMenuDesigner() {
             </div>
           </div>
           {draft.install_prompt && !appIconSrc && (
-            <p className="mt-3 flex items-center gap-2 rounded-xl bg-warning-soft p-2.5 text-sm text-warning"><CircleAlert className="size-4 shrink-0" />{T('ارفع أيقونة عشان رسالة التثبيت تظهر للضيوف')}</p>
+            <p className="mt-3 flex items-center gap-2 rounded-xl bg-warning-soft p-2.5 text-sm text-warning"><CircleAlert className="size-4 shrink-0" />{T('ارفع أيقونة لكي تظهر رسالة التثبيت للضيوف')}</p>
           )}
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button size="sm" variant="secondary" icon={Eye} onClick={() => { setShowPreview(true); setInstallDemo((x) => ({ kind: 'android', n: (x?.n || 0) + 1 })); }}>{T('معاينة الرسالة (أندرويد)')}</Button>
-            <Button size="sm" variant="secondary" icon={Eye} onClick={() => { setShowPreview(true); setInstallDemo((x) => ({ kind: 'ios', n: (x?.n || 0) + 1 })); }}>{T('معاينة الرسالة (آيفون)')}</Button>
+            <Button size="sm" variant="secondary" icon={Eye} onClick={() => { setShowPreview(true); setInstallDemo((x) => ({ kind: 'android', n: (x?.n || 0) + 1 })); }}>{T('معاينة الرسالة (Android)')}</Button>
+            <Button size="sm" variant="secondary" icon={Eye} onClick={() => { setShowPreview(true); setInstallDemo((x) => ({ kind: 'ios', n: (x?.n || 0) + 1 })); }}>{T('معاينة الرسالة (iPhone)')}</Button>
           </div>
         </Card>
 
         <Card title={T('التواصل')} icon={Phone}>
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label={T('التليفون')}><Input dir="ltr" value={draft.phone} maxLength={20} onChange={set('phone')} /></Field>
+            <Field label={T('الهاتف')}><Input dir="ltr" value={draft.phone} maxLength={20} onChange={set('phone')} /></Field>
             <Field label={T('واتساب')}><Input dir="ltr" value={draft.whatsapp} maxLength={20} onChange={set('whatsapp')} /></Field>
             <Field label={T('العنوان')} className="md:col-span-2"><Input value={draft.address} maxLength={160} onChange={set('address')} /></Field>
             <Field label={T('رابط الخريطة')} hint="https://…" className="md:col-span-2"><Input dir="ltr" value={draft.map_url} onChange={set('map_url')} /></Field>
@@ -172,9 +175,9 @@ export default function EMenuDesigner() {
       {showPreview && (
         <aside className="sticky top-0 grid justify-items-center gap-3">
           <Segmented className="w-full" value={previewTab} onChange={setPreviewTab}
-            options={[['home', T('الرئيسية')], ['menu', T('المنيو')], ['offers', T('العروض')], ['cart', T('السلة')], ['profile', T('بياناتي')]]} />
+            options={[['home', T('الرئيسية')], ['menu', T('قائمة الطعام')], ['offers', T('العروض')], ['cart', T('السلة')], ['profile', T('بياناتي')]]} />
           <PhonePreview draft={draft} logo={logo} appIcon={appIconSrc} version={version} tab={previewTab} installDemo={installDemo} />
-          <p className="text-center text-xs text-muted">{T('المعاينة بتتحدث مع كل تعديل، حتى قبل الحفظ')}</p>
+          <p className="text-center text-xs text-muted">{T('تتحدّث المعاينة مع كل تعديل، حتى قبل الحفظ')}</p>
         </aside>
       )}
     </div>
@@ -186,13 +189,13 @@ export default function EMenuDesigner() {
 function StatusCard({ status, enabled, onEnabled }) {
   const url = status.menu_url;
   return (
-    <Card title={T('حالة المنيو الإلكتروني')} icon={Smartphone}>
+    <Card title={T('حالة قائمة الطعام الإلكترونية')} icon={Smartphone}>
       <div className="flex flex-wrap items-center gap-3">
-        <Switch checked={enabled} onChange={onEnabled} label={T('المنيو متاح للضيوف')} />
-        <span className="font-semibold">{T('المنيو متاح للضيوف')}</span>
+        <Switch checked={enabled} onChange={onEnabled} label={T('قائمة الطعام متاحة للضيوف')} />
+        <span className="font-semibold">{T('قائمة الطعام متاحة للضيوف')}</span>
         <span className="ms-auto flex flex-wrap gap-2">
           {status.licensed ? <Badge tone="green" dot>{T('مفعّل في باقتك')}</Badge> : <Badge tone="amber" dot>{T('غير مفعّل في باقتك')}</Badge>}
-          {status.open ? <Badge tone="green" dot>{T('شغال للضيوف')}</Badge> : <Badge tone="gray" dot>{T('مقفول للضيوف')}</Badge>}
+          {status.open ? <Badge tone="green" dot>{T('متاح للضيوف')}</Badge> : <Badge tone="gray" dot>{T('مغلق أمام الضيوف')}</Badge>}
         </span>
       </div>
       {url ? (
@@ -202,7 +205,7 @@ function StatusCard({ status, enabled, onEnabled }) {
           <Button size="sm" variant="secondary" icon={ExternalLink} onClick={() => openExternal(url)}>{T('فتح')}</Button>
         </div>
       ) : (
-        <p className="mt-3 text-sm text-muted">{T('رابط المنيو بيظهر هنا لما الدومين يتفعّل من المنصة. تقدر تجهز المنيو وتشوفه في المعاينة من دلوقتي.')}</p>
+        <p className="mt-3 text-sm text-muted">{T('يظهر رابط قائمة الطعام هنا عند تفعيل النطاق من المنصة. ويمكنك إعداد قائمة الطعام ومعاينتها من الآن.')}</p>
       )}
     </Card>
   );
@@ -248,7 +251,7 @@ function isLight(hex) {
 
 // ---- offers ---------------------------------------------------------------------------
 
-function OffersCard({ kind, offers, allOffers, items, overlays, onChanged }) {
+function OffersCard({ kind, offers, allOffers, items, overlays, onChanged, stickerHex }) {
   const [edit, setEdit] = useState(null);
   const open = (o, i) => setEdit({ ...o, price: minorInput(o.price_minor), sort: i + 1, prep: o.prep_minutes || '' });
   const family = kind === 'family';
@@ -256,10 +259,10 @@ function OffersCard({ kind, offers, allOffers, items, overlays, onChanged }) {
     try { await api.post('/emenu/offers', { ...o, active }); onChanged(); } catch (e) { toastError(e); }
   };
   return (
-    <Card title={family ? T('العروض المجمعة (للعيلة)') : T('عروض السلايدر (للفرد)')} icon={family ? Users : Images}
-      actions={<Button size="sm" icon={Plus} onClick={() => setEdit({ kind, name: '', description: '', price: '', badge: '', highlight: '', sort: offers.length + 1, prep: '', contents: [], overlay_opacity: 75, overlay_color: 'black', active: true })}>{T('عرض جديد')}</Button>}>
+    <Card title={family ? T('العروض المجمّعة (للعائلة)') : T('العروض المتحركة (للفرد)')} icon={family ? Users : Images}
+      actions={<Button size="sm" icon={Plus} onClick={() => setEdit({ kind, name: '', description: '', price: '', badge: '', highlight: '', highlight_x: STICKER_DEFAULT.x, highlight_y: STICKER_DEFAULT.y, highlight_size: STICKER_DEFAULT.size, highlight_motion: STICKER_DEFAULT.motion, sort: offers.length + 1, prep: '', contents: [], overlay_opacity: 75, overlay_color: 'black', active: true })}>{T('عرض جديد')}</Button>}>
       <p className="mb-3 text-sm text-muted">
-        {family ? T('بانرات عريضة تحت الأصناف المميزة — للوجبات المجمعة والعروض العائلية.') : T('الصور المتحركة أعلى المنيو. الضيف يدوس «اطلب الآن» فيضاف العرض للسلة بنفس السعر اللي هنا.')}
+        {family ? T('لافتات عريضة أسفل الأصناف المميزة — للوجبات المجمّعة والعروض العائلية.') : T('الصور المتحركة أعلى قائمة الطعام. عندما يضغط الضيف «أضف إلى السلة» يُضاف العرض بالسعر المحدد هنا.')}
       </p>
       {!offers.length && <p className="rounded-xl bg-surface-2 p-4 text-center text-sm text-muted">{T('لا توجد عروض بعد')}</p>}
       <div className="grid gap-2">
@@ -278,7 +281,7 @@ function OffersCard({ kind, offers, allOffers, items, overlays, onChanged }) {
           </div>
         ))}
       </div>
-      {edit && <OfferDialog offer={edit} count={offers.length + (edit.id ? 0 : 1)} allOffers={allOffers} items={items} overlays={overlays} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); onChanged(); }} />}
+      {edit && <OfferDialog offer={edit} count={offers.length + (edit.id ? 0 : 1)} allOffers={allOffers} items={items} overlays={overlays} stickerHex={stickerHex} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); onChanged(); }} />}
     </Card>
   );
 }
@@ -286,9 +289,13 @@ function OffersCard({ kind, offers, allOffers, items, overlays, onChanged }) {
 // «2 مارجريتا + 2 برجر»
 const contentsLabel = (list) => (list || []).map((c) => `${c.qty} ${c.name}`).join(' + ');
 
+const motionNames = {
+  pulse: () => T('نبض'), bounce: () => T('قفز'), wiggle: () => T('اهتزاز'), shine: () => T('لمعان'), none: () => T('بدون حركة'),
+};
+
 const overlayNames = { black: 'أسود', brown: 'بني', navy: 'كحلي', green: 'أخضر', red: 'أحمر', purple: 'بنفسجي' };
 
-function OfferDialog({ offer, count, allOffers, items, overlays, onClose, onSaved }) {
+function OfferDialog({ offer, count, allOffers, items, overlays, stickerHex, onClose, onSaved }) {
   const [f, setF] = useState(offer);
   const [image, setImage] = useState('');
   const [busy, run] = useAction();
@@ -303,40 +310,93 @@ function OfferDialog({ offer, count, allOffers, items, overlays, onClose, onSave
     onSaved();
   });
   const remove = async () => {
-    if (!(await confirm({ title: T('حذف «{0}»', [f.name]), message: T('هيتحذف العرض والصنف بتاعه. لو العرض اتباع قبل كده هيتأرشف مع الاحتفاظ بالسجل.') }))) return;
+    if (!(await confirm({ title: T('حذف «{0}»', [f.name]), message: T('سيُحذف العرض والصنف المرتبط به. وإن سبق بيعه فسيُؤرشَف مع الاحتفاظ بسجله.') }))) return;
     try { await api.del(`/emenu/offers/${f.id}`); toast(T('تم الحذف')); onSaved(); } catch (e) { toastError(e); }
   };
   const src = image || f.image;
   const overlayHex = overlays.find((c) => c.id === f.overlay_color)?.hex || '#000000';
+
+  // The sticker in the preview: the guest menu's button colour, dragged to
+  // its place (its centre, as % of the picture) or nudged with the arrows.
+  const sticker = { bg: stickerHex || 'var(--primary)', fg: stickerHex ? onColor(stickerHex) : '#fff' };
+  const card = useRef(null);
+  const [dragging, setDragging] = useState(false);
+  const place = (x, y) => setF((cur) => ({ ...cur, highlight_x: Math.round(Math.min(96, Math.max(4, x))), highlight_y: Math.round(Math.min(92, Math.max(8, y))) }));
+  const startDrag = (e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); e.currentTarget.focus(); setDragging(true); };
+  const drag = (e) => {
+    if (!dragging || !card.current) return;
+    const r = card.current.getBoundingClientRect();
+    place(((e.clientX - r.left) / r.width) * 100, ((e.clientY - r.top) / r.height) * 100);
+  };
+  const endDrag = () => setDragging(false);
+  const nudge = (e) => {
+    const step = e.shiftKey ? 10 : 2;
+    const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    place(f.highlight_x + d[0], f.highlight_y + d[1]);
+  };
   return (
-    <Modal open onClose={onClose} title={f.id ? f.name : family ? T('عرض مجمع جديد') : T('عرض سلايدر جديد')} size="lg"
+    <Modal open onClose={onClose} title={f.id ? f.name : family ? T('عرض مجمع جديد') : T('عرض متحرك جديد')} size="lg"
       footer={<>{f.id && <Button variant="danger-soft" icon={Trash2} className="me-auto" onClick={remove}>{T('حذف')}</Button>}<Button variant="secondary" onClick={onClose}>{T('إلغاء')}</Button><Button busy={busy} onClick={save}>{T('حفظ')}</Button></>}>
-      <div className="grid gap-4 md:grid-cols-[1fr_220px]">
+      <div className={cx('grid gap-4', family ? 'md:grid-cols-[1fr_300px]' : 'md:grid-cols-[1fr_220px]')}>
         <div className="grid content-start gap-3">
           <Field label={T('اسم العرض')}><Input autoFocus value={f.name} maxLength={80} onChange={set('name')} placeholder={family ? T('برجر + بطاطس + مشروب') : T('برجر مشوي على الفحم')} /></Field>
           <Field label={T('المكونات / الوصف')} hint={T('يظهر للضيف تحت اسم العرض')}><Textarea value={f.description} maxLength={300} onChange={set('description')} /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label={T('السعر')}><Input className="num" value={f.price} onChange={set('price')} inputMode="decimal" /></Field>
             <Field label={T('الترتيب')}><PositionSelect count={count} value={f.sort} onChange={(v) => setF({ ...f, sort: v })} /></Field>
-            <Field label={T('شارة صغيرة')} hint={T('مثلاً: ساخن وطازة')}><Input value={f.badge} maxLength={20} onChange={set('badge')} /></Field>
-            {family && <Field label={T('ملصق التوفير')} hint={T('شارة صغيرة في ركن الصورة، مثلاً: وفّر 20%')}><Input value={f.highlight} maxLength={16} onChange={set('highlight')} /></Field>}
-            <Field label={T('وقت التحضير التقديري (دقيقة)')} hint={T('لو سبته فاضي هيتحسب من أطول صنف في العرض')}><Input className="num" type="number" min={0} max={240} value={f.prep} onChange={set('prep')} /></Field>
+            <Field label={T('شارة صغيرة')} hint={T('مثلاً: ساخن وطازج')}><Input value={f.badge} maxLength={20} onChange={set('badge')} /></Field>
+            {family && <Field label={T('ملصق التوفير')} hint={T('مثلاً: وفّر 20% — حرّكه وكبّره من المعاينة')}><Input value={f.highlight} maxLength={16} onChange={set('highlight')} /></Field>}
+            <Field label={T('وقت التحضير التقديري (دقيقة)')} hint={T('إن تُرك فارغاً يُحسب من أطول أصناف العرض تحضيراً')}><Input className="num" type="number" min={0} max={240} value={f.prep} onChange={set('prep')} /></Field>
           </div>
           <OfferContents offer={f} items={items} allOffers={allOffers} onChange={(next) => setF(next)} />
-          <Checkbox label={T('ظاهر في المنيو ونقطة البيع')} checked={f.active} onChange={(v) => setF({ ...f, active: v })} />
-          <p className="text-xs text-muted">{T('العرض بيتسجل كصنف في قسم «العروض»، فيتباع من نقطة البيع ويطلع في التقارير والمطبخ زي أي صنف.')}</p>
+          <Checkbox label={T('ظاهر في قائمة الطعام ونقطة البيع')} checked={f.active} onChange={(v) => setF({ ...f, active: v })} />
+          <p className="text-xs text-muted">{T('يُسجَّل العرض صنفاً في قسم «العروض»، فيُباع من نقطة البيع ويظهر في التقارير والمطبخ كأي صنف آخر.')}</p>
         </div>
         <div className="grid content-start justify-items-center gap-2">
-          <div className={cx('relative w-full overflow-hidden rounded-2xl border border-line', family ? 'aspect-[5/2]' : 'aspect-[12/7]')} style={{ backgroundColor: overlayHex }}>
+          <div ref={card} className={cx('relative w-full overflow-hidden rounded-2xl border border-line', family ? 'aspect-[5/2]' : 'aspect-[12/7]')}
+            style={{ backgroundColor: overlayHex, containerType: 'inline-size', '--sticker-bg': sticker.bg, '--sticker-fg': sticker.fg }}>
             {src && <img src={src} alt="" className="absolute inset-0 size-full object-cover" />}
             <div className="absolute inset-0 flex flex-col justify-end p-2.5 text-white" style={{ backgroundImage: overlayGradient(overlayHex, f.overlay_opacity) }}>
               <span className="line-clamp-1 text-sm font-black drop-shadow" dir="auto">{f.name || T('اسم العرض')}</span>
               {f.price && <span className="num text-xs font-bold drop-shadow">{f.price}</span>}
             </div>
+            {family && (
+              <OfferSticker text={f.highlight} x={f.highlight_x} y={f.highlight_y} size={f.highlight_size} motion={f.highlight_motion}
+                className={cx('cursor-grab touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-white', dragging && 'cursor-grabbing')}
+                tabIndex={0} role="button" aria-label={T('موضع الملصق — اسحبه أو حرّكه بالأسهم')} title={T('اسحب الملصق لمكانه')}
+                onPointerDown={startDrag} onPointerMove={drag} onPointerUp={endDrag} onPointerCancel={endDrag} onKeyDown={nudge} />
+            )}
           </div>
+          {family && f.highlight && (
+            <div className="grid w-full gap-2 rounded-xl bg-surface-2 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-bold">{T('الملصق')}</span>
+                <button type="button" onClick={() => setF({ ...f, highlight_x: STICKER_DEFAULT.x, highlight_y: STICKER_DEFAULT.y, highlight_size: STICKER_DEFAULT.size })}
+                  className="text-xs font-semibold text-primary hover:underline">{T('أعده إلى موضعه الأصلي')}</button>
+              </div>
+              <p className="text-xs text-muted">{T('اسحب الملصق على الصورة لأي مكان.')}</p>
+              <label className="grid gap-1 text-sm font-semibold">
+                <span className="flex justify-between">{T('الحجم')}<span className="num text-muted">{f.highlight_size}%</span></span>
+                <input type="range" min={60} max={200} step={10} value={f.highlight_size} onChange={(e) => setF({ ...f, highlight_size: Number(e.target.value) })} className="accent-[var(--primary)]" />
+              </label>
+              <div>
+                <div className="mb-1.5 text-sm font-semibold">{T('الحركة')}</div>
+                <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={T('الحركة')}>
+                  {STICKER_MOTIONS.map((m) => (
+                    <button key={m} type="button" role="radio" aria-checked={f.highlight_motion === m} onClick={() => setF({ ...f, highlight_motion: m })}
+                      className={cx('rounded-full border px-3 py-1 text-xs font-semibold transition', f.highlight_motion === m ? 'border-primary bg-primary-soft text-primary' : 'border-line bg-surface')}>
+                      {motionNames[m]()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
           <ImagePick label={src ? T('تغيير الصورة') : T('اختيار صورة')} onPick={setImage} maxSide={1600} shape={family ? 'family' : 'slider'} />
           <label className="grid w-full gap-1 text-sm font-semibold">
-            <span className="flex justify-between">{T('درجة الغمقان')}<span className="num text-muted">{f.overlay_opacity}%</span></span>
+            <span className="flex justify-between">{T('درجة التعتيم')}<span className="num text-muted">{f.overlay_opacity}%</span></span>
             <input type="range" min={0} max={100} step={5} value={f.overlay_opacity} onChange={(e) => setF({ ...f, overlay_opacity: Number(e.target.value) })} className="accent-[var(--primary)]" />
           </label>
           <div className="w-full">
@@ -380,8 +440,8 @@ function OfferContents({ offer, items, allOffers, onChange }) {
   };
   return (
     <div className="rounded-xl bg-surface-2 p-3">
-      <div className="font-bold">{T('مكونات العرض من أصناف المنيو')}</div>
-      <p className="mb-2 text-xs text-muted">{T('اختياري: المكونات بتظهر للمطبخ والضيف، والمخزون بيتخصم من وصفاتها.')}</p>
+      <div className="font-bold">{T('مكونات العرض من أصناف قائمة الطعام')}</div>
+      <p className="mb-2 text-xs text-muted">{T('اختياري: تظهر المكونات للمطبخ والضيف، ويُخصم المخزون وفق وصفاتها.')}</p>
       <div className="flex gap-2">
         <Select className="min-w-0 flex-1" value={pick} aria-label={T('صنف')} onChange={(e) => setPick(e.target.value)}>
           <option value="">{T('— اختر صنف —')}</option>
@@ -402,8 +462,8 @@ function OfferContents({ offer, items, allOffers, onChange }) {
             </div>
           ))}
           <p className="text-sm text-muted">
-            {T('سعرهم منفصلين')}: <span className="num font-bold">{money(worth)}</span>
-            {price > 0 && price < worth && <> · {T('الضيف بيوفر')} <span className="num font-bold text-primary">{money(worth - price)}</span></>}
+            {T('سعرها منفردةً')}: <span className="num font-bold">{money(worth)}</span>
+            {price > 0 && price < worth && <> · {T('يوفّر الضيف')} <span className="num font-bold text-primary">{money(worth - price)}</span></>}
           </p>
         </div>
       )}
@@ -422,7 +482,7 @@ function CategoryImages({ cats, onChanged }) {
   const shown = cats.filter((c) => c.active);
   return (
     <Card title={T('أيقونات الأقسام')} icon={LayoutGrid}>
-      <p className="mb-3 text-sm text-muted">{T('صورة دائرية لكل قسم في الشريط المتحرك تحت السلايدر. الأقسام نفسها بتتعدل من تبويب «الأقسام».')} <span dir="auto">({T(SIZES.category.hint)})</span></p>
+      <p className="mb-3 text-sm text-muted">{T('صورة دائرية لكل قسم في الشريط أسفل العروض المتحركة. وتُعدَّل الأقسام نفسها من تبويب «الأقسام».')} <span dir="auto">({T(SIZES.category.hint)})</span></p>
       {!shown.length && <p className="rounded-xl bg-surface-2 p-4 text-center text-sm text-muted">{T('لا توجد أقسام ظاهرة')}</p>}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
         {shown.map((c) => (
@@ -472,7 +532,7 @@ function FeaturedCard({ featured, items, offers, onChanged }) {
 
   return (
     <Card title={T('الأصناف المميزة')} icon={Star}>
-      <p className="mb-3 text-sm text-muted">{T('تظهر في صف «الأكثر طلباً» مع شارة لكل صنف. «عرض الكل» بيفتح المنيو كامل مترتب بالأقسام.')} {T('سعر «عرض ساخن» بيطبق على الطلب من المنيو الإلكتروني بس، مش على البيع من الكاشير.')}</p>
+      <p className="mb-3 text-sm text-muted">{T('تظهر في صف «الأكثر طلباً» مع شارة لكل صنف، ويفتح «عرض الكل» قائمة الطعام كاملة مرتبة حسب الأقسام.')} {T('يُطبَّق سعر «عرض ساخن» على الطلبات من قائمة الطعام الإلكترونية فقط، لا على البيع من نقطة البيع.')}</p>
       <div className="mb-3 flex gap-2">
         <Select className="flex-1" value={pick} onChange={(e) => setPick(e.target.value)}>
           <option value="">{T('— اختر صنف —')}</option>
@@ -488,7 +548,7 @@ function FeaturedCard({ featured, items, offers, onChanged }) {
           const setDeal = (e) => {
             const v = e.target.value.trim() ? toMinor(e.target.value) : 0;
             if (v == null || v < 0 || (v > 0 && v >= it.price_minor)) {
-              toastError(new Error(T('سعر العرض لازم يكون أقل من سعر الصنف')));
+              toastError(new Error(T('يجب أن يكون سعر العرض أقل من سعر الصنف')));
               e.target.value = f.deal_price_minor ? minorInput(f.deal_price_minor) : '';
             } else if (v !== f.deal_price_minor) patch({ deal_price_minor: v });
           };
@@ -585,7 +645,7 @@ function PhonePreview({ draft, logo, appIcon, version, tab, installDemo }) {
       <div className="absolute overflow-hidden rounded-[46px] border-[10px] border-neutral-900 bg-neutral-900 shadow-pop"
         style={{ width: W, height: H, left: 0, top: 0, transform: `scale(${scale})`, transformOrigin: '0 0' }}>
         <span className="absolute left-1/2 top-0 z-10 h-6 w-32 -translate-x-1/2 rounded-b-2xl bg-neutral-900" aria-hidden />
-        <iframe ref={frame} title={T('معاينة المنيو')} src="/menu.html?preview=1" className="size-full rounded-[36px] bg-white" />
+        <iframe ref={frame} title={T('معاينة قائمة الطعام')} src="/menu.html?preview=1" className="size-full rounded-[36px] bg-white" />
       </div>
       {error && <p className="absolute inset-x-2 bottom-3 rounded-xl bg-danger-soft p-2 text-center text-xs font-semibold text-danger">{error}</p>}
     </div>

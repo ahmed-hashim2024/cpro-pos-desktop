@@ -54,7 +54,7 @@ func (s *server) routes(mux *http.ServeMux) {
 		if err := decode(r, &in); err != nil {
 			return nil, err
 		}
-		return a.Login(r.Context(), in, s.channel, remoteIP(r))
+		return a.Login(r.Context(), in, s.channel, s.clientIP(r))
 	}))
 	mux.HandleFunc("GET /api/v1/auth/users", s.public(func(w http.ResponseWriter, r *http.Request) (any, error) {
 		return a.LoginUsers(r.Context(), s.channel)
@@ -565,6 +565,10 @@ func (s *server) routes(mux *http.ServeMux) {
 		from, to := rangeOf(r)
 		return a.SalesReport(r.Context(), actor, from, to)
 	}))
+	mux.HandleFunc("GET /api/v1/reports/service", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
+		from, to := rangeOf(r)
+		return a.ServiceReport(r.Context(), actor, from, to)
+	}))
 	mux.HandleFunc("GET /api/v1/reports/consumption", s.auth(func(w http.ResponseWriter, r *http.Request, actor app.Actor) (any, error) {
 		from, to := rangeOf(r)
 		return a.ConsumptionReport(r.Context(), actor, from, to)
@@ -579,7 +583,7 @@ func (s *server) routes(mux *http.ServeMux) {
 	windowOnly := func(fn func(r *http.Request) (any, error)) http.HandlerFunc {
 		return s.public(func(w http.ResponseWriter, r *http.Request) (any, error) {
 			if s.channel != app.ChannelApp {
-				return nil, &app.Error{Code: app.CodeForbidden, Msg: "متاح من جهاز الكاشير الرئيسي فقط"}
+				return nil, &app.Error{Code: app.CodeForbidden, Msg: "متاح من الجهاز الرئيسي لنقطة البيع فقط"}
 			}
 			return fn(r)
 		})
@@ -587,7 +591,7 @@ func (s *server) routes(mux *http.ServeMux) {
 	// A new computer starts from the owner's backup instead of the setup form.
 	mux.HandleFunc("POST /api/v1/setup/restore", s.public(func(w http.ResponseWriter, r *http.Request) (any, error) {
 		if s.channel != app.ChannelApp {
-			return nil, &app.Error{Code: app.CodeForbidden, Msg: "متاح من جهاز الكاشير الرئيسي فقط"}
+			return nil, &app.Error{Code: app.CodeForbidden, Msg: "متاح من الجهاز الرئيسي لنقطة البيع فقط"}
 		}
 		path, err := s.receiveBackup(w, r)
 		if err != nil {

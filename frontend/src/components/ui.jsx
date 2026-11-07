@@ -1,7 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Loader2, CheckCircle2, AlertCircle, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useToast, toastError } from '@/lib/store';
 import { T, dir } from '@/lib/i18n';
+
+// «Back» points the way the reader came from: right in Arabic, left in
+// English and French.
+export const BackIcon = dir === 'rtl' ? ArrowRight : ArrowLeft;
 
 export const cx = (...c) => c.filter(Boolean).join(' ');
 

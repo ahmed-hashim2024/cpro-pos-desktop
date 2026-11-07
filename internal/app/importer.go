@@ -90,7 +90,7 @@ var yesNo = map[string]bool{
 }
 
 var unitAliases = map[string]string{
-	"kg": "kg", "كجم": "kg", "كيلو": "kg", "g": "g", "جم": "g", "جرام": "g", "l": "l", "لتر": "l", "ml": "ml", "مل": "ml",
+	"kg": "kg", "كجم": "kg", "كغ": "kg", "كيلو": "kg", "كيلوغرام": "kg", "g": "g", "جم": "g", "غ": "g", "جرام": "g", "غرام": "g", "l": "l", "لتر": "l", "ml": "ml", "مل": "ml",
 	"pcs": "pcs", "قطعة": "pcs", "pc": "pcs", "piece": "pcs", "pièce": "pcs",
 }
 
@@ -109,7 +109,7 @@ func boolWord(b bool, lang string) string {
 var activeField = importField{key: "active", label: tr{"مفعّل", "Active", "Actif"}, kind: kBool,
 	help: tr{"نعم أو لا — الافتراضي نعم", "Yes or No — default Yes", "Oui ou Non — par défaut Oui"}, example: "نعم"}
 var sortField = importField{key: "sort", label: tr{"الترتيب", "Sort order", "Ordre"}, kind: kInt,
-	help: tr{"رقم صحيح، الأصغر يظهر أولاً", "Whole number, lower shows first", "Nombre entier, le plus petit d'abord"}, example: "1"}
+	help: tr{"عدد صحيح، ويظهر الأصغر أولاً", "Whole number, lower shows first", "Nombre entier, le plus petit d'abord"}, example: "1"}
 
 func (a *App) importEntities() []importEntity {
 	return []importEntity{
@@ -117,7 +117,7 @@ func (a *App) importEntities() []importEntity {
 			key: "items", label: tr{"الأصناف", "Menu items", "Articles"}, perm: rbac.CatalogManage, match: "code",
 			query: `SELECT i.id, i.code, i.name, coalesce(c.name,''), i.price_minor, i.description, i.sort, i.active FROM items i LEFT JOIN categories c ON c.id = i.category_id WHERE i.deleted_at IS NULL ORDER BY i.sort, i.name`,
 			fields: []importField{
-				{key: "code", label: tr{"الكود", "Code", "Code"}, kind: kText, help: tr{"فريد. يُولَّد تلقائياً عند الإضافة إن تُرك فارغاً، ومطلوب للتعديل", "Unique. Auto-generated on insert if empty; required for update", "Unique. Généré à l'ajout si vide ; requis pour la mise à jour"}, example: "BRG-01"},
+				{key: "code", label: tr{"الرمز", "Code", "Code"}, kind: kText, help: tr{"فريد. يُولَّد تلقائياً عند الإضافة إن تُرك فارغاً، ومطلوب للتعديل", "Unique. Auto-generated on insert if empty; required for update", "Unique. Généré à l'ajout si vide ; requis pour la mise à jour"}, example: "BRG-01"},
 				{key: "name", label: tr{"اسم الصنف", "Item name", "Nom de l'article"}, kind: kText, required: true, example: "برجر كلاسيك"},
 				{key: "category", label: tr{"القسم", "Category", "Catégorie"}, kind: kRef, refTable: "categories", help: tr{"اسم قسم موجود", "Name of an existing category", "Nom d'une catégorie existante"}, example: "ساندوتشات"},
 				{key: "price", label: tr{"السعر", "Price", "Prix"}, kind: kMoney, required: true, example: "150"},
@@ -149,6 +149,26 @@ func (a *App) importEntities() []importEntity {
 			},
 		},
 		{
+			// Before categories: a new file can create the stations the
+			// categories below it name.
+			key: "stations", label: tr{"محطات المطبخ", "Kitchen stations", "Postes de cuisine"}, perm: rbac.CatalogManage, match: "name",
+			query: `SELECT id, name, coalesce(printer,''), active FROM kitchen_stations ORDER BY name`,
+			fields: []importField{
+				{key: "name", label: tr{"اسم المحطة", "Station name", "Nom du poste"}, kind: kText, required: true, example: "الشواية"},
+				{key: "printer", label: tr{"الطابعة", "Printer", "Imprimante"}, kind: kText,
+					help: tr{"اسم طابعة تذاكر المطبخ (اختياري). إن تُرك فارغاً تظهر الطلبات على شاشة المطبخ فقط", "Name of the kitchen ticket printer (optional). Empty: orders show on the kitchen screen only", "Nom de l'imprimante des bons (facultatif). Vide : les commandes s'affichent seulement sur l'écran cuisine"}},
+				activeField,
+			},
+			insert: func(ctx context.Context, tx *sql.Tx, a *App, v rowValues) error {
+				_, err := tx.ExecContext(ctx, `INSERT INTO kitchen_stations(id, name, printer, active) VALUES (?,?,?,?)`,
+					sqlite.NewID(), v.str("name"), sqlite.NullString(v.str("printer")), sqlite.Int(orBool(v, "active", true)))
+				return err
+			},
+			update: func(ctx context.Context, tx *sql.Tx, a *App, id string, v rowValues) error {
+				return updateCols(ctx, tx, "kitchen_stations", id, v, map[string]string{"printer": "printer", "active": "active"}, "")
+			},
+		},
+		{
 			key: "categories", label: tr{"الأقسام", "Categories", "Catégories"}, perm: rbac.CatalogManage, match: "name",
 			query: `SELECT c.id, c.name, coalesce(s.name,''), c.sort, c.active FROM categories c LEFT JOIN kitchen_stations s ON s.id = c.kitchen_station_id ORDER BY c.sort, c.name`,
 			fields: []importField{
@@ -172,7 +192,7 @@ func (a *App) importEntities() []importEntity {
 				{key: "name", label: tr{"اسم الخامة", "Material name", "Nom de la matière"}, kind: kText, required: true, example: "لحم بقري"},
 				{key: "unit", label: tr{"الوحدة", "Unit", "Unité"}, kind: kEnum, required: true, insertOnly: true, enum: []string{"kg", "g", "l", "ml", "pcs"},
 					help: tr{"kg أو g أو l أو ml أو pcs — لا تتغير بعد الإضافة", "kg, g, l, ml or pcs — fixed after insert", "kg, g, l, ml ou pcs — fixe après l'ajout"}, example: "kg"},
-				{key: "cost", label: tr{"التكلفة للوحدة", "Cost per unit", "Coût unitaire"}, kind: kMoney, insertOnly: true, help: tr{"عند الإضافة فقط؛ بعدها تتحدث من المشتريات", "Insert only; afterwards it follows purchases", "À l'ajout seulement ; ensuite selon les achats"}, example: "400"},
+				{key: "cost", label: tr{"التكلفة للوحدة", "Cost per unit", "Coût unitaire"}, kind: kMoney, insertOnly: true, help: tr{"عند الإضافة فقط؛ ثم تُحدَّث وفق المشتريات", "Insert only; afterwards it follows purchases", "À l'ajout seulement ; ensuite selon les achats"}, example: "400"},
 				{key: "min_stock", label: tr{"الحد الأدنى", "Minimum stock", "Stock minimum"}, kind: kQty, example: "2"},
 				{key: "opening_stock", label: tr{"الرصيد الافتتاحي", "Opening stock", "Stock initial"}, kind: kQty, insertOnly: true, example: "10"},
 				activeField,
@@ -829,7 +849,7 @@ func (a *App) Import(ctx context.Context, actor Actor, key string, mode ImportMo
 			}
 			if err != nil {
 				if isUnique(err) {
-					return &Error{CodeConflict, fmt.Sprintf("الصف %d: قيمة مكررة لحقل فريد", p.row)}
+					return &Error{CodeConflict, fmt.Sprintf("الصف %d: قيمة مكررة في حقل يجب أن يكون فريداً", p.row)}
 				}
 				return fmt.Errorf("row %d: %w", p.row, err)
 			}

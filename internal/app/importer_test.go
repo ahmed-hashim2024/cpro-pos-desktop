@@ -231,3 +231,50 @@ func TestExportEverythingRespectsPermissions(t *testing.T) {
 		}
 	}
 }
+
+// Kitchen stations import before categories, so one sitting can create the
+// stations and the categories that send their orders there.
+func TestImportStations(t *testing.T) {
+	f := newFixture(t)
+	a, ctx, owner := f.app, f.ctx, f.owner
+	tmpl, _, err := a.ImportTemplate(ctx, owner, "stations", ModeInsert, "ar")
+	f.must(err)
+	res, err := a.Import(ctx, owner, "stations", ModeInsert, fill(t, tmpl, [][]any{{"الشواية", "EPSON-1"}, {"المشروبات", ""}}), "ar")
+	f.must(err)
+	if res.Inserted != 2 || len(res.Issues) != 0 {
+		t.Fatalf("stations: %+v", res)
+	}
+	tmpl, _, err = a.ImportTemplate(ctx, owner, "categories", ModeInsert, "ar")
+	f.must(err)
+	res, err = a.Import(ctx, owner, "categories", ModeInsert, fill(t, tmpl, [][]any{{"مشويات", "الشواية"}}), "ar")
+	f.must(err)
+	if res.Inserted != 1 || len(res.Issues) != 0 {
+		t.Fatalf("category on a new station: %+v", res)
+	}
+
+	tmpl, _, err = a.ImportTemplate(ctx, owner, "stations", ModeUpdate, "ar")
+	f.must(err)
+	// The update template comes filled with the current stations.
+	res, err = a.Import(ctx, owner, "stations", ModeUpdate, fill(t, tmpl, [][]any{{"الشواية", "EPSON-1"}, {"المشروبات", "XP-58"}}), "ar")
+	f.must(err)
+	if res.Updated != 2 || len(res.Issues) != 0 {
+		t.Fatalf("update: %+v", res)
+	}
+	st, err := a.Stations(ctx, owner)
+	f.must(err)
+	got := map[string]string{}
+	for _, s := range st {
+		got[s.Name] = s.Printer
+	}
+	if got["الشواية"] != "EPSON-1" || got["المشروبات"] != "XP-58" || len(st) != 2 {
+		t.Fatalf("stations after import: %+v", st)
+	}
+	var station string
+	f.must(a.db.Read.QueryRowContext(ctx, `SELECT s.name FROM categories c JOIN kitchen_stations s ON s.id = c.kitchen_station_id WHERE c.name = 'مشويات'`).Scan(&station))
+	if station != "الشواية" {
+		t.Fatalf("category station: %q", station)
+	}
+	if _, _, err := a.ImportTemplate(ctx, Actor{Role: rbac.Cashier}, "stations", ModeInsert, "ar"); code(err) != CodeForbidden {
+		t.Fatalf("cashier got the template: %v", err)
+	}
+}

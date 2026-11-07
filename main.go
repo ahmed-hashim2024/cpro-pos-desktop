@@ -33,6 +33,12 @@ var assets embed.FS
 // (saas integrations/cloudflare.py DESKTOP_TUNNEL_ORIGIN). Loopback only.
 const publicAddr = "127.0.0.1:8788"
 
+// remoteAddr is where the same tunnel delivers the staff hostname
+// («<name>-pos», DESKTOP_REMOTE_ORIGIN): the whole staff system on the
+// tunnel channel. Sign-in there needs the plan's remote access and the
+// owner's permission per account. Loopback only.
+const remoteAddr = "127.0.0.1:8789"
+
 // relaunch is set when a restored backup needs the app to start again. It
 // happens only after run returns, so the new process finds the ports free.
 var relaunch bool
@@ -114,6 +120,12 @@ func run() error {
 		// The guest e-menu, reached through the tunnel.
 		if err := httpapi.Listen(ctx, publicAddr, httpapi.NewPublic(a, log, dist), log); err != nil {
 			log.Error("public server", "err", err)
+		}
+	}()
+	go func() {
+		// Staff signing in from outside the restaurant, through the tunnel.
+		if err := httpapi.Listen(ctx, remoteAddr, httpapi.New(a, app.ChannelTunnel, log, dist), log); err != nil {
+			log.Error("remote server", "err", err)
 		}
 	}()
 	settings, err := a.Settings(ctx, app.Actor{})

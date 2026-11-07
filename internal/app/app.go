@@ -94,9 +94,11 @@ func errf(code Code, format string, args ...any) error {
 	return &Error{Code: code, Msg: fmt.Sprintf(format, args...)}
 }
 
-func invalid(msg string) error   { return &Error{CodeInvalid, msg} }
-func notFound(what string) error { return &Error{CodeNotFound, what + " غير موجود"} }
-func conflict(msg string) error  { return &Error{CodeConflict, msg} }
+func invalid(msg string) error { return &Error{CodeInvalid, msg} }
+func notFound(what string) error {
+	return &Error{CodeNotFound, "تعذّر العثور على " + what}
+}
+func conflict(msg string) error { return &Error{CodeConflict, msg} }
 
 var errForbidden = &Error{CodeForbidden, "ليس لديك صلاحية لتنفيذ هذا الإجراء"}
 

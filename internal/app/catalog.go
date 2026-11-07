@@ -395,7 +395,7 @@ func (a *App) SaveItem(ctx context.Context, actor Actor, in ItemInput) (string, 
 			}
 		}
 		if isUnique(err) {
-			return conflict("كود الصنف مستخدم بالفعل")
+			return conflict("رمز الصنف مستخدم بالفعل")
 		}
 		if err != nil {
 			return noRows(err, "الصنف")
@@ -456,11 +456,11 @@ func decodeImage(dataURL string) (string, []byte, error) {
 		return "", nil, invalid("الصورة يجب أن تكون PNG أو JPG أو WEBP")
 	}
 	if len(payload) > 3<<20 { // ~2 MB once decoded
-		return "", nil, invalid("الصورة غير صالحة أو أكبر من 2 ميجا")
+		return "", nil, invalid("الصورة غير صالحة أو يتجاوز حجمها 2 ميجابايت")
 	}
 	b, err := base64.StdEncoding.DecodeString(payload)
 	if err != nil || len(b) > 2<<20 {
-		return "", nil, invalid("الصورة غير صالحة أو أكبر من 2 ميجا")
+		return "", nil, invalid("الصورة غير صالحة أو يتجاوز حجمها 2 ميجابايت")
 	}
 	// The bytes must really be that kind of picture (not HTML, SVG or
 	// anything else renamed), since these files are served to guests.
@@ -737,7 +737,7 @@ func (a *App) deleteItemTx(ctx context.Context, tx *sql.Tx, actor Actor, id stri
 	err := tx.QueryRowContext(ctx, `SELECT i.name FROM emenu_offer_items b JOIN emenu_offers o ON o.id = b.offer_id JOIN items i ON i.id = o.item_id
 		WHERE b.item_id = ? LIMIT 1`, id).Scan(&offer)
 	if err == nil {
-		return res, conflict("الصنف ده جزء من عرض «" + offer + "»، شيله من العرض الأول")
+		return res, conflict("هذا الصنف جزء من العرض «" + offer + "»، فأزله من العرض أولاً")
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return res, err

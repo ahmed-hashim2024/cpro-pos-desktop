@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Armchair, Bike, Check, Utensils } from 'lucide-react';
-import { cx, orderModes, effectiveMode, contactReady, saveContact } from './lib';
+import { cx, orderModes, effectiveMode, contactReady, saveContact, phoneOK } from './lib';
 
 // «My details»: in the hall (table number) or delivery (name, phone,
 // address). Kept on this phone only and sent with each order.
@@ -9,8 +9,20 @@ export function ProfilePage({ menu, t, contact, setContact, flash, onDone }) {
   const modes = orderModes(menu);
   const set = (k) => (e) => setC({ ...c, [k]: e.target.value });
   const ready = contactReady(menu, c);
+  // Every field shown is required. There's no star: a missing one says so
+  // under the field once the guest tries to save.
+  const [tried, setTried] = useState(false);
+  const missing = {
+    table: c.mode === 'hall' && !menu.table && !menu.tables.includes(c.table) && t('needTable'),
+    name: c.mode === 'delivery' && !c.name.trim() && t('needName'),
+    phone: c.mode === 'delivery' && (!c.phone.trim() ? t('needPhone') : !phoneOK(c.phone) && t('badPhone')),
+    address: c.mode === 'delivery' && !c.address.trim() && t('needAddressOnly'),
+  };
+  const err = (k) => tried && missing[k] && <span role="alert" className="text-xs font-semibold text-red-500">{missing[k]}</span>;
+  const bad = (k) => tried && missing[k] && 'border-red-500';
   const save = (e) => {
     e.preventDefault();
+    setTried(true);
     if (!ready) return;
     const next = { ...c, name: c.name.trim(), phone: c.phone.trim(), address: c.address.trim(), table: c.table.trim() };
     saveContact(next);
@@ -22,7 +34,7 @@ export function ProfilePage({ menu, t, contact, setContact, flash, onDone }) {
 
   if (!modes.length) {
     return (
-      <div className="px-4 pt-[max(1rem,env(safe-area-inset-top))]">
+      <div className="px-4 pt-[max(1rem,env(safe-area-inset-top))] md:mx-auto md:max-w-xl md:pt-6">
         <h1 className="text-2xl font-black">{t('myDetails')}</h1>
         <p className="mt-4 rounded-2xl bg-card2 px-4 py-3 text-sm text-mut">{t('browseOnly')}</p>
       </div>
@@ -30,7 +42,7 @@ export function ProfilePage({ menu, t, contact, setContact, flash, onDone }) {
   }
 
   return (
-    <form onSubmit={save} className="px-4 pt-[max(1rem,env(safe-area-inset-top))]">
+    <form onSubmit={save} noValidate className="px-4 pt-[max(1rem,env(safe-area-inset-top))] md:mx-auto md:max-w-xl md:pt-6">
       <h1 className="text-2xl font-black">{t('myDetails')}</h1>
       <p className="mt-1 text-sm text-mut">{t('detailsSub')}</p>
 
@@ -50,30 +62,34 @@ export function ProfilePage({ menu, t, contact, setContact, flash, onDone }) {
           <p className="flex items-center gap-2 font-bold"><Utensils className="size-4 text-p" aria-hidden />{t('table')} {menu.table}</p>
         ) : (
           <label className="grid gap-1.5">
-            <span className="text-sm font-bold">{t('tableNumber')} *</span>
-            <select required value={menu.tables.includes(c.table) ? c.table : ''} onChange={set('table')} className={field}>
+            <span className="text-sm font-bold">{t('tableNumber')}</span>
+            <select required value={menu.tables.includes(c.table) ? c.table : ''} onChange={set('table')} className={cx(field, bad('table'))} aria-invalid={!!(tried && missing.table)}>
               <option value="">{t('chooseTable')}</option>
               {menu.tables.map((name) => <option key={name} value={name}>{name}</option>)}
             </select>
+            {err('table')}
           </label>
         ))}
         <label className="grid gap-1.5">
-          <span className="text-sm font-bold">{t('name')}{c.mode === 'delivery' && ' *'}</span>
-          <input required={c.mode === 'delivery'} value={c.name} onChange={set('name')} autoComplete="name" maxLength={60} className={field} />
+          <span className="text-sm font-bold">{t('name')}</span>
+          <input required={c.mode === 'delivery'} value={c.name} onChange={set('name')} autoComplete="name" maxLength={60} className={cx(field, bad('name'))} aria-invalid={!!(tried && missing.name)} />
+          {err('name')}
         </label>
         <label className="grid gap-1.5">
-          <span className="text-sm font-bold">{t('phone')}{c.mode === 'delivery' && ' *'}</span>
+          <span className="text-sm font-bold">{t('phone')}</span>
           <input required={c.mode === 'delivery'} value={c.phone} onChange={set('phone')} type="tel" inputMode="tel" autoComplete="tel" dir="ltr" maxLength={20}
-            className={`${field} num text-start rtl:text-end`} />
+            className={cx(field, 'num text-start rtl:text-end', bad('phone'))} aria-invalid={!!(tried && missing.phone)} />
+          {err('phone')}
         </label>
         {c.mode === 'delivery' && (
           <label className="grid gap-1.5">
-            <span className="text-sm font-bold">{t('address')} *</span>
+            <span className="text-sm font-bold">{t('address')}</span>
             <textarea required value={c.address} onChange={set('address')} placeholder={t('addressPh')} autoComplete="street-address" maxLength={200} rows={3}
-              className="w-full rounded-2xl border border-line bg-card px-4 py-3 outline-none focus:border-p" />
+              className={cx('w-full rounded-2xl border border-line bg-card px-4 py-3 outline-none focus:border-p', bad('address'))} aria-invalid={!!(tried && missing.address)} />
+            {err('address')}
           </label>
         )}
-        <button disabled={!ready} className="mt-1 flex h-12 items-center justify-center gap-2 rounded-2xl bg-p font-bold text-onp shadow-lg transition active:scale-[.98] disabled:opacity-40">
+        <button className="mt-1 flex h-12 items-center justify-center gap-2 rounded-2xl bg-p font-bold text-onp shadow-lg transition active:scale-[.98] disabled:opacity-40">
           <Check className="size-5" aria-hidden />{t('save')}
         </button>
       </div>

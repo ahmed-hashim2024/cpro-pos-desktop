@@ -196,7 +196,7 @@ func (s *EMenuSettings) normalize() error {
 		}
 	}
 	if s.Phone != "" && !validPhone(s.Phone) {
-		return invalid("رقم التليفون غير صحيح")
+		return invalid("رقم الهاتف غير صحيح")
 	}
 	if s.WhatsApp != "" && !validPhone(s.WhatsApp) {
 		return invalid("رقم الواتساب غير صحيح")
@@ -205,7 +205,7 @@ func (s *EMenuSettings) normalize() error {
 		return invalid("رابط الخريطة يجب أن يبدأ بـ https://")
 	}
 	if !socialOK(s.Instagram) || !socialOK(s.Facebook) || !socialOK(s.TikTok) {
-		return invalid("روابط السوشيال: اكتب الرابط كاملاً أو اسم الحساب فقط")
+		return invalid("روابط التواصل الاجتماعي: اكتب الرابط كاملاً أو اسم الحساب فقط")
 	}
 	return nil
 }
@@ -281,19 +281,25 @@ type EMenuOfferContent struct {
 }
 
 type EMenuOffer struct {
-	ID          string              `json:"id"`
-	Kind        string              `json:"kind"` // single | family
-	ItemID      string              `json:"item_id"`
-	Name        string              `json:"name"`
-	Description string              `json:"description"`
-	Price       money.Minor         `json:"price_minor"`
-	Image       string              `json:"image"`
-	Badge       string              `json:"badge"`
-	Highlight   string              `json:"highlight"`
-	Sort        int                 `json:"sort"`
-	PrepMinutes int                 `json:"prep_minutes"`
-	Active      bool                `json:"active"`
-	Contents    []EMenuOfferContent `json:"contents"`
+	ID          string      `json:"id"`
+	Kind        string      `json:"kind"` // single | family
+	ItemID      string      `json:"item_id"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	Price       money.Minor `json:"price_minor"`
+	Image       string      `json:"image"`
+	Badge       string      `json:"badge"`
+	Highlight   string      `json:"highlight"`
+	// The sticker's centre on the picture (% from left and top), size (% of
+	// normal) and motion (none | pulse | bounce | wiggle | shine).
+	HighlightX      int                 `json:"highlight_x"`
+	HighlightY      int                 `json:"highlight_y"`
+	HighlightSize   int                 `json:"highlight_size"`
+	HighlightMotion string              `json:"highlight_motion"`
+	Sort            int                 `json:"sort"`
+	PrepMinutes     int                 `json:"prep_minutes"`
+	Active          bool                `json:"active"`
+	Contents        []EMenuOfferContent `json:"contents"`
 	// OverlayOpacity (0-100) and OverlayColor (a preset id) shade the picture.
 	OverlayOpacity int    `json:"overlay_opacity"`
 	OverlayColor   string `json:"overlay_color"`
@@ -370,7 +376,8 @@ func loadOffers(ctx context.Context, q sqlite.Querier, imgPrefix string, publicO
 		where += ` AND i.active = 1 AND EXISTS (SELECT 1 FROM categories c WHERE c.id = i.category_id AND c.active = 1)`
 	}
 	rows, err := q.QueryContext(ctx, `SELECT o.id, o.kind, o.item_id, i.name, i.description, i.price_minor, coalesce(i.image_path,''),
-		o.badge, o.highlight, o.sort, i.prep_minutes, i.active, o.overlay_opacity, o.overlay_color FROM emenu_offers o JOIN items i ON i.id = o.item_id
+		o.badge, o.highlight, o.sort, i.prep_minutes, i.active, o.overlay_opacity, o.overlay_color,
+		o.highlight_x, o.highlight_y, o.highlight_size, o.highlight_motion FROM emenu_offers o JOIN items i ON i.id = o.item_id
 		WHERE `+where+` ORDER BY o.kind, o.sort, o.created_at`)
 	if err != nil {
 		return nil, err
@@ -380,7 +387,8 @@ func loadOffers(ctx context.Context, q sqlite.Querier, imgPrefix string, publicO
 	for rows.Next() {
 		var o EMenuOffer
 		var active int64
-		if err := rows.Scan(&o.ID, &o.Kind, &o.ItemID, &o.Name, &o.Description, &o.Price, &o.Image, &o.Badge, &o.Highlight, &o.Sort, &o.PrepMinutes, &active, &o.OverlayOpacity, &o.OverlayColor); err != nil {
+		if err := rows.Scan(&o.ID, &o.Kind, &o.ItemID, &o.Name, &o.Description, &o.Price, &o.Image, &o.Badge, &o.Highlight, &o.Sort, &o.PrepMinutes, &active, &o.OverlayOpacity, &o.OverlayColor,
+			&o.HighlightX, &o.HighlightY, &o.HighlightSize, &o.HighlightMotion); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -453,6 +461,9 @@ func (a *App) SaveOffer(ctx context.Context, actor Actor, in EMenuOfferInput) (E
 	o := in.EMenuOffer
 	o.Name, o.Description = clip(o.Name, 80), clip(o.Description, 300)
 	o.Badge, o.Highlight = clip(o.Badge, 20), clip(o.Highlight, 16)
+	if err := stickerDefaults(&o); err != nil {
+		return o, err
+	}
 	if o.Kind != "single" && o.Kind != "family" {
 		return o, invalid("نوع العرض غير صحيح")
 	}
@@ -472,10 +483,10 @@ func (a *App) SaveOffer(ctx context.Context, actor Actor, in EMenuOfferInput) (E
 		return o, invalid("اختر لون الخلفية من الألوان المتاحة")
 	}
 	if o.OverlayOpacity < 0 || o.OverlayOpacity > 100 {
-		return o, invalid("درجة الغمقان غير صحيحة")
+		return o, invalid("درجة التعتيم غير صحيحة")
 	}
 	if len(o.Contents) > maxOfferContents {
-		return o, invalid(fmt.Sprintf("الحد الأقصى %d أصناف في العرض", maxOfferContents))
+		return o, invalid(fmt.Sprintf("الحد الأقصى %d أصناف في العرض الواحد", maxOfferContents))
 	}
 	if in.ImageData == "-" {
 		return o, invalid("صورة العرض مطلوبة")
@@ -502,8 +513,10 @@ func (a *App) SaveOffer(ctx context.Context, actor Actor, in EMenuOfferInput) (E
 				o.PrepMinutes, sqlite.Int(o.Active), now, now); err != nil {
 				return err
 			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO emenu_offers(id, kind, item_id, badge, highlight, sort, overlay_opacity, overlay_color, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-				o.ID, o.Kind, o.ItemID, o.Badge, o.Highlight, o.Sort, o.OverlayOpacity, o.OverlayColor, now, now); err != nil {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO emenu_offers(id, kind, item_id, badge, highlight, sort, overlay_opacity, overlay_color,
+				highlight_x, highlight_y, highlight_size, highlight_motion, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+				o.ID, o.Kind, o.ItemID, o.Badge, o.Highlight, o.Sort, o.OverlayOpacity, o.OverlayColor,
+				o.HighlightX, o.HighlightY, o.HighlightSize, o.HighlightMotion, now, now); err != nil {
 				return err
 			}
 		} else {
@@ -520,8 +533,10 @@ func (a *App) SaveOffer(ctx context.Context, actor Actor, in EMenuOfferInput) (E
 					return err
 				}
 			}
-			if _, err := tx.ExecContext(ctx, `UPDATE emenu_offers SET kind=?, badge=?, highlight=?, sort=?, overlay_opacity=?, overlay_color=?, updated_at=? WHERE id=?`,
-				o.Kind, o.Badge, o.Highlight, o.Sort, o.OverlayOpacity, o.OverlayColor, now, o.ID); err != nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE emenu_offers SET kind=?, badge=?, highlight=?, sort=?, overlay_opacity=?, overlay_color=?,
+				highlight_x=?, highlight_y=?, highlight_size=?, highlight_motion=?, updated_at=? WHERE id=?`,
+				o.Kind, o.Badge, o.Highlight, o.Sort, o.OverlayOpacity, o.OverlayColor,
+				o.HighlightX, o.HighlightY, o.HighlightSize, o.HighlightMotion, now, o.ID); err != nil {
 				return err
 			}
 		}
@@ -579,7 +594,7 @@ func saveOfferContents(ctx context.Context, tx *sql.Tx, offerID string, list []E
 			return notFound("الصنف")
 		}
 		if isOffer > 0 {
-			return invalid("مينفعش تحط عرض جوه عرض")
+			return invalid("لا يجوز إدراج عرض داخل عرض آخر")
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO emenu_offer_items(offer_id, item_id, qty, sort) VALUES (?,?,?,?)`, offerID, c.ItemID, c.Qty, i); err != nil {
 			return err
@@ -667,7 +682,7 @@ func (a *App) SetFeatured(ctx context.Context, actor Actor, list []EMenuFeatured
 		return nil, err
 	}
 	if len(list) > maxFeatured {
-		return nil, invalid("الحد الأقصى 24 صنف مميز")
+		return nil, invalid("الحد الأقصى 24 صنفاً مميزاً")
 	}
 	seen := map[string]bool{}
 	for i := range list {
@@ -697,7 +712,7 @@ func (a *App) SetFeatured(ctx context.Context, actor Actor, list []EMenuFeatured
 				return noRows(err, "الصنف")
 			}
 			if f.Deal >= price && f.Deal > 0 {
-				return invalid("سعر العرض لازم يكون أقل من سعر الصنف")
+				return invalid("يجب أن يكون سعر العرض أقل من سعر الصنف")
 			}
 			if _, err := tx.ExecContext(ctx, `INSERT INTO emenu_featured(item_id, badge, note, deal_price_minor, sort) VALUES (?,?,?,?,?)`,
 				f.ItemID, f.Badge, f.Note, f.Deal, i); err != nil {
@@ -774,4 +789,28 @@ func (a *App) PreviewEMenu(ctx context.Context, actor Actor, draft EMenuSettings
 	}
 	m.Preview = true
 	return m, nil
+}
+
+// stickerMotions are the ways the savings sticker can move on the guest menu.
+var stickerMotions = map[string]bool{"none": true, "pulse": true, "bounce": true, "wiggle": true, "shine": true}
+
+// stickerDefaults fills an offer's sticker settings left out by older
+// clients and keeps the rest in range: the sticker stays on the picture.
+func stickerDefaults(o *EMenuOffer) error {
+	if o.HighlightMotion == "" {
+		o.HighlightMotion = "pulse"
+	}
+	if !stickerMotions[o.HighlightMotion] {
+		return invalid("حركة الملصق غير صحيحة")
+	}
+	if o.HighlightSize == 0 {
+		o.HighlightSize = 100
+	}
+	if o.HighlightX == 0 && o.HighlightY == 0 {
+		o.HighlightX, o.HighlightY = 14, 20
+	}
+	o.HighlightX = min(max(o.HighlightX, 0), 100)
+	o.HighlightY = min(max(o.HighlightY, 0), 100)
+	o.HighlightSize = min(max(o.HighlightSize, 60), 200)
+	return nil
 }

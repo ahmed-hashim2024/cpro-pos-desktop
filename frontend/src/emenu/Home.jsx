@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Search, SlidersHorizontal, Bell, BellRing, Plus, ArrowLeft, ArrowRight, Languages, ChevronDown, Utensils, Phone, MapPin, MessageCircle, Globe, Link as LinkIcon } from 'lucide-react';
 import { cx, Thumb, Badge, PriceTag, SectionTitle, offerShade, safeHref, social, waLink } from './lib';
 import { langNames } from './i18n';
+import { OfferSticker } from '../lib/sticker';
 
 // ---- header ----------------------------------------------------------------------
 
@@ -103,7 +104,7 @@ export function HeroSlider({ offers, t, money, showPrices, onPick }) {
     <section className="mt-4" aria-roledescription="carousel" aria-label={t('offers')}>
       <div ref={ref} onPointerDown={hold} onTouchStart={hold} className="no-scrollbar flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth px-4">
         {offers.map((o, n) => (
-          <article key={o.id} data-i={n} className="relative aspect-[12/7] w-full shrink-0 snap-start overflow-hidden rounded-[26px] text-white shadow-xl" style={offerShade(o).card}>
+          <article key={o.id} data-i={n} className="relative aspect-[12/7] w-full shrink-0 snap-start md:w-[calc(50%-0.375rem)] overflow-hidden rounded-[26px] text-white shadow-xl" style={offerShade(o).card}>
             {o.item.image && <img src={o.item.image} alt="" className="absolute inset-0 size-full object-cover" />}
             <div className="relative flex h-full flex-col items-start justify-end gap-1 p-4" style={offerShade(o).shade}>
               {o.badge && <span className="rounded-full bg-p/90 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-onp">{o.badge}</span>}
@@ -111,7 +112,7 @@ export function HeroSlider({ offers, t, money, showPrices, onPick }) {
               {o.item.description && <p className="line-clamp-1 text-xs leading-relaxed text-white/85 drop-shadow">{o.item.description}</p>}
               <div className="mt-1 flex items-center gap-2">
                 <button onClick={() => onPick(o.item)} className="flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-p px-4 text-xs font-bold uppercase text-onp shadow-lg transition active:scale-95">
-                  {t('orderNow')}<Arrow />
+                  {t('addToCart')}<Arrow />
                 </button>
                 {showPrices && <PriceTag item={o.item} money={money} className="whitespace-nowrap text-sm font-bold drop-shadow" wasClassName="text-white/70" />}
               </div>
@@ -187,7 +188,7 @@ export function Popular({ featured, t, money, showPrices, canOrder, inCart, onPi
       <div className="no-scrollbar flex snap-x gap-3 overflow-x-auto px-4 pb-1">
         {featured.map((f) => (
           <ItemCard key={f.item.id} item={f.item} badge={f.badge} t={t} money={money} showPrices={showPrices} canOrder={canOrder}
-            count={inCart[f.item.id]} onPick={onPick} className="w-[42%] shrink-0 snap-start" />
+            count={inCart[f.item.id]} onPick={onPick} className="w-[42%] shrink-0 snap-start md:w-[calc((100%-1.5rem)/3)] lg:w-[calc((100%-3rem)/5)]" />
         ))}
       </div>
     </section>
@@ -199,7 +200,8 @@ export function Popular({ featured, t, money, showPrices, canOrder, inCart, onPi
 export function FamilyBanner({ offer, t, money, showPrices, onPick }) {
   const it = offer.item;
   return (
-    <button onClick={() => onPick(it)} className="relative block aspect-[5/2] w-full overflow-hidden rounded-[22px] text-start text-white shadow-lg transition active:scale-[.99]" style={offerShade(offer).card}>
+    <button onClick={() => onPick(it)} className="relative block aspect-[5/2] w-full overflow-hidden rounded-[22px] text-start text-white shadow-lg transition active:scale-[.99]"
+      style={{ ...offerShade(offer).card, containerType: 'inline-size', '--sticker-bg': 'var(--p)', '--sticker-fg': 'var(--onp)' }}>
       {it.image && <img src={it.image} alt="" loading="lazy" className="absolute inset-0 size-full object-cover" />}
       <div className="relative flex h-full flex-col justify-end gap-0.5 p-3.5" style={offerShade(offer).shade}>
         {offer.badge && <span className="text-[10px] font-bold uppercase tracking-wider text-white/90 drop-shadow">{offer.badge}</span>}
@@ -207,9 +209,7 @@ export function FamilyBanner({ offer, t, money, showPrices, onPick }) {
         {it.description && <p className="line-clamp-1 text-[11px] text-white/85 drop-shadow">{it.description}</p>}
         {showPrices && <span className="mt-0.5"><PriceTag item={it} money={money} className="text-sm font-bold drop-shadow" wasClassName="text-white/70" /></span>}
       </div>
-      {offer.highlight && (
-        <span className="absolute end-2.5 top-2.5 max-w-[45%] truncate rounded-full bg-p px-2.5 py-1 text-[11px] font-bold leading-none text-onp shadow">{offer.highlight}</span>
-      )}
+      <OfferSticker text={offer.highlight} x={offer.highlight_x} y={offer.highlight_y} size={offer.highlight_size} motion={offer.highlight_motion} />
     </button>
   );
 }
@@ -219,7 +219,7 @@ export function FamilyOffers({ offers, t, money, showPrices, onPick }) {
   return (
     <section className="mt-6">
       <SectionTitle title={t('familyOffers')} />
-      <div className="grid gap-3 px-4">
+      <div className="grid gap-3 px-4 md:grid-cols-2">
         {offers.map((o) => <FamilyBanner key={o.id} offer={o} t={t} money={money} showPrices={showPrices} onPick={onPick} />)}
       </div>
     </section>

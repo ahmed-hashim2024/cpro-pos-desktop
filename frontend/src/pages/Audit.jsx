@@ -7,7 +7,7 @@ import { Button, DateRange, PageHeader, Select, Table, Td, useLoad } from '@/com
 import { T } from '@/lib/i18n';
 
 const actions = {
-  'auth.login': T('تسجيل دخول'), 'auth.login_failed': T('محاولة دخول فاشلة'), setup: T('إعداد النظام'),
+  'auth.login': T('تسجيل دخول'), 'auth.login_failed': T('محاولة دخول فاشلة'), 'auth.remote_denied': T('رُفض دخول عن بُعد'), setup: T('إعداد النظام'),
   'order.pay': T('دفع طلب'), 'order.void': T('إلغاء طلب'), 'order.void_line': T('إلغاء صنف'), 'order.discount': T('خصم على طلب'),
   'order.line_discount': T('خصم على صنف'), 'order.refund': T('مرتجع'), 'order.merge': T('دمج طلبات'), 'order.transfer_table': T('نقل طاولة'),
   'shift.open': T('فتح وردية'), 'shift.close': T('إغلاق وردية'), 'shift.cash_in': T('إيداع نقدي'), 'shift.cash_out': T('صرف نقدي'), 'shift.recount': T('تصحيح عد وردية'),
@@ -49,8 +49,9 @@ export default function Audit() {
       <p className="mb-3 text-sm text-muted">{T('السجل للقراءة فقط ولا يمكن تعديله أو حذفه من أي مستخدم.')}</p>
       <Table head={[T('الوقت'), T('المستخدم'), T('الجهاز'), T('الإجراء'), T('التفاصيل')]}>
         {(list.data || []).map((e) => (
-          <tr key={e.id} className={e.action.includes('void') || e.action.includes('failed') || e.action.includes('refund') ? 'bg-danger-soft' : ''}>
-            <Td className="whitespace-nowrap">{dateTime(e.at)}</Td><Td>{e.user_name}</Td><Td>{e.device_name}</Td>
+          <tr key={e.id} className={e.action.includes('void') || e.action.includes('failed') || e.action.includes('denied') || e.action.includes('refund') ? 'bg-danger-soft' : ''}>
+            <Td className="whitespace-nowrap">{dateTime(e.at)}</Td><Td>{e.user_name}</Td>
+            <Td>{e.device_name}{e.channel === 'tunnel' && <span className="ms-1.5 rounded-full bg-info-soft px-1.5 py-0.5 text-[10px] font-bold text-info">{T('عن بُعد')}</span>}</Td>
             <Td className="font-semibold">{actions[e.action] || e.action}</Td><Td className="text-xs text-muted">{details(e.data)}</Td>
           </tr>
         ))}

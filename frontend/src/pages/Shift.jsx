@@ -74,7 +74,7 @@ function ShiftSummary({ r }) {
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-card border border-line bg-surface px-4 py-3 shadow-card text-sm">
         <Badge tone={closed ? 'gray' : 'success'} dot>{closed ? T('مغلقة') : T('مفتوحة')}</Badge>
-        <Info k={T('الكاشير')} v={sh.user_name} />
+        <Info k={T('أمين الصندوق')} v={sh.user_name} />
         <Info k={T('الجهاز')} v={sh.device_name} />
         <Info k={T('فُتحت')} v={dateTime(sh.opened_at)} />
         {closed && <Info k={T('أُغلقت')} v={dateTime(sh.closed_at)} />}
@@ -147,7 +147,7 @@ function CashDialog({ kind, onClose, onDone }) {
       footer={<Button busy={busy} disabled={!toMinor(amount) || !reason.trim()} onClick={save}>{T('تسجيل')}</Button>}>
       <div className="grid gap-3">
         <Field label={T('المبلغ')}><Input autoFocus className="num" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
-        <Field label={T('السبب')}><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={kind === 'out' ? T('شراء خضار، مواصلات…') : T('فكة…')} /></Field>
+        <Field label={T('السبب')}><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={kind === 'out' ? T('شراء خضراوات، أجرة مواصلات…') : T('فكّة نقدية…')} /></Field>
       </div>
     </Modal>
   );
@@ -229,7 +229,7 @@ function RecountDialog({ report, onClose, onDone }) {
           <div className="rounded-lg bg-surface-2 p-2"><div className="text-muted">{T('المعدود حالياً')}</div><div className="num font-bold">{money(report.shift.counted_cash_minor)}</div></div>
         </div>
         <Field label={T('المبلغ الصحيح بعد إعادة العد')}><Input autoFocus className="num text-lg" value={counted} onChange={(e) => setCounted(e.target.value)} /></Field>
-        <Field label={T('السبب')}><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={T('خطأ في العد، مبلغ وُجد بعد الإغلاق…')} /></Field>
+        <Field label={T('السبب')}><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={T('خطأ في العدّ، أو مبلغ عُثر عليه بعد الإغلاق…')} /></Field>
         {diff != null && (
           <div className={`rounded-lg p-2 font-bold ${diff === 0 ? 'bg-success-soft text-success' : diff < 0 ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'}`}>
             {diff === 0 ? T('الدرج مطابق') : diff < 0 ? T('عجز {0}', [money(-diff)]) : T('زيادة {0}', [money(diff)])}

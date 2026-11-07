@@ -133,14 +133,27 @@ type LoginInput struct {
 
 var errBadLogin = &Error{CodeUnauthorized, "اسم المستخدم أو كلمة المرور غير صحيحة"}
 
+// Remote access (the tunnel's staff hostname) needs the plan's feature and,
+// per account, the owner's say-so. Both are checked at sign-in and on every
+// request, so taking either away shuts the door at once.
+var (
+	errRemoteOff    = &Error{CodeForbidden, "الدخول عن بُعد غير مفعّل في الاشتراك"}
+	errRemoteDenied = &Error{CodeForbidden, "هذا الحساب غير مأذون له بالدخول من خارج المطعم — اطلب من المالك منحه الإذن من شاشة المستخدمين"}
+)
+
+func (a *App) remoteOpen() bool { return a.features().RemoteAccess() }
+
 func (a *App) Login(ctx context.Context, in LoginInput, ch Channel, remote string) (Session, error) {
 	key := strings.ToLower(in.Username + in.UserID)
+	if ch == ChannelTunnel && !a.remoteOpen() {
+		return Session{}, errRemoteOff
+	}
 	if err := throttle.check(key + "|" + remote); err != nil {
 		return Session{}, err
 	}
 	var (
 		id, hash, pinHash string
-		active            int64
+		active, allowed   int64
 		pin               sql.NullString
 	)
 	var err error
@@ -148,12 +161,12 @@ func (a *App) Login(ctx context.Context, in LoginInput, ch Channel, remote strin
 		if ch == ChannelTunnel {
 			return Session{}, errf(CodeForbidden, "الدخول بالرقم السري غير متاح من خارج المطعم")
 		}
-		err = a.db.Read.QueryRowContext(ctx, `SELECT id, password_hash, pin_hash, active FROM users WHERE id = ?`, in.UserID).
-			Scan(&id, &hash, &pin, &active)
+		err = a.db.Read.QueryRowContext(ctx, `SELECT id, password_hash, pin_hash, active, remote_access FROM users WHERE id = ?`, in.UserID).
+			Scan(&id, &hash, &pin, &active, &allowed)
 		pinHash = pin.String
 	} else {
-		err = a.db.Read.QueryRowContext(ctx, `SELECT id, password_hash, pin_hash, active FROM users WHERE username = ?`, strings.TrimSpace(in.Username)).
-			Scan(&id, &hash, &pin, &active)
+		err = a.db.Read.QueryRowContext(ctx, `SELECT id, password_hash, pin_hash, active, remote_access FROM users WHERE username = ?`, strings.TrimSpace(in.Username)).
+			Scan(&id, &hash, &pin, &active, &allowed)
 	}
 	if errors.Is(err, sql.ErrNoRows) {
 		auth.VerifyMissing(in.Password + in.PIN)
@@ -173,6 +186,12 @@ func (a *App) Login(ctx context.Context, in LoginInput, ch Channel, remote strin
 		return Session{}, errBadLogin
 	}
 	throttle.reset(key + "|" + remote)
+	// Checked after the password, so it doesn't tell a stranger which
+	// accounts exist or which may come in from outside.
+	if ch == ChannelTunnel && allowed == 0 {
+		_ = a.audit(ctx, a.db.Write, Actor{UserID: id, Channel: ch}, "auth.remote_denied", "users", id, map[string]string{"remote": remote})
+		return Session{}, errRemoteDenied
+	}
 
 	deviceID, err := a.resolveDevice(ctx, in, ch)
 	if err != nil {
@@ -265,12 +284,13 @@ func (a *App) lookupSession(ctx context.Context, hash string, ch Channel) (Actor
 		channel, expires, seen string
 		revoked                sql.NullString
 		active, mustChange     int64
+		allowed                int64
 	)
 	err := a.db.Write.QueryRowContext(ctx,
 		`SELECT s.user_id, s.device_id, s.channel, s.expires_at, s.last_seen_at, s.revoked_at,
-		        u.full_name, u.username, u.role, u.active, u.must_change_password
+		        u.full_name, u.username, u.role, u.active, u.must_change_password, u.remote_access
 		   FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?`, hash).
-		Scan(&me.UserID, &device, &channel, &expires, &seen, &revoked, &me.Name, &me.Username, &me.Role, &active, &mustChange)
+		Scan(&me.UserID, &device, &channel, &expires, &seen, &revoked, &me.Name, &me.Username, &me.Role, &active, &mustChange, &allowed)
 	unauth := &Error{CodeUnauthorized, "انتهت الجلسة، سجّل الدخول مرة أخرى"}
 	if errors.Is(err, sql.ErrNoRows) {
 		return Actor{}, Me{}, unauth
@@ -281,6 +301,9 @@ func (a *App) lookupSession(ctx context.Context, hash string, ch Channel) (Actor
 	now := a.now()
 	if revoked.Valid || active == 0 || Channel(channel) != ch || now.After(sqlite.ParseTime(expires)) {
 		return Actor{}, Me{}, unauth
+	}
+	if ch == ChannelTunnel && (allowed == 0 || !a.remoteOpen()) {
+		return Actor{}, Me{}, &Error{CodeUnauthorized, "أُوقف الدخول عن بُعد لحسابك"}
 	}
 	if now.Sub(sqlite.ParseTime(seen)) > time.Minute {
 		a.db.Write.ExecContext(ctx, `UPDATE sessions SET last_seen_at = ? WHERE token_hash = ?`, sqlite.FormatTime(now), hash)

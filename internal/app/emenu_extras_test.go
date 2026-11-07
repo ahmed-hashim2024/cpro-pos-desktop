@@ -432,13 +432,60 @@ func TestServiceCalls(t *testing.T) {
 	}
 }
 
-// The rebuilt table takes the new kind and keeps its index.
+// Every reason a table can call for, with the picks and notes each keeps.
+func TestServiceCallReasons(t *testing.T) {
+	f := newFixture(t)
+	a, ctx, owner := f.app, f.ctx, f.owner
+	m := f.menu()
+	call := func(c ServiceCall) error { c.Table = m.token; return a.CallWaiter(ctx, c, "1.1.1.1") }
+
+	if err := call(ServiceCall{Kind: "other"}); code(err) != CodeInvalid {
+		t.Fatalf("other without a note: %v", err)
+	}
+	if err := call(ServiceCall{Kind: "extras", Details: []string{"caviar"}}); code(err) != CodeInvalid {
+		t.Fatalf("extras with nothing known: %v", err)
+	}
+	f.must(call(ServiceCall{Kind: "order", Note: "dropped"}))
+	f.must(call(ServiceCall{Kind: "late"}))
+	f.must(call(ServiceCall{Kind: "bill", Details: []string{"card", "cash", "bogus"}}))
+	f.must(call(ServiceCall{Kind: "extras", Details: []string{"water", "water", "napkins", "caviar"}, Note: "2 مياه"}))
+	f.must(call(ServiceCall{Kind: "other", Note: "عايزين نغير الترابيزة"}))
+	// A newer pick replaces the open one instead of adding a call.
+	f.must(call(ServiceCall{Kind: "bill", Details: []string{"cash"}}))
+	if err := call(ServiceCall{Kind: "extras"}); code(err) != CodeInvalid {
+		t.Fatalf("empty extras: %v", err)
+	}
+
+	in, err := a.Inbox(ctx, owner)
+	f.must(err)
+	got := map[string]ServiceRequest{}
+	for _, r := range in.Requests {
+		got[r.Kind] = r
+	}
+	if len(in.Requests) != 5 {
+		t.Fatalf("requests: %+v", in.Requests)
+	}
+	if r := got["order"]; r.Note != "" || len(r.Details) != 0 {
+		t.Fatalf("order kept extras: %+v", r)
+	}
+	if r := got["bill"]; strings.Join(r.Details, ",") != "cash" {
+		t.Fatalf("bill: %+v", r)
+	}
+	if r := got["extras"]; strings.Join(r.Details, ",") != "water,napkins" || r.Note != "2 مياه" {
+		t.Fatalf("extras: %+v", r)
+	}
+	if r := got["other"]; r.Note != "عايزين نغير الترابيزة" {
+		t.Fatalf("other: %+v", r)
+	}
+}
+
+// The schema takes every kind of call and keeps its index.
 func TestServiceRequestsRebuilt(t *testing.T) {
 	f := newFixture(t)
 	var sqlText string
 	err := f.app.db.Read.QueryRowContext(f.ctx, `SELECT sql FROM sqlite_master WHERE name = 'service_requests'`).Scan(&sqlText)
 	f.must(err)
-	if !strings.Contains(sqlText, "'issue'") {
+	if !strings.Contains(sqlText, "'issue'") || !strings.Contains(sqlText, "'extras'") || !strings.Contains(sqlText, "details") {
 		t.Fatalf("table not rebuilt: %s", sqlText)
 	}
 	var idx string
@@ -483,5 +530,108 @@ func TestOfferOverlay(t *testing.T) {
 		if _, err := a.SaveOffer(ctx, owner, EMenuOfferInput{EMenuOffer: x}); code(err) != CodeInvalid {
 			t.Fatalf("accepted %+v: %v", bad, err)
 		}
+	}
+}
+
+// The table's own QR shows what it owes; voided lines don't count.
+func TestPublicBill(t *testing.T) {
+	f := newFixture(t)
+	a, ctx, owner := f.app, f.ctx, f.owner
+	m := f.menu()
+
+	b, err := a.PublicBill(ctx, m.token)
+	f.must(err)
+	if b.Table != "T1" || len(b.Lines) != 0 || b.Total != 0 {
+		t.Fatalf("empty bill: %+v", b)
+	}
+	if _, err := a.PublicBill(ctx, ""); code(err) != CodeNotFound {
+		t.Fatalf("no token: %v", err)
+	}
+
+	_, err = a.OpenShift(ctx, owner, 0)
+	f.must(err)
+	o, err := a.CreateOrder(ctx, owner, OrderInput{Type: "dine_in", TableID: m.table}, "")
+	f.must(err)
+	_, err = a.AddLine(ctx, owner, o.ID, LineInput{ItemID: m.burger, ModifierIDs: []string{m.cheese}})
+	f.must(err)
+	o, err = a.AddLine(ctx, owner, o.ID, LineInput{ItemID: m.burger, Qty: 2 * money.OneUnit})
+	f.must(err)
+
+	b, err = a.PublicBill(ctx, m.token)
+	f.must(err)
+	if len(b.Lines) != 2 || b.Total != o.Total || b.Due != o.Total || b.Total == 0 {
+		t.Fatalf("bill %+v vs order total %d", b, o.Total)
+	}
+	if len(b.Lines[0].Modifiers) != 1 || b.Lines[0].Modifiers[0] != "جبنة" {
+		t.Fatalf("modifiers: %+v", b.Lines[0])
+	}
+}
+
+// Calls per reason, how long they waited and who answered them.
+func TestServiceReport(t *testing.T) {
+	f := newFixture(t)
+	a, ctx, owner := f.app, f.ctx, f.owner
+	m := f.menu()
+	call := func(kind string) {
+		f.must(a.CallWaiter(ctx, ServiceCall{Table: m.token, Kind: kind, Details: []string{"cash"}}, "1.1.1.1"))
+	}
+	call("waiter")
+	call("bill")
+	in, err := a.Inbox(ctx, owner)
+	f.must(err)
+	for _, r := range in.Requests {
+		if r.Kind == "waiter" {
+			f.must(a.DoneServiceRequest(ctx, owner, r.ID))
+		}
+	}
+	today := businessDate(a.now(), 6)
+	r, err := a.ServiceReport(ctx, owner, today, today)
+	f.must(err)
+	if r.Calls != 2 || r.Answered != 1 || len(r.ByKind) != 2 || len(r.ByStaff) != 1 || r.ByStaff[0].Answered != 1 {
+		t.Fatalf("report: %+v", r)
+	}
+	hours := 0
+	for _, h := range r.ByHour {
+		hours += h.Orders
+	}
+	if hours != 2 {
+		t.Fatalf("by hour: %+v", r.ByHour)
+	}
+	if _, err := a.ServiceReport(ctx, Actor{Role: "waiter"}, today, today); code(err) != CodeForbidden {
+		t.Fatalf("waiter sees reports: %v", err)
+	}
+}
+
+// The savings sticker keeps its place, size and motion, stays on the picture,
+// and starts where it always was for clients that don't send them.
+func TestOfferSticker(t *testing.T) {
+	f := newFixture(t)
+	a, ctx, owner := f.app, f.ctx, f.owner
+	o := EMenuOffer{Name: "عرض العيلة", Kind: "family", Price: 100, Active: true, Highlight: "وفّر 20%", OverlayColor: "black"}
+	saved, err := a.SaveOffer(ctx, owner, EMenuOfferInput{EMenuOffer: o, ImageData: pngData(t)})
+	f.must(err)
+	if saved.HighlightX != 14 || saved.HighlightY != 20 || saved.HighlightSize != 100 || saved.HighlightMotion != "pulse" {
+		t.Fatalf("defaults: %+v", saved)
+	}
+
+	saved.HighlightX, saved.HighlightY, saved.HighlightSize, saved.HighlightMotion = 80, 70, 150, "bounce"
+	saved, err = a.SaveOffer(ctx, owner, EMenuOfferInput{EMenuOffer: saved})
+	f.must(err)
+	pub, err := a.PublicMenu(ctx, "")
+	f.must(err)
+	if g := pub.Offers[0]; g.HighlightX != 80 || g.HighlightY != 70 || g.HighlightSize != 150 || g.HighlightMotion != "bounce" {
+		t.Fatalf("public: %+v", g)
+	}
+
+	// Out of range is pulled back onto the picture; an unknown motion is refused.
+	saved.HighlightX, saved.HighlightY, saved.HighlightSize = 140, -5, 900
+	got, err := a.SaveOffer(ctx, owner, EMenuOfferInput{EMenuOffer: saved})
+	f.must(err)
+	if got.HighlightX != 100 || got.HighlightY != 0 || got.HighlightSize != 200 {
+		t.Fatalf("clamped: %+v", got)
+	}
+	got.HighlightMotion = "explode"
+	if _, err := a.SaveOffer(ctx, owner, EMenuOfferInput{EMenuOffer: got}); code(err) != CodeInvalid {
+		t.Fatalf("bad motion: %v", err)
 	}
 }

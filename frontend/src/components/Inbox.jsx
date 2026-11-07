@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, BellRing, Check, X, Receipt, ShoppingBag, Utensils, Smartphone, Bike, MapPin, TriangleAlert } from 'lucide-react';
+import { Bell, BellRing, Check, X, Receipt, ShoppingBag, Utensils, Smartphone, Bike, MapPin, TriangleAlert, NotebookPen, GlassWater, Hourglass, MessageSquareMore } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp, toast, toastError } from '@/lib/store';
 import { money, minutesSince } from '@/lib/format';
@@ -9,16 +9,19 @@ import { T } from '@/lib/i18n';
 // Online orders and waiter calls from the e-menu. Polled while a selling
 // screen is open; a short chime announces anything new.
 
-function chime() {
+// An urgent call (a problem with the food, a late order) sounds sharper and
+// longer, so it isn't mistaken for a routine one across the hall.
+function chime(urgent) {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    [0, 0.18].forEach((at, i) => {
+    const notes = urgent ? [[0, 1320], [0.16, 1760], [0.32, 1320], [0.48, 1760]] : [[0, 880], [0.18, 1175]];
+    notes.forEach(([at, hz]) => {
       const o = ctx.createOscillator();
       const g = ctx.createGain();
-      o.type = 'sine';
-      o.frequency.value = i ? 1175 : 880;
+      o.type = urgent ? 'square' : 'sine';
+      o.frequency.value = hz;
       g.gain.setValueAtTime(0.0001, ctx.currentTime + at);
-      g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + at + 0.02);
+      g.gain.exponentialRampToValueAtTime(urgent ? 0.12 : 0.25, ctx.currentTime + at + 0.02);
       g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.35);
       o.connect(g).connect(ctx.destination);
       o.start(ctx.currentTime + at);
@@ -40,7 +43,9 @@ export function useInbox() {
     try {
       const d = await api.get('/inbox');
       const ids = new Set([...d.orders.map((o) => o.id), ...d.requests.map((r) => r.id)]);
-      if (seen.current && [...ids].some((id) => !seen.current.has(id))) chime();
+      if (seen.current && [...ids].some((id) => !seen.current.has(id))) {
+        chime(d.requests.some((r) => !seen.current.has(r.id) && requestKinds[r.kind]?.urgent));
+      }
       seen.current = ids;
       setData(d);
     } catch { /* offline for a moment; the next poll retries */ }
@@ -60,20 +65,37 @@ export function InboxButton({ inbox, onClick }) {
   const n = inbox.count;
   const Icon = n ? BellRing : Bell;
   return (
-    <button type="button" onClick={onClick} aria-label={T('الطلبات الأونلاين والنداءات')} title={T('الطلبات الأونلاين والنداءات')}
+    <button type="button" onClick={onClick} aria-label={T('الطلبات الإلكترونية والنداءات')} title={T('الطلبات الإلكترونية والنداءات')}
       className={cx('relative flex h-10 items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition',
         n ? 'border-warning bg-warning text-white shadow-pop animate-pulse motion-reduce:animate-none' : 'border-line bg-surface text-muted hover:text-fg')}>
       <Icon className="size-4" aria-hidden />
-      <span className="hidden xl:inline">{T('أونلاين')}</span>
+      <span className="hidden xl:inline">{T('الطلبات')}</span>
       {n > 0 && <span className="num rounded-full bg-white/25 px-1.5">{n}</span>}
     </button>
   );
 }
 
-const requestKinds = {
-  waiter: { icon: BellRing, label: () => T('ينادي الويتر') },
-  bill: { icon: Receipt, label: () => T('يطلب الحساب') },
-  issue: { icon: TriangleAlert, label: () => T('مشكلة في الأكل') },
+// What a table calls for (the server's serviceKinds). Urgent ones are red.
+export const requestKinds = {
+  waiter: { icon: BellRing, label: () => T('ينادي النادل') },
+  order: { icon: NotebookPen, label: () => T('جاهزون للطلب') },
+  bill: { icon: Receipt, label: () => T('يطلب الفاتورة') },
+  extras: { icon: GlassWater, label: () => T('يحتاجون شيئاً') },
+  late: { icon: Hourglass, label: () => T('تأخر الطلب'), urgent: true },
+  issue: { icon: TriangleAlert, label: () => T('مشكلة في الأكل'), urgent: true },
+  other: { icon: MessageSquareMore, label: () => T('طلب آخر') },
+};
+
+// The guest's picks, sent as codes so they read in this screen's language.
+const requestDetails = {
+  cash: () => T('الدفع نقداً'),
+  card: () => T('الدفع بالبطاقة — أحضر جهاز الدفع'),
+  water: () => T('ماء'),
+  napkins: () => T('مناديل'),
+  cutlery: () => T('أدوات المائدة'),
+  ice: () => T('ثلج'),
+  plates: () => T('أطباق إضافية'),
+  clean: () => T('تنظيف الطاولة'),
 };
 
 const quickReasons = () => [T('الصنف غير متاح الآن'), T('المطبخ مشغول جداً'), T('المطعم مغلق حالياً')];
@@ -109,8 +131,8 @@ export function InboxPanel({ open, onClose, inbox, onAccepted }) {
   const done = (r) => act(r.id, () => api.post(`/service-requests/${r.id}/done`));
 
   return (
-    <Modal open={open} onClose={onClose} title={T('الطلبات الأونلاين والنداءات')} icon={Smartphone} size="lg">
-      {!orders.length && !requests.length && <Empty icon={Bell} title={T('لا يوجد شيء جديد')}>{T('الطلبات من المنيو الإلكتروني ونداءات الطاولات تظهر هنا')}</Empty>}
+    <Modal open={open} onClose={onClose} title={T('الطلبات الإلكترونية والنداءات')} icon={Smartphone} size="lg">
+      {!orders.length && !requests.length && <Empty icon={Bell} title={T('لا يوجد شيء جديد')}>{T('تظهر هنا الطلبات الواردة من قائمة الطعام الإلكترونية ونداءات الطاولات')}</Empty>}
 
       {requests.length > 0 && (
         <section className="mb-4">
@@ -118,13 +140,18 @@ export function InboxPanel({ open, onClose, inbox, onAccepted }) {
           <div className="grid gap-2 sm:grid-cols-2">
             {requests.map((r) => {
               const kind = requestKinds[r.kind] || requestKinds.waiter;
-              const issue = r.kind === 'issue';
+              const urgent = kind.urgent;
               return (
-                <div key={r.id} className={cx('flex items-center gap-3 rounded-xl border p-3', issue ? 'border-danger/40 bg-danger-soft' : 'border-warning/40 bg-warning-soft')}>
-                  <kind.icon className={cx('size-5 shrink-0', issue ? 'text-danger' : 'text-warning')} aria-hidden />
+                <div key={r.id} className={cx('flex items-center gap-3 rounded-xl border p-3', urgent ? 'border-danger/40 bg-danger-soft' : 'border-warning/40 bg-warning-soft')}>
+                  <kind.icon className={cx('size-5 shrink-0', urgent ? 'text-danger' : 'text-warning')} aria-hidden />
                   <div className="min-w-0 flex-1">
                     <div className="font-bold">{r.table_name}</div>
                     <div className="text-xs text-muted">{kind.label()} · {T('منذ')} {minutesSince(r.created_at)} {T('دقيقة')}</div>
+                    {r.details?.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {r.details.map((d) => <span key={d} className="rounded-full bg-surface px-2 py-0.5 text-xs font-semibold">{requestDetails[d]?.() || d}</span>)}
+                      </div>
+                    )}
                     {r.note && <p className="mt-1 text-sm" dir="auto">{r.note}</p>}
                   </div>
                   <Button size="sm" variant="secondary" icon={Check} busy={busy === r.id} onClick={() => done(r)}>{T('تم')}</Button>
@@ -144,7 +171,7 @@ export function InboxPanel({ open, onClose, inbox, onAccepted }) {
                 <header className="mb-2 flex flex-wrap items-center gap-2">
                   {o.type === 'dine_in' && <Badge tone="blue"><Utensils className="size-3" aria-hidden /> {o.table_name}</Badge>}
                   {o.type === 'delivery' && <Badge tone="green"><Bike className="size-3" aria-hidden /> {T('توصيل')}</Badge>}
-                  {o.type === 'takeaway' && <Badge tone="amber"><ShoppingBag className="size-3" aria-hidden /> {T('تيك أواي')}</Badge>}
+                  {o.type === 'takeaway' && <Badge tone="amber"><ShoppingBag className="size-3" aria-hidden /> {T('طلب خارجي')}</Badge>}
                   {o.customer_name && <span className="font-bold">{o.customer_name}</span>}
                   {o.phone && <a dir="ltr" className="num text-sm text-primary" href={`tel:${o.phone}`}>{o.phone}</a>}
                   <span className="ms-auto text-xs text-muted">{T('منذ')} {minutesSince(o.created_at)} {T('دقيقة')}</span>

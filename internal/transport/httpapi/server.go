@@ -157,9 +157,15 @@ func securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-func remoteIP(r *http.Request) string {
-	if ip := r.Header.Get("Cf-Connecting-Ip"); ip != "" {
-		return ip // set by Cloudflare on the tunnel
+// clientIP is who's asking, for login throttling and the audit log. Only the
+// tunnel listeners are reached through Cloudflare (via cloudflared on this
+// computer), so only there is its header the guest's address. On the LAN any
+// device could send that header to dodge the throttle, so it's ignored.
+func (s *server) clientIP(r *http.Request) string {
+	if s.channel == app.ChannelTunnel {
+		if ip := r.Header.Get("Cf-Connecting-Ip"); ip != "" {
+			return ip
+		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {

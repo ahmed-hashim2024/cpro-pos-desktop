@@ -51,7 +51,7 @@ type transferGroup struct {
 }
 
 var transferGroups = []transferGroup{
-	{tr{"المنيو", "Menu", "Menu"}, []string{"categories", "kitchen_stations", "items", "modifier_groups", "modifiers", "item_modifier_groups",
+	{tr{"قائمة الطعام", "Menu", "Menu"}, []string{"categories", "kitchen_stations", "items", "modifier_groups", "modifiers", "item_modifier_groups",
 		"recipe_lines", "modifier_recipe_lines", "dining_tables", "emenu_offers", "emenu_offer_items", "emenu_featured"}},
 	{tr{"المخزون والموردون", "Stock and suppliers", "Stock et fournisseurs"}, []string{"ingredients", "suppliers", "purchases", "purchase_lines",
 		"stock_movements", "stock_counts", "stock_count_lines", "waste_entries"}},
@@ -335,7 +335,7 @@ func (r *transferRun) issue(table string, row int, col, code, val string) {
 // openTransfer takes the zip from ExportTransfer, or a bare workbook (the zip's
 // data.xlsx after editing it).
 func openTransfer(data []byte) (*excelize.File, []*zip.File, error) {
-	bad := invalid("الملف ده مش ملف نقل بيانات. استخدم الملف اللي نزلته من «نقل البيانات»")
+	bad := invalid("هذا الملف ليس ملف نقل بيانات. استخدم الملف الذي نزّلته من «نقل البيانات»")
 	z, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return nil, nil, bad
@@ -390,7 +390,7 @@ func (a *App) ImportTransfer(ctx context.Context, actor Actor, data []byte) (Tra
 		known = known || sheets[t]
 	}
 	if !known {
-		return res, invalid("الملف ده مش ملف نقل بيانات. استخدم الملف اللي نزلته من «نقل البيانات»")
+		return res, invalid("هذا الملف ليس ملف نقل بيانات. استخدم الملف الذي نزّلته من «نقل البيانات»")
 	}
 	device, err := a.EnsureTerminal(ctx)
 	if err != nil {

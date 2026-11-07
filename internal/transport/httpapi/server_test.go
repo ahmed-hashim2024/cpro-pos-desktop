@@ -146,3 +146,17 @@ func TestPublicHandlerExposesOnlyTheMenu(t *testing.T) {
 		}
 	}
 }
+
+// Cloudflare's client address is trusted only on the tunnel listeners; on the
+// LAN a device could send the header to dodge the login throttle.
+func TestClientIP(t *testing.T) {
+	r := httptest.NewRequest("POST", "/api/v1/auth/login", nil)
+	r.RemoteAddr = "192.168.1.20:51515"
+	r.Header.Set("Cf-Connecting-Ip", "203.0.113.9")
+	if got := (&server{channel: app.ChannelLAN}).clientIP(r); got != "192.168.1.20" {
+		t.Fatalf("LAN trusted the header: %q", got)
+	}
+	if got := (&server{channel: app.ChannelTunnel}).clientIP(r); got != "203.0.113.9" {
+		t.Fatalf("tunnel ignored the header: %q", got)
+	}
+}

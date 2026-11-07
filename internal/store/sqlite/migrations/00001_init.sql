@@ -17,6 +17,7 @@ CREATE TABLE users (
     role                 TEXT NOT NULL CHECK (role IN ('owner','manager','cashier','waiter','kitchen')),
     active               INTEGER NOT NULL DEFAULT 1,
     must_change_password INTEGER NOT NULL DEFAULT 0,
+    remote_access        INTEGER NOT NULL DEFAULT 0, -- may sign in from outside the restaurant (the owner decides)
     created_at           TEXT NOT NULL,
     updated_at           TEXT NOT NULL
 );
@@ -367,6 +368,12 @@ CREATE TABLE emenu_offers (
     item_id    TEXT NOT NULL UNIQUE REFERENCES items(id) ON DELETE CASCADE,
     badge      TEXT NOT NULL DEFAULT '',   -- small label, e.g. «جديد»
     highlight  TEXT NOT NULL DEFAULT '',   -- round sticker, e.g. «وفّر 20%»
+    -- Where the sticker sits on the picture (its centre, % from the left
+    -- and top), its size (% of normal) and how it moves.
+    highlight_x      INTEGER NOT NULL DEFAULT 14 CHECK (highlight_x BETWEEN 0 AND 100),
+    highlight_y      INTEGER NOT NULL DEFAULT 20 CHECK (highlight_y BETWEEN 0 AND 100),
+    highlight_size   INTEGER NOT NULL DEFAULT 100 CHECK (highlight_size BETWEEN 60 AND 200),
+    highlight_motion TEXT NOT NULL DEFAULT 'pulse' CHECK (highlight_motion IN ('none','pulse','bounce','wiggle','shine')),
     sort       INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -410,7 +417,8 @@ CREATE TABLE emenu_offer_items (
 CREATE TABLE service_requests (
     id         TEXT PRIMARY KEY,
     table_id   TEXT NOT NULL REFERENCES dining_tables(id),
-    kind       TEXT NOT NULL CHECK (kind IN ('waiter','bill','issue')),
+    kind       TEXT NOT NULL CHECK (kind IN ('waiter','order','bill','extras','late','issue','other')),
+    details    TEXT NOT NULL DEFAULT '', -- the guest's picks as codes: payment method, things needed
     note       TEXT NOT NULL DEFAULT '',
     status     TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','done')),
     created_at TEXT NOT NULL,

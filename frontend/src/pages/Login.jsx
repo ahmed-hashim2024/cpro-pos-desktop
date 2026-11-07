@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { LangMenu } from '@/components/Layout';
-import { Delete, KeyRound, UserRound, ShoppingCart, ChefHat, FlaskConical, ShieldCheck } from 'lucide-react';
+import { Delete, KeyRound, UserRound, ShoppingCart, ChefHat, FlaskConical, ShieldCheck, Earth } from 'lucide-react';
 import { api, deviceId } from '@/lib/api';
 import { useApp, toastError } from '@/lib/store';
 import { ConnectGoogle } from '@/components/License';
@@ -27,13 +27,13 @@ export default function Login() {
         <div className="absolute -bottom-32 -start-20 size-96 rounded-full bg-white/10" aria-hidden />
         <div className="relative flex items-center gap-3">
           <span className="flex size-12 items-center justify-center rounded-2xl bg-white/20 text-2xl font-black">C</span>
-          <div><div className="text-2xl font-black" dir="ltr">CPro</div><div className="text-sm text-white/80">{T('نظام المطاعم والكافيهات')}</div></div>
+          <div><div className="text-2xl font-black" dir="ltr">CPro</div><div className="text-sm text-white/80">{T('نظام المطاعم والمقاهي')}</div></div>
         </div>
         <div className="relative">
           <h1 className="text-4xl font-bold leading-snug">{T('كل مطعمك في شاشة واحدة')}</h1>
-          <p className="mt-3 max-w-md text-lg text-white/85">{T('الكاشير، المطبخ، المخزون والتقارير — يعمل بدون إنترنت وبياناتك على جهازك.')}</p>
+          <p className="mt-3 max-w-md text-lg text-white/85">{T('نقطة البيع والمطبخ والمخزون والتقارير — يعمل دون إنترنت وتبقى بياناتك على جهازك.')}</p>
           <ul className="mt-8 grid gap-3 text-white/90">
-            {[[ShoppingCart, T('بيع سريع بالطاولات والتيك أواي والتوصيل')], [ChefHat, T('شاشة مطبخ لحظية لكل محطة')], [FlaskConical, T('وصفات وجرد ومتابعة استهلاك الخامات')], [ShieldCheck, T('صلاحيات وموافقات المدير وسجل كامل')]].map(([Icon, t]) => (
+            {[[ShoppingCart, T('بيع سريع للطاولات والطلبات الخارجية والتوصيل')], [ChefHat, T('شاشة مطبخ لحظية لكل محطة')], [FlaskConical, T('وصفات وجرد ومتابعة استهلاك الخامات')], [ShieldCheck, T('صلاحيات وموافقات المدير وسجل كامل')]].map(([Icon, t]) => (
               <li key={t} className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-xl bg-white/15"><Icon className="size-5" aria-hidden /></span>{t}</li>
             ))}
           </ul>
@@ -45,11 +45,12 @@ export default function Login() {
         <div className="flex min-h-full items-center justify-center p-6">
         <div className="w-full max-w-2xl">
           <div className="mb-8">
-            <h2 className="text-3xl font-bold">{returning ? T('أهلاً بيك تاني') : status.needs_connect || status.needs_setup ? T('مرحباً بك في CPro') : T('تسجيل الدخول')}</h2>
+            <h2 className="text-3xl font-bold">{returning ? T('مرحباً بعودتك') : status.needs_connect || status.needs_setup ? T('مرحباً بك في CPro') : T('تسجيل الدخول')}</h2>
             <p className="mt-1 text-muted">
-              {status.needs_connect ? T('سجّل دخولك بحساب Google علشان تبدأ. لو مالكش حساب هيتعمل لوحده.')
-                : returning ? T('حسابك جاهز. كمّل على الجهاز ده من نسختك الاحتياطية، أو ابدأ من غير نسخة.')
-                  : status.needs_setup ? T('خطوة أخيرة: جهّز حساب المالك على الجهاز ده') : T('اختر حسابك وأدخل الرقم السري')}
+              {status.needs_connect ? T('سجّل الدخول بحساب Google للبدء. وإن لم يكن لديك حساب فسيُنشأ تلقائياً.')
+                : returning ? T('حسابك جاهز. تابع على هذا الجهاز من نسختك الاحتياطية، أو ابدأ دون نسخة.')
+                  : status.needs_setup ? T('الخطوة الأخيرة: أنشئ حساب المالك على هذا الجهاز')
+                    : status.channel === 'tunnel' ? T('الدخول عن بُعد باسم المستخدم وكلمة المرور') : T('اختر حسابك وأدخل الرقم السري')}
             </p>
           </div>
           {status.needs_connect
@@ -75,8 +76,8 @@ function ReturningChoice({ account, onStart }) {
       <RestoreFirstRun />
       <div className="grid gap-2 rounded-card border border-line bg-surface p-4 shadow-card">
         <div>
-          <h3 className="font-bold">{T('معندكش نسخة احتياطية؟')}</h3>
-          <p className="text-sm text-muted">{account.restaurant ? T('هتبدأ ببيانات مطعمك من حسابك، والأصناف والمبيعات فاضية.') : T('هتبدأ من غير بيانات، والدومين من حسابك.')}</p>
+          <h3 className="font-bold">{T('أليست لديك نسخة احتياطية؟')}</h3>
+          <p className="text-sm text-muted">{account.restaurant ? T('ستبدأ ببيانات مطعمك المحفوظة في حسابك، دون أصناف أو مبيعات.') : T('ستبدأ دون بيانات، ويُؤخذ النطاق من حسابك.')}</p>
         </div>
         <Button variant="secondary" onClick={onStart}>{T('ابدأ من غير نسخة')}</Button>
       </div>
@@ -108,19 +109,19 @@ function SetupForm({ account, onBack }) {
   };
   return (
     <form onSubmit={submit} className="grid max-w-md gap-4 rounded-card border border-line bg-surface p-6 shadow-card">
-      <h3 className="text-lg font-bold">{onBack ? T('كلمة مرور للجهاز ده') : T('إعداد النظام لأول مرة')}</h3>
+      <h3 className="text-lg font-bold">{onBack ? T('كلمة مرور لهذا الجهاز') : T('إعداد النظام لأول مرة')}</h3>
       {known ? (
         <dl className="grid gap-2 rounded-xl bg-surface-2 p-3 text-sm">
           <div className="flex justify-between gap-3"><dt className="text-muted">{T('المطعم')}</dt><dd className="font-bold">{f.restaurant_name}</dd></div>
           {f.username && <div className="flex justify-between gap-3"><dt className="text-muted">{T('اسم المستخدم')}</dt><dd className="font-bold" dir="ltr">{f.username}</dd></div>}
-          {account?.domain && <div className="flex justify-between gap-3"><dt className="text-muted">{T('المنيو')}</dt><dd className="num font-bold" dir="ltr">{account.domain}</dd></div>}
+          {account?.domain && <div className="flex justify-between gap-3"><dt className="text-muted">{T('قائمة الطعام')}</dt><dd className="num font-bold" dir="ltr">{account.domain}</dd></div>}
         </dl>
       ) : (
         <Field label={T('اسم المطعم')}><Input required value={f.restaurant_name} onChange={set('restaurant_name')} /></Field>
       )}
       {!known && account?.domain && (
         <div className="rounded-xl bg-surface-2 p-3 text-sm">
-          <div className="text-muted">{T('دومين المنيو من حسابك')}</div>
+          <div className="text-muted">{T('نطاق قائمة الطعام من حسابك')}</div>
           <div className="num font-bold" dir="ltr">{account.domain}</div>
         </div>
       )}
@@ -155,7 +156,10 @@ function SignIn({ channel }) {
   const [cred, setCred] = useState({ username: '', password: '' });
   const [device, setDevice] = useState({ name: stored(DEVICE_NAME, ''), kind: stored(DEVICE_KIND, 'waiter') });
   const [busy, setBusy] = useState(false);
-  const lan = channel !== 'app';
+  // From outside the restaurant (the tunnel's staff address): password only,
+  // and this browser isn't one of the restaurant's devices.
+  const remote = channel === 'tunnel';
+  const lan = channel === 'lan';
 
   useEffect(() => {
     api.get('/auth/users').then((u) => { setUsers(u); if (!u.length) setMode('password'); }).catch(toastError);
@@ -167,7 +171,7 @@ function SignIn({ channel }) {
       if (lan) {
         try { localStorage.setItem(DEVICE_NAME, device.name); localStorage.setItem(DEVICE_KIND, device.kind); } catch { /* ignore */ }
       }
-      const s = await api.post('/auth/login', { ...body, device_id: deviceId(), device_name: device.name, device_kind: device.kind });
+      const s = await api.post('/auth/login', { ...body, device_id: deviceId(), device_name: remote ? T('دخول عن بُعد') : device.name, device_kind: device.kind });
       if (lan && device.kind === 'kds') sessionStorage.setItem('cpro.next', '/kitchen');
       await signedIn(s);
     } catch (e) {
@@ -188,19 +192,26 @@ function SignIn({ channel }) {
       <div>
         {lan && (
           <div className="mb-4 grid grid-cols-2 gap-2 rounded-card border border-line bg-surface p-3">
-            <Field label={T('اسم الجهاز')}><Input value={device.name} placeholder={T('تابلت الصالة')} onChange={(e) => setDevice({ ...device, name: e.target.value })} /></Field>
+            <Field label={T('اسم الجهاز')}><Input value={device.name} placeholder={T('الجهاز اللوحي للصالة')} onChange={(e) => setDevice({ ...device, name: e.target.value })} /></Field>
             <Field label={T('نوع الجهاز')}>
               <Select value={device.kind} onChange={(e) => setDevice({ ...device, kind: e.target.value })}>
-                <option value="waiter">{T('ويتر')}</option><option value="kds">{T('شاشة مطبخ')}</option>
-                <option value="terminal">{T('كاشير')}</option><option value="display">{T('شاشة عميل')}</option>
+                <option value="waiter">{T('نادل')}</option><option value="kds">{T('شاشة مطبخ')}</option>
+                <option value="terminal">{T('جهاز نقطة البيع')}</option><option value="display">{T('شاشة عميل')}</option>
               </Select>
             </Field>
           </div>
         )}
-        <div className="mb-3 flex gap-2">
-          <Button variant={mode === 'pin' ? 'primary' : 'secondary'} size="sm" onClick={() => setMode('pin')} disabled={!users.length}><KeyRound className="size-4" />{T('رقم سري')}</Button>
-          <Button variant={mode === 'password' ? 'primary' : 'secondary'} size="sm" onClick={() => setMode('password')}><UserRound className="size-4" />{T('اسم مستخدم')}</Button>
-        </div>
+        {remote ? (
+          <p className="mb-4 flex items-start gap-2 rounded-card border border-line bg-surface p-3 text-sm text-muted">
+            <Earth className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+            {T('أنت تسجّل الدخول من خارج المطعم، ويجب أن يكون المالك قد أذن لهذا الحساب بالدخول عن بُعد.')}
+          </p>
+        ) : (
+          <div className="mb-3 flex gap-2">
+            <Button variant={mode === 'pin' ? 'primary' : 'secondary'} size="sm" onClick={() => setMode('pin')} disabled={!users.length}><KeyRound className="size-4" />{T('رقم سري')}</Button>
+            <Button variant={mode === 'password' ? 'primary' : 'secondary'} size="sm" onClick={() => setMode('password')}><UserRound className="size-4" />{T('اسم مستخدم')}</Button>
+          </div>
+        )}
         {mode === 'pin' ? (
           <div className="grid max-h-80 grid-cols-2 gap-2 overflow-y-auto">
             {users.map((u) => (

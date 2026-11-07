@@ -26,7 +26,7 @@ func (a *App) applyAppIcon(s *EMenuSettings, data512, data192 string) error {
 		s.AppIcon512, s.AppIcon192 = "", ""
 		return nil
 	case data512 == "" || data192 == "":
-		return invalid("أيقونة التطبيق ناقصة، اختارها تاني")
+		return invalid("أيقونة التطبيق ناقصة، فاخترها مرة أخرى")
 	}
 	big, err := pngIcon(data512, 512)
 	if err != nil {
@@ -50,7 +50,7 @@ func pngIcon(dataURL string, size int) ([]byte, error) {
 		return nil, err
 	}
 	if mime != "image/png" {
-		return nil, invalid("أيقونة التطبيق لازم تكون PNG")
+		return nil, invalid("يجب أن تكون أيقونة التطبيق بصيغة PNG")
 	}
 	cfg, err := png.DecodeConfig(bytes.NewReader(b))
 	if err != nil || cfg.Width != size || cfg.Height != size {
@@ -117,7 +117,7 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(fetch(e.request).catch(() => new Response(
     '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<body style="font-family:system-ui;display:grid;place-items:center;min-height:90vh;text-align:center;padding:24px">' +
-    '<div><h1 style="font-size:20px">مفيش اتصال بالإنترنت</h1><p>اتأكد من الاتصال وحاول تاني.<br>No internet connection.</p></div>',
+    '<div><h1 style="font-size:20px">لا يوجد اتصال بالإنترنت</h1><p>تحقّق من الاتصال وأعد المحاولة.<br>No internet connection.</p></div>',
     { headers: { 'Content-Type': 'text/html; charset=utf-8' } })));
 });
 `

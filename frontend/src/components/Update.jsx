@@ -19,7 +19,7 @@ function InstallButton({ size }) {
     const t = setInterval(loadPlatform, 2000);
     return () => clearInterval(t);
   }, [downloading, loadPlatform]);
-  if (me?.channel !== 'app') return <p className="text-sm text-muted">{T('ثبّت التحديث من جهاز الكاشير الرئيسي')}</p>;
+  if (me?.channel !== 'app') return <p className="text-sm text-muted">{T('ثبّت التحديث من الجهاز الرئيسي لنقطة البيع')}</p>;
   const install = async () => {
     setBusy(true);
     try {
@@ -57,7 +57,7 @@ export function UpdateAlert() {
           <Sparkles className="size-10" aria-hidden />
         </span>
         <h2 id="update-title" className="mt-4 text-2xl font-bold">{T('تحديث إجباري')}</h2>
-        <p className="mt-2 text-muted">{T('الإصدار {0} متاح ولازم يتثبّت عشان تكمّل شغل. بياناتك مش هتتأثر.', [u.version])}</p>
+        <p className="mt-2 text-muted">{T('الإصدار {0} متاح ويجب تثبيته لمتابعة العمل. لن تتأثر بياناتك.', [u.version])}</p>
         {u.notes && <p className="mt-3 max-h-32 overflow-y-auto whitespace-pre-wrap rounded-xl bg-surface-2 p-3 text-start text-sm" dir="auto">{u.notes}</p>}
         <div className="mt-5"><InstallButton size="lg" /></div>
         <button type="button" onClick={logout} className="mt-4 inline-flex items-center gap-1.5 text-sm text-muted underline-offset-2 hover:text-fg hover:underline">

@@ -9,13 +9,21 @@ import { Badge, Button, Card, Checkbox, Field, Input, PageHeader, Select, Spinne
 import { T, lang, languages, setLang } from '@/lib/i18n';
 import { RestoreCard, RestoreConfirm } from '@/components/Restore';
 import Platform from './settings/Platform';
+import Help from './settings/Help';
 
 export default function Settings() {
-  const [tab, setTab] = useTab('general');
+  // Without the settings permission only Help and «My account» show.
+  const manager = useApp((s) => s.can)('settings.manage');
+  const all = [['general', T('عام')], ['display', T('العرض')], ['payments', T('طرق الدفع')], ['devices', T('الأجهزة والشبكة')], ['backups', T('النسخ الاحتياطي')],
+    ['platform', T('الاشتراك وقائمة الطعام الإلكترونية')], ['account', T('حسابي')], ['help', T('المساعدة والمصطلحات')]];
+  const tabs = manager ? all : all.filter(([k]) => k === 'help' || k === 'account');
+  const [asked, setTab] = useTab(manager ? 'general' : 'help');
+  const tab = tabs.some(([k]) => k === asked) ? asked : 'help';
   return (
     <div>
-      <PageHeader title={T('الإعدادات')} icon={SettingsIcon} subtitle={T('بيانات المطعم والضرائب والطباعة والأجهزة')} crumb={T('الإدارة')} />
-      <Tabs value={tab} onChange={setTab} tabs={[['general', T('عام')], ['display', T('العرض')], ['payments', T('طرق الدفع')], ['devices', T('الأجهزة والشبكة')], ['backups', T('النسخ الاحتياطي')], ['platform', T('الاشتراك والمنيو الإلكتروني')], ['account', T('حسابي')]]} />
+      <PageHeader title={tab === 'help' ? T('المساعدة والمصطلحات') : T('الإعدادات')} icon={SettingsIcon}
+        subtitle={tab === 'help' ? T('كيف يعمل النظام، ومعنى كل مصطلح من مصطلحات العمل') : T('بيانات المطعم والضرائب والطباعة والأجهزة')} crumb={T('الإدارة')} />
+      <Tabs value={tab} onChange={setTab} tabs={tabs} />
       {tab === 'general' && <General />}
       {tab === 'display' && <Display />}
       {tab === 'payments' && <Payments />}
@@ -23,6 +31,7 @@ export default function Settings() {
       {tab === 'backups' && <Backups />}
       {tab === 'platform' && <Platform />}
       {tab === 'account' && <Account />}
+      {tab === 'help' && <Help />}
     </div>
   );
 }
@@ -80,7 +89,7 @@ function General() {
           <div className="col-span-2 flex gap-3">
             <span className="text-sm text-muted">{T('الخدمة على:')}</span>
             <Checkbox label={T('صالة')} checked={s.service_order_types.includes('dine_in')} onChange={(v) => toggleService('dine_in', v)} />
-            <Checkbox label={T('تيك أواي')} checked={s.service_order_types.includes('takeaway')} onChange={(v) => toggleService('takeaway', v)} />
+            <Checkbox label={T('طلب خارجي')} checked={s.service_order_types.includes('takeaway')} onChange={(v) => toggleService('takeaway', v)} />
             <Checkbox label={T('توصيل')} checked={s.service_order_types.includes('delivery')} onChange={(v) => toggleService('delivery', v)} />
           </div>
           <Field label={T('رسوم التوصيل')}><Input className="num" value={s.delivery} onChange={(e) => set({ delivery: e.target.value })} /></Field>
@@ -91,7 +100,7 @@ function General() {
           <Field label={T('رأس الفاتورة')}><Textarea value={s.receipt_header} onChange={(e) => set({ receipt_header: e.target.value })} /></Field>
           <Field label={T('تذييل الفاتورة')}><Textarea value={s.receipt_footer} onChange={(e) => set({ receipt_footer: e.target.value })} /></Field>
           <Checkbox label={T('طباعة الفاتورة تلقائياً بعد الدفع')} checked={s.auto_print_receipt} onChange={(v) => set({ auto_print_receipt: v })} />
-          <Checkbox label={T('طباعة بون المطبخ عند الإرسال')} checked={s.print_kitchen} onChange={(v) => set({ print_kitchen: v })} />
+          <Checkbox label={T('طباعة تذكرة المطبخ عند الإرسال')} checked={s.print_kitchen} onChange={(v) => set({ print_kitchen: v })} />
         </div>
       </Card>
       <div className="lg:col-span-2"><Button busy={busy} size="lg" onClick={submit}>{T('حفظ الإعدادات')}</Button></div>
@@ -110,7 +119,7 @@ function Payments() {
       <div className="grid gap-2">
         {list.map((m, i) => (
           <div key={i} className="flex items-center gap-3">
-            <Input className="w-32" placeholder={T('الكود')} value={m.code} disabled={!!data.data.payment_methods.find((x) => x.code === m.code) && !methods?.[i]?.isNew}
+            <Input className="w-32" placeholder={T('الرمز')} value={m.code} disabled={!!data.data.payment_methods.find((x) => x.code === m.code) && !methods?.[i]?.isNew}
               onChange={(e) => update(i, { code: e.target.value })} />
             <Input className="flex-1" placeholder={T('الاسم')} value={m.name} onChange={(e) => update(i, { name: e.target.value })} />
             <Checkbox label={T('نقدي')} checked={m.is_cash} onChange={(v) => update(i, { is_cash: v })} />
@@ -135,15 +144,15 @@ function Devices() {
   const [, run] = useAction();
   if (!data.data) return <Spinner />;
   const s = data.data;
-  const kinds = { terminal: T('كاشير'), waiter: T('ويتر'), kds: T('شاشة مطبخ'), display: T('شاشة عميل'), remote: T('دخول عن بعد') };
+  const kinds = { terminal: T('جهاز نقطة البيع'), waiter: T('نادل'), kds: T('شاشة مطبخ'), display: T('شاشة عميل'), remote: T('دخول عن بُعد') };
   return (
     <div className="grid gap-3">
-      <Card title={T('الشبكة المحلية (تابلت الويتر وشاشات المطبخ)')}>
+      <Card title={T('الشبكة المحلية (الأجهزة اللوحية للنُّدُل وشاشات المطبخ)')}>
         <div className="grid gap-3">
           <Checkbox label={T('السماح للأجهزة على نفس الشبكة بالاتصال')} checked={s.lan_enabled} onChange={(v) => save({ ...s, lan_enabled: v })} />
           <Field label={T('المنفذ')} className="w-40"><Input type="number" defaultValue={s.lan_port} onBlur={(e) => Number(e.target.value) !== s.lan_port && save({ ...s, lan_port: Number(e.target.value) })} /></Field>
           <p className="text-sm text-muted">
-            {T('بعد التفعيل أعد تشغيل البرنامج، ثم افتح من التابلت أو شاشة المطبخ المتصفح على العنوان:')}
+            {T('بعد التفعيل أعد تشغيل البرنامج، ثم افتح المتصفح على الجهاز اللوحي أو شاشة المطبخ على العنوان:')}
             <b className="num mx-1">http://[{T('عنوان-هذا-الجهاز')}]:{s.lan_port}</b>
             {T('وسجّل الدخول. كل جهاز يظهر في القائمة بالأسفل ويمكنك إيقافه في أي وقت.')}
           </p>
@@ -182,7 +191,7 @@ function Backups() {
           <Field label={T('الاحتفاظ بآخر')} hint={T('نسخة')}><Input type="number" className="w-28" defaultValue={s.backup_keep} id="bk" /></Field>
           <Button busy={busy} onClick={() => save({ ...s, auto_backup_hours: Number(document.getElementById('bh').value), backup_keep: Number(document.getElementById('bk').value) })}>{T('حفظ')}</Button>
         </div>
-        <p className="mt-2 text-sm text-muted">{T('تُؤخذ نسخة أيضاً عند إغلاق البرنامج. احتفظ بنسخة خارج الجهاز (فلاشة أو سحابة) بشكل دوري.')}</p>
+        <p className="mt-2 text-sm text-muted">{T('تُنشأ نسخة أيضاً عند إغلاق البرنامج. احتفظ دورياً بنسخة خارج الجهاز (ذاكرة USB أو تخزين سحابي).')}</p>
       </Card>
       <BackupLocation onCopied={() => list.reload(true)} />
       <Card title={T('النسخ المحفوظة')} actions={<Button busy={creating} onClick={() => run(async () => { await api.post('/backups'); toast(T('تم إنشاء نسخة')); list.reload(true); })}><HardDriveDownload className="size-4" />{T('نسخة الآن')}</Button>}>
@@ -211,25 +220,25 @@ function BackupLocation({ onCopied }) {
     await api.put('/backups/location', { dir });
     await loc.reload(true);
     onCopied();
-    toast(dir ? T('تم حفظ نسخة في المكان الجديد') : T('هتتحفظ النسخ على الجهاز بس'));
+    toast(dir ? T('تم حفظ نسخة في المكان الجديد') : T('ستُحفظ النسخ على هذا الجهاز فقط'));
   });
   const choose = async () => {
-    const dir = await pick(T('اختار مكان النسخ الاحتياطي'));
+    const dir = await pick(T('اختر موقع النسخ الاحتياطي'));
     if (dir) setDir(dir);
   };
   const d = loc.data;
   return (
-    <Card title={T('مكان النسخ الاحتياطي')} icon={FolderOpen}>
-      <p className="text-sm text-muted">{T('كل نسخة بتتحفظ على الجهاز، ونسخة تانية منها في المكان اللي تختاره. الأفضل هارد خارجي أو فلاشة، أو على الأقل بارتيشن غير اللي عليه الويندوز، علشان لو حصل حاجة للويندوز الداتا تفضل موجودة.')}</p>
+    <Card title={T('موقع النسخ الاحتياطي')} icon={FolderOpen}>
+      <p className="text-sm text-muted">{T('تُحفظ كل نسخة على الجهاز، وتُحفظ نسخة ثانية منها في الموقع الذي تختاره. ويُفضَّل قرص صلب خارجي أو ذاكرة USB، أو على الأقل قسم من القرص غير الذي يعمل عليه نظام Windows، لتبقى البيانات سليمة إن تعطّل النظام.')}</p>
       <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-surface-2 p-3">
         <span className="min-w-0 flex-1 truncate font-semibold" dir="auto">{d?.dir || T('لم يتم اختيار مكان إضافي')}</span>
         {pick && <Button variant="secondary" icon={FolderOpen} busy={busy} onClick={choose}>{d?.dir ? T('تغيير المكان') : T('اختيار المكان')}</Button>}
         {pick && d?.dir && <Button variant="ghost" onClick={() => setDir('')}>{T('إلغاء')}</Button>}
       </div>
-      {!pick && <p className="mt-2 text-xs text-muted">{T('المكان بيتغير من جهاز الكاشير الرئيسي فقط')}</p>}
-      {d?.same_drive && <p className="mt-2 rounded-xl bg-warning-soft p-2.5 text-sm text-warning">{T('المكان ده على نفس البارتيشن بتاع البرنامج، فلو حصلت مشكلة النسختين هيضيعوا مع بعض. اختار بارتيشن أو هارد تاني.')}</p>}
+      {!pick && <p className="mt-2 text-xs text-muted">{T('يُغيَّر الموقع من الجهاز الرئيسي لنقطة البيع فقط')}</p>}
+      {d?.same_drive && <p className="mt-2 rounded-xl bg-warning-soft p-2.5 text-sm text-warning">{T('هذا الموقع على قسم القرص نفسه الذي يعمل عليه البرنامج، فإن حدث عطل فقدت النسختان معاً. اختر قسماً آخر أو قرصاً صلباً آخر.')}</p>}
       {d?.last_copy?.error && <p className="mt-2 rounded-xl bg-danger-soft p-2.5 text-sm text-danger">{d.last_copy.error}</p>}
-      {d?.dir && d.last_copy?.at && !d.last_copy.error && <p className="mt-2 text-xs text-muted">{T('آخر نسخة في المكان ده')}: <span className="num">{dateTime(d.last_copy.at)}</span></p>}
+      {d?.dir && d.last_copy?.at && !d.last_copy.error && <p className="mt-2 text-xs text-muted">{T('آخر نسخة في هذا الموقع')}: <span className="num">{dateTime(d.last_copy.at)}</span></p>}
     </Card>
   );
 }
@@ -265,7 +274,7 @@ export function Display() {
         </div>
       </Card>
       <Card title={T('حجم الخط')}>
-        <p className="mb-4 text-sm text-muted">{T('يُطبَّق على هذا الجهاز فقط — اختر الحجم المناسب لشاشة الكاشير أو التابلت.')}</p>
+        <p className="mb-4 text-sm text-muted">{T('يُطبَّق على هذا الجهاز فقط — اختر الحجم المناسب لشاشة نقطة البيع أو الجهاز اللوحي.')}</p>
         <div className="grid grid-cols-5 gap-2" role="radiogroup" aria-label={T('حجم الخط')}>
           {fontScales.map(([k, label, size]) => (
             <button key={k} role="radio" aria-checked={scale === k} onClick={() => setScale(k)}

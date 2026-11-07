@@ -33,7 +33,7 @@ export function ModifierDialog({ item, groups, onClose, onAdd }) {
           <Button variant="secondary" onClick={() => setCount(count + 1)}>+</Button>
         </div>
         <Button size="lg" disabled={!!missing} onClick={() => onAdd({ modifier_ids: Object.values(picked).flat(), notes, qty_milli: count * 1000 })}>
-          {T('إضافة —')} {moneyC((item.price_minor + extra) * count)}
+          {T('إضافة')} {moneyC((item.price_minor + extra) * count)}
         </Button>
       </>}>
       <div className="grid gap-4">

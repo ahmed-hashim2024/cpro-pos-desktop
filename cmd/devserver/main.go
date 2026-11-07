@@ -35,8 +35,9 @@ func main() {
 	ui := flag.String("ui", "frontend/dist", "built web UI directory")
 	fake := flag.Bool("fake-saas", false, "link to an in-process fake Platform (activation code ACT-DEMO)")
 	public := flag.String("public", "", "also serve the guest e-menu on this loopback address, e.g. 127.0.0.1:8788")
+	remote := flag.String("remote", "", "also serve the staff system as remote access (tunnel channel) on this loopback address, e.g. 127.0.0.1:8789")
 	flag.Parse()
-	if err := run(*addr, *ui, *fake, *public); err != nil {
+	if err := run(*addr, *ui, *fake, *public, *remote); err != nil {
 		fmt.Fprintln(os.Stderr, "devserver:", err)
 		os.Exit(1)
 	}
@@ -53,12 +54,15 @@ func loopback(addr string) error {
 	return nil
 }
 
-func run(addr, ui string, fake bool, public string) error {
+func run(addr, ui string, fake bool, public, remote string) error {
 	if err := loopback(addr); err != nil {
 		return err
 	}
-	if public != "" {
-		if err := loopback(public); err != nil {
+	for _, extra := range []string{public, remote} {
+		if extra == "" {
+			continue
+		}
+		if err := loopback(extra); err != nil {
 			return err
 		}
 	}
@@ -91,6 +95,7 @@ func run(addr, ui string, fake bool, public string) error {
 
 	if fake {
 		f := saastest.NewHandler("ACT-DEMO")
+		f.Update("ACT-DEMO", func(t *saastest.Tenant) { t.Remote = remote != "" })
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			return err
@@ -119,6 +124,13 @@ func run(addr, ui string, fake bool, public string) error {
 			}
 		}()
 	}
-	log.Info("devserver", "data", p.Data, "addr", addr, "public", public)
+	if remote != "" {
+		go func() {
+			if err := httpapi.Listen(ctx, remote, httpapi.New(a, app.ChannelTunnel, log, static), log); err != nil {
+				log.Error("remote server", "err", err)
+			}
+		}()
+	}
+	log.Info("devserver", "data", p.Data, "addr", addr, "public", public, "remote", remote)
 	return httpapi.Listen(ctx, addr, httpapi.New(a, app.ChannelApp, log, static), log)
 }

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { CheckCheck, Clock, Flame, ChefHat, LayoutDashboard } from 'lucide-react';
+import { CheckCheck, Clock, Flame, ChefHat } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/store';
 import { orderTypes, qty, minutesSince } from '@/lib/format';
-import { Button, Select, Spinner, Empty, cx, useLoad } from '@/components/ui';
+import { BackIcon, Button, Select, Spinner, Empty, cx, useLoad } from '@/components/ui';
 import { T } from '@/lib/i18n';
 
 const STATION_KEY = 'cpro.kdsStation';
@@ -38,7 +38,7 @@ export default function Kitchen() {
   return (
     <div className="flex h-full flex-col bg-bg text-fg">
       <div className="flex items-center gap-3 border-b border-line bg-surface px-4 py-3">
-        <button onClick={() => navigate('/')} aria-label={T('الرجوع')} className="flex size-10 items-center justify-center rounded-xl border border-line text-muted hover:bg-surface-2 hover:text-fg"><LayoutDashboard className="size-5" /></button>
+        <button onClick={() => navigate('/')} aria-label={T('الرجوع')} className="flex size-10 items-center justify-center rounded-xl border border-line text-muted hover:bg-surface-2 hover:text-fg" title={T('الرجوع')}><BackIcon className="size-5" aria-hidden /></button>
         <span className="bg-brand flex size-10 items-center justify-center rounded-xl text-white"><ChefHat className="size-5" aria-hidden /></span>
         <h1 className="text-xl font-bold">{T('شاشة المطبخ')}</h1>
         <Select className="w-56" value={station} onChange={(e) => { setStation(e.target.value); try { localStorage.setItem(STATION_KEY, e.target.value); } catch { /* ignore */ } }}>

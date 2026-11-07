@@ -9,9 +9,9 @@ import { T } from '@/lib/i18n';
 export const licenseReason = (p) => ({
   trial_ended: T('انتهت الفترة التجريبية. اشترك من حسابك على المنصة ثم اضغط مزامنة'),
   suspended: T('الحساب موقوف. تواصل مع الدعم'),
-  revoked: T('الجهاز ده اتشال من حسابك على المنصة. اربطه تاني علشان تكمل'),
-  offline: T('بياناتك كلها محفوظة ومفيش حاجة ضاعت. وصّل الجهاز بالإنترنت وهيرجع يشتغل لوحده خلال دقيقة.'),
-}[p?.reason] || T('اربط البرنامج بحسابك علشان تبدأ'));
+  revoked: T('أُزيل هذا الجهاز من حسابك على المنصة. اربطه مرة أخرى للمتابعة'),
+  offline: T('جميع بياناتك محفوظة ولم يُفقد شيء. صِل الجهاز بالإنترنت وسيعود إلى العمل تلقائياً خلال دقيقة.'),
+}[p?.reason] || T('اربط البرنامج بحسابك للبدء'));
 
 const daysLeft = (iso) => Math.max(Math.ceil((new Date(iso) - Date.now()) / 864e5), 0);
 
@@ -63,8 +63,8 @@ export function ConnectGoogle({ onDone }) {
       </button>
       {url && (
         <p className="text-center text-sm text-muted">
-          {T('كمّل تسجيل الدخول في المتصفح، والبرنامج هيتفعّل لوحده.')}{' '}
-          <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openExternal(url)}>{T('افتح الصفحة تاني')}</button>
+          {T('أكمل تسجيل الدخول في المتصفح، وسيُفعَّل البرنامج تلقائياً.')}{' '}
+          <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openExternal(url)}>{T('أعد فتح الصفحة')}</button>
         </p>
       )}
       {error && <p role="alert" className="rounded-xl bg-danger-soft p-2.5 text-center text-sm text-danger" dir="auto">{error}</p>}
@@ -89,7 +89,7 @@ export function ActivationAlert() {
   const { reason } = platform;
   const offline = reason === 'offline';
   const connect = reason === 'not_connected' || reason === 'revoked';
-  const title = { trial_ended: T('انتهت الفترة التجريبية'), offline: T('البرنامج محتاج إنترنت'), not_connected: T('اربط البرنامج بحسابك'), revoked: T('اربط الجهاز بحسابك') }[reason] || T('البيع متوقف');
+  const title = { trial_ended: T('انتهت الفترة التجريبية'), offline: T('البرنامج يحتاج إلى الاتصال بالإنترنت'), not_connected: T('اربط البرنامج بحسابك'), revoked: T('اربط الجهاز بحسابك') }[reason] || T('البيع متوقف');
   const Icon = offline ? WifiOff : ShieldAlert;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
@@ -100,7 +100,7 @@ export function ActivationAlert() {
         </span>
         <h2 id="activation-title" className="mt-4 text-2xl font-bold">{title}</h2>
         <p className="mt-2 text-muted">{licenseReason(platform)}</p>
-        {offline && <div className="mt-5"><SyncButton label={T('حاول دلوقتي')} /></div>}
+        {offline && <div className="mt-5"><SyncButton label={T('حاول الآن')} /></div>}
         {!offline && (owner ? (
           <div className="mt-5 grid gap-3 text-start">
             {connect ? <ConnectGoogle onDone={loadPlatform} /> : (
@@ -111,9 +111,9 @@ export function ActivationAlert() {
             )}
           </div>
         ) : (
-          <p className="mt-5 rounded-xl bg-surface-2 p-3 text-sm">{T('اطلب من المالك يكمّل الخطوة دي')}</p>
+          <p className="mt-5 rounded-xl bg-surface-2 p-3 text-sm">{T('اطلب من المالك إتمام هذه الخطوة')}</p>
         ))}
-        <p className="mt-4 text-xs text-muted">{T('بياناتك محفوظة على هذا الجهاز والنسخ الاحتياطي التلقائي شغال')}</p>
+        <p className="mt-4 text-xs text-muted">{T('بياناتك محفوظة على هذا الجهاز، والنسخ الاحتياطي التلقائي مفعّل')}</p>
         <button type="button" onClick={logout} className="mt-3 inline-flex items-center gap-1.5 text-sm text-muted underline-offset-2 hover:text-fg hover:underline">
           <LogOut className="size-4" aria-hidden />{T('تسجيل الخروج')}
         </button>
@@ -149,8 +149,8 @@ export function LicenseBanner() {
       <CalendarClock className="size-4 shrink-0" aria-hidden />
       <span className="flex-1">
         {days > 1
-          ? T('جهازك مش متصل بالإنترنت من فترة. وصّله في أقرب وقت علشان البرنامج يفضل شغال — باقي {0} أيام', [days])
-          : T('جهازك مش متصل بالإنترنت من فترة. وصّله النهارده علشان البرنامج يفضل شغال — ده آخر يوم')}
+          ? T('لم يتصل جهازك بالإنترنت منذ مدة. صِله في أقرب وقت ليستمر البرنامج في العمل — بقي {0} أيام', [days])
+          : T('لم يتصل جهازك بالإنترنت منذ مدة. صِله اليوم ليستمر البرنامج في العمل — هذا هو اليوم الأخير')}
       </span>
     </div>
   );

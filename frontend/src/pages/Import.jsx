@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import {
   FileSpreadsheet, Download, Paperclip, Upload, CheckCircle2, AlertTriangle, UtensilsCrossed, Layers, Wheat,
-  Users, Store, Armchair, FilePlus2, FilePen, X, FileDown, Loader2, Truck,
+  Users, Store, Armchair, Flame, FilePlus2, FilePen, X, FileDown, Loader2, Truck,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { lang } from '@/lib/i18n';
@@ -11,7 +11,7 @@ import { exportCSV } from '@/lib/csv';
 import { Button, Card, Empty, PageHeader, Spinner, Table, Td, Tabs, cx, useAction, useLoad } from '@/components/ui';
 import { T } from '@/lib/i18n';
 
-const icons = { items: UtensilsCrossed, categories: Layers, ingredients: Wheat, customers: Users, suppliers: Store, tables: Armchair };
+const icons = { items: UtensilsCrossed, stations: Flame, categories: Layers, ingredients: Wheat, customers: Users, suppliers: Store, tables: Armchair };
 
 // Messages for the issue codes returned by the server.
 const issueText = {
@@ -27,7 +27,7 @@ const issueText = {
   not_found: T('غير موجود — استخدم تبويب الإضافة'),
   too_long: T('النص أطول من المسموح'),
   invalid_json: T('صيغة البيانات في الخلية غير صحيحة'),
-  db_rule: T('قاعدة البيانات رفضت القيمة دي'),
+  db_rule: T('رفضت قاعدة البيانات هذه القيمة'),
 };
 
 export default function Import() {
@@ -108,7 +108,7 @@ export default function Import() {
                 </div>
               </Step>
 
-              <Step n={3} title={T('أرفق الملف بعد ملئه')}>
+              <Step n={3} title={T('أرفق الملف بعد تعبئته')}>
                 <input ref={input} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden"
                   onChange={(e) => { setFile(e.target.files[0] || null); setResult(null); }} />
                 <div
@@ -160,7 +160,7 @@ function Export({ list }) {
   return (
     <Card title={T('تصدير البيانات')} icon={FileDown}
       actions={<Button icon={Download} busy={busy === 'all'} disabled={!!busy} onClick={() => download('all')}>{T('تصدير كل البيانات')}</Button>}>
-      <p className="mb-4 text-sm text-muted">{T('نزّل بياناتك الحالية في ملف Excel. تقدر تعدّل الملف وترفعه من تبويب «تحديث بيانات موجودة». ملف «كل البيانات» فيه ورقة لكل نوع، ولرفع التعديلات استخدم ملف كل نوع لوحده.')}</p>
+      <p className="mb-4 text-sm text-muted">{T('نزّل بياناتك الحالية في ملف Excel، ثم عدّله وارفعه من تبويب «تحديث بيانات موجودة». يحتوي ملف «كل البيانات» على ورقة لكل نوع، ولرفع التعديلات استخدم ملف كل نوع على حدة.')}</p>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {list.map((t) => {
           const Icon = icons[t.key] || FileSpreadsheet;
@@ -206,30 +206,30 @@ function Transfer() {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card title={T('من الجهاز القديم')} icon={Download}>
-        <p className="mb-3 text-sm text-muted">{T('نزّل ملف واحد فيه بيانات المطعم وصور المنيو، وانقله للجهاز الجديد.')}</p>
+        <p className="mb-3 text-sm text-muted">{T('نزّل ملفاً واحداً يضم بيانات المطعم وصور قائمة الطعام، وانقله إلى الجهاز الجديد.')}</p>
         {d && (
           <ul className="mb-3 divide-y divide-line rounded-xl bg-surface-2 px-3 text-sm">
             {d.groups.map((g) => <li key={g.label} className="flex justify-between py-2"><span>{g.label}</span><span className="num text-muted">{g.rows}</span></li>)}
             <li className="flex justify-between py-2"><span>{T('الصور')}</span><span className="num text-muted">{d.images}</span></li>
           </ul>
         )}
-        {d?.open_shifts > 0 && <p className="mb-3 rounded-xl bg-warning-soft p-2.5 text-sm text-warning">{T('فيه وردية مفتوحة. اقفلها الأول علشان حساباتها تتنقل كاملة.')}</p>}
+        {d?.open_shifts > 0 && <p className="mb-3 rounded-xl bg-warning-soft p-2.5 text-sm text-warning">{T('توجد وردية مفتوحة. أغلقها أولاً لتُنقل حساباتها كاملة.')}</p>}
         <Button icon={Download} busy={busy === 'down'} disabled={!!busy} onClick={download}>{T('تنزيل ملف النقل')}</Button>
       </Card>
 
       <Card title={T('على الجهاز الجديد')} icon={Upload}>
         <ol className="mb-3 grid list-decimal gap-1.5 ps-5 text-sm text-muted">
           <li>{T('احذف الجهاز القديم من حسابك على المنصة لو عدد الأجهزة في باقتك جهاز واحد.')}</li>
-          <li>{T('افتح البرنامج على الجهاز الجديد، ودوس Continue with Google، وجهّز حساب المالك.')}</li>
+          <li>{T('افتح البرنامج على الجهاز الجديد، واضغط Continue with Google، ثم أنشئ حساب المالك.')}</li>
           <li>{T('ارفع ملف النقل من هنا.')}</li>
         </ol>
         <input ref={input} type="file" accept=".zip,.xlsx" className="hidden"
           onChange={(e) => { const f = e.target.files[0]; e.target.value = ''; if (f) upload(f); }} />
         <Button icon={Upload} busy={busy === 'up'} disabled={!!busy} onClick={() => input.current?.click()}>{T('رفع ملف النقل')}</Button>
-        <p className="mt-3 text-xs text-muted">{T('بتتاخد نسخة احتياطية قبل الرفع، ولو فيه خطأ في صف واحد مش بيتحفظ أي حاجة. رفع نفس الملف مرتين مش بيكرر البيانات.')}</p>
+        <p className="mt-3 text-xs text-muted">{T('تُنشأ نسخة احتياطية قبل الرفع، وإن وُجد خطأ في صف واحد لا يُحفظ أي شيء. ولا يؤدي رفع الملف نفسه مرتين إلى تكرار البيانات.')}</p>
       </Card>
 
-      <p className="rounded-xl bg-surface-2 p-3 text-sm text-muted lg:col-span-2">{T('المستخدمين والأجهزة والترخيص مش بيتنقلوا. الطلبات والورديات القديمة بتتسجل باسم المالك اللي عمل النقل، فتقارير الكاشير القديمة هتظهر باسمه.')}</p>
+      <p className="rounded-xl bg-surface-2 p-3 text-sm text-muted lg:col-span-2">{T('لا يُنقل المستخدمون والأجهزة والترخيص. تُسجَّل الطلبات والورديات السابقة باسم المالك الذي أجرى النقل، فتظهر تقارير أمناء الصندوق السابقة باسمه.')}</p>
 
       {result && <div className="lg:col-span-2"><TransferResult result={result} /></div>}
     </div>
@@ -242,7 +242,7 @@ function TransferResult({ result }) {
       <div className="flex items-center gap-3 rounded-card border border-success/30 bg-success-soft p-4 text-success">
         <CheckCircle2 className="size-7 shrink-0" aria-hidden />
         <div>
-          <div className="text-lg font-bold">{T('تمت إضافة {0} وتعديل {1} صف، ونقل {2} صورة', [result.inserted, result.updated, result.images])}</div>
+          <div className="text-lg font-bold">{T('أُضيف {0} صف وعُدّل {1} صف ونُقلت {2} صورة', [result.inserted, result.updated, result.images])}</div>
           <div className="text-sm" dir="auto">{T('نسخة احتياطية قبل الرفع')}: {result.backup}</div>
         </div>
       </div>

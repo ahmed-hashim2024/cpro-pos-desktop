@@ -97,7 +97,7 @@ func (a *App) StartConnect(context.Context) (string, error) {
 		return "", err
 	}
 	if !a.NeedsConnect() {
-		return "", conflict("البرنامج متربط بحسابك بالفعل")
+		return "", conflict("البرنامج مرتبط بحسابك بالفعل")
 	}
 	p.mu.RLock()
 	base := p.baseURL()
@@ -119,7 +119,7 @@ func (a *App) StartConnect(context.Context) (string, error) {
 		a.connectMu.Lock()
 		defer a.connectMu.Unlock()
 		if a.connect == f && f.status.State == "waiting" {
-			f.status = ConnectStatus{State: "failed", Error: "انتهى وقت الربط، حاول مرة تانية"}
+			f.status = ConnectStatus{State: "failed", Error: "انتهت مهلة الربط، أعد المحاولة"}
 		}
 		f.close()
 	})
@@ -157,7 +157,7 @@ func (a *App) finishConnect(w http.ResponseWriter, r *http.Request, f *connectFl
 	a.connectMu.Lock()
 	if f.status.State != "waiting" {
 		a.connectMu.Unlock()
-		connectPage(w, "الربط تم بالفعل", "ارجع للبرنامج.")
+		connectPage(w, "تم الربط بالفعل", "عُد إلى البرنامج.")
 		return
 	}
 	f.status.State = "working" // one token, one try
@@ -176,16 +176,16 @@ func (a *App) finishConnect(w http.ResponseWriter, r *http.Request, f *connectFl
 	}
 	a.connectMu.Unlock()
 	if err != nil {
-		connectPage(w, "تعذر ربط البرنامج", err.Error())
+		connectPage(w, "تعذّر ربط البرنامج", err.Error())
 	} else {
-		connectPage(w, "تم ربط البرنامج بحسابك", "تقدر تقفل الصفحة دي وترجع للبرنامج.")
+		connectPage(w, "تم ربط البرنامج بحسابك", "يمكنك إغلاق هذه الصفحة والعودة إلى البرنامج.")
 	}
 	f.close()
 }
 
 func (a *App) activateWithLink(ctx context.Context, token string) error {
 	if token == "" || len(token) > 128 {
-		return invalid("رابط الربط غير صحيح، حاول مرة تانية")
+		return invalid("رابط الربط غير صحيح، أعد المحاولة")
 	}
 	p, err := a.platformRequired()
 	if err != nil {
@@ -278,7 +278,7 @@ func (a *App) linkedPlatform() (*platformLink, error) {
 		return nil, err
 	}
 	if a.NeedsConnect() {
-		return nil, invalid("اربط البرنامج بحسابك الأول")
+		return nil, invalid("اربط البرنامج بحسابك أولاً")
 	}
 	return p, nil
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Printer, Download, BarChart3, TrendingUp, Coins, Wheat, Receipt, Percent, Undo2, Landmark, Ban, Truck, FlaskConical, Trash2, ClipboardCheck } from 'lucide-react';
+import { Printer, Download, BarChart3, TrendingUp, Coins, Wheat, Receipt, Percent, Undo2, Landmark, Ban, Truck, FlaskConical, Trash2, ClipboardCheck, BellRing, Timer, CheckCheck } from 'lucide-react';
+import { requestKinds } from '@/components/Inbox';
 import { api } from '@/lib/api';
 import { useTab } from '@/lib/useTab';
 import { money, pct, qty, milliInput, orderTypes, dateTime, today, daysAgo, monthStart, units } from '@/lib/format';
@@ -7,7 +8,7 @@ import { exportCSV } from '@/lib/csv';
 import { printReport } from '@/lib/print';
 import { Button, Card, DateRange, PageHeader, Stat, Table, Td, Tabs, Spinner, useLoad } from '@/components/ui';
 import { Bars } from '@/components/Chart';
-import { T } from '@/lib/i18n';
+import { T, locale } from '@/lib/i18n';
 
 const presets = [
   [T('اليوم'), () => [today(), today()]],
@@ -30,9 +31,9 @@ export default function Reports() {
       </PageHeader>
       <Tabs value={tab} onChange={setTab} tabs={[
         ['sales', T('ملخص المبيعات')], ['items', T('الأصناف والربحية')], ['breakdown', T('التفاصيل')],
-        ['consumption', T('استهلاك الخامات')], ['voids', T('الإلغاءات والهالك')],
+        ['consumption', T('استهلاك الخامات')], ['voids', T('الإلغاءات والهالك')], ['service', T('نداءات الصالة')],
       ]} />
-      {tab === 'consumption' ? <Consumption range={range} /> : <Sales range={range} tab={tab} />}
+      {tab === 'consumption' ? <Consumption range={range} /> : tab === 'service' ? <Service range={range} /> : <Sales range={range} tab={tab} />}
     </div>
   );
 }
@@ -109,7 +110,7 @@ function Sales({ range, tab }) {
       <div className="grid gap-3 md:grid-cols-2">
         {block(T('طرق الدفع'), d.by_method)}
         {block(T('نوع الطلب'), d.by_type, (b) => orderTypes[b.key])}
-        {block(T('حسب الكاشير'), d.by_cashier)}
+        {block(T('حسب أمين الصندوق'), d.by_cashier)}
         {block(T('حسب القسم'), d.by_category)}
         {block(T('حسب الساعة'), d.by_hour)}
         {block(T('حسب اليوم'), d.by_day)}
@@ -179,6 +180,53 @@ function Consumption({ range }) {
           </tr>
         ))}
       </Table>
+    </div>
+  );
+}
+
+// Calls from the tables: how many of each reason, how long guests waited
+// until someone marked them done, and who answered.
+function Service({ range }) {
+  const r = useLoad(() => api.get('/reports/service', range), [range.from, range.to]);
+  if (!r.data) return <Spinner />;
+  const d = r.data;
+  const mins = (m) => T('{0} دقيقة', [Number(m).toLocaleString(locale, { maximumFractionDigits: 1 })]);
+  const label = (k) => (requestKinds[k] || requestKinds.waiter).label();
+  const missed = d.calls - d.answered;
+  const head = [T('السبب'), T('النداءات'), T('تم الرد'), T('متوسط الانتظار'), T('أطول انتظار')];
+  const wait = (k, m) => (k.answered ? mins(m) : '—'); // nobody answered: there's no wait to report
+  const rows = d.by_kind.map((k) => [label(k.kind), k.calls, k.answered, wait(k, k.avg_minutes), wait(k, k.max_minutes)]);
+  return (
+    <div className="grid gap-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Stat label={T('النداءات')} icon={BellRing} value={String(d.calls)} />
+        <Stat label={T('متوسط وقت الرد')} icon={Timer} value={d.answered ? mins(d.avg_minutes) : '—'} tone={d.avg_minutes > 5 ? 'bad' : 'good'} sub={T('من النداء حتى «تم»')} />
+        <Stat label={T('تم الرد')} icon={CheckCheck} value={String(d.answered)} tone="success" />
+        <Stat label={T('بدون رد')} icon={Ban} value={String(missed)} tone={missed ? 'danger' : 'default'} sub={T('نداءات لم يُضغط عليها «تم»')} />
+      </div>
+      <ReportActions title={T('نداءات الصالة')} period={`${range.from} → ${range.to}`} head={head} rows={rows} />
+      <div className="grid gap-3 md:grid-cols-2">
+        <Card title={T('حسب السبب')}>
+          <Table head={head} empty={T('لا توجد نداءات في الفترة')}>
+            {d.by_kind.map((k) => (
+              <tr key={k.kind}>
+                <Td className="font-semibold">{label(k.kind)}</Td><Td className="num">{k.calls}</Td><Td className="num">{k.answered}</Td>
+                <Td className="num">{wait(k, k.avg_minutes)}</Td><Td className={`num ${k.max_minutes > 10 ? 'text-danger' : ''}`}>{wait(k, k.max_minutes)}</Td>
+              </tr>
+            ))}
+          </Table>
+        </Card>
+        <Card title={T('حسب الموظف')}>
+          <Table head={[T('الموظف'), T('تم الرد'), T('متوسط الانتظار')]} empty={T('لا توجد نداءات في الفترة')}>
+            {d.by_staff.map((st, i) => (
+              <tr key={i}><Td className="font-semibold">{st.user_name}</Td><Td className="num">{st.answered}</Td><Td className="num">{mins(st.avg_minutes)}</Td></tr>
+            ))}
+          </Table>
+        </Card>
+      </div>
+      <Card title={T('النداءات حسب الساعة')}>
+        <Bars data={d.by_hour.map((b) => ({ label: b.key, value: b.orders }))} format={(v) => T('{0} نداء', [v])} tone="warning" />
+      </Card>
     </div>
   );
 }

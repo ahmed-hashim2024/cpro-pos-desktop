@@ -81,10 +81,10 @@ func (a *App) RestoreFirstRun(ctx context.Context, path string) error {
 		return err
 	}
 	if !empty {
-		return conflict("البرنامج متجهز بالفعل، استرجع النسخة من الإعدادات")
+		return conflict("البرنامج مُعدّ بالفعل، فاسترجع النسخة من الإعدادات")
 	}
 	if a.NeedsConnect() {
-		return invalid("اربط البرنامج بحسابك الأول")
+		return invalid("اربط البرنامج بحسابك أولاً")
 	}
 	return a.restore(ctx, path, false)
 }
@@ -94,7 +94,7 @@ func requireRestore(actor Actor) error {
 		return err
 	}
 	if actor.Channel != ChannelApp {
-		return &Error{CodeForbidden, "الاسترجاع من جهاز الكاشير الرئيسي فقط"}
+		return &Error{CodeForbidden, "يتم الاسترجاع من الجهاز الرئيسي لنقطة البيع فقط"}
 	}
 	return nil
 }
@@ -129,7 +129,7 @@ func (a *App) restore(ctx context.Context, src string, keepCurrent bool) error {
 }
 
 func (a *App) checkBackup(ctx context.Context, path string) error {
-	bad := invalid("الملف ده مش نسخة احتياطية من البرنامج. اختار ملف .db من فولدر النسخ الاحتياطية")
+	bad := invalid("هذا الملف ليس نسخة احتياطية من البرنامج. اختر ملفاً بامتداد ‎.db من مجلد النسخ الاحتياطية")
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -138,13 +138,13 @@ func (a *App) checkBackup(ctx context.Context, path string) error {
 	n, _ := f.Read(head)
 	f.Close()
 	if bytes.HasPrefix(head[:n], []byte("PK")) {
-		return invalid("ده ملف نقل بيانات مش نسخة احتياطية. ارفعه من «استيراد وتصدير البيانات» ← «نقل البيانات» بعد إعداد البرنامج")
+		return invalid("هذا ملف نقل بيانات وليس نسخة احتياطية. ارفعه من «استيراد وتصدير البيانات» ← «نقل البيانات» بعد إعداد البرنامج")
 	}
 	if !bytes.Equal(head[:n], []byte("SQLite format 3\x00")) {
 		return bad
 	}
 	if res, err := sqlite.CheckIntegrity(ctx, path); err != nil || res != "ok" {
-		return invalid("ملف النسخة تالف، جرب نسخة تانية")
+		return invalid("ملف النسخة تالف، جرّب نسخة أخرى")
 	}
 	db, err := sqlite.ReadFile(path)
 	if err != nil {
@@ -164,7 +164,7 @@ func (a *App) checkBackup(ctx context.Context, path string) error {
 		return err
 	}
 	if version > current {
-		return invalid("النسخة دي من إصدار مختلف من البرنامج ومش ممكن تترجع على الإصدار ده")
+		return invalid("هذه النسخة من إصدار مختلف من البرنامج، ولا يمكن استرجاعها على هذا الإصدار")
 	}
 	return nil
 }

@@ -14,8 +14,8 @@ export default function Menu() {
   const [tab, setTab] = useTab('items');
   return (
     <div>
-      <PageHeader title={T('المنيو')} icon={UtensilsCrossed} subtitle={T('الأصناف والوصفات والإضافات والطاولات والمنيو الإلكتروني')} crumb={T('المنيو')} />
-      <Tabs value={tab} onChange={setTab} tabs={[['items', T('الأصناف')], ['categories', T('الأقسام')], ['modifiers', T('الإضافات')], ['tables', T('الطاولات')], ['stations', T('محطات المطبخ')], ['emenu', T('المنيو الإلكتروني')]]} />
+      <PageHeader title={T('قائمة الطعام')} icon={UtensilsCrossed} subtitle={T('الأصناف والوصفات والإضافات والطاولات وقائمة الطعام الإلكترونية')} crumb={T('قائمة الطعام')} />
+      <Tabs value={tab} onChange={setTab} tabs={[['items', T('الأصناف')], ['categories', T('الأقسام')], ['modifiers', T('الإضافات')], ['tables', T('الطاولات')], ['stations', T('محطات المطبخ')], ['emenu', T('قائمة الطعام الإلكترونية')]]} />
       {tab === 'items' && <Items />}
       {tab === 'categories' && <Categories />}
       {tab === 'modifiers' && <ModifierGroups />}
@@ -41,7 +41,7 @@ function useCatalogActions(kind, reload) {
     if (!ok) return false;
     try {
       const r = await api.del(`/${kind}/${row.id}`);
-      toast(r?.archived ? T('تمت الأرشفة — مستخدم في طلبات سابقة فتم إخفاؤه مع الاحتفاظ بالسجل') : T('تم الحذف'));
+      toast(r?.archived ? T('تمت الأرشفة — استُخدم في طلبات سابقة، فأُخفي مع الاحتفاظ بالسجل') : T('تم الحذف'));
       reload(true);
       return true;
     } catch (e) { toastError(e); return false; }
@@ -78,7 +78,7 @@ function Items() {
           <Plus className="size-4" />{T('صنف جديد')}
         </Button>
       </div>
-      <Table head={['', T('الكود'), T('الصنف'), T('القسم'), T('السعر'), T('تكلفة الوصفة'), T('هامش الربح'), T('يظهر في المنيو')]}>
+      <Table head={['', T('الرمز'), T('الصنف'), T('القسم'), T('السعر'), T('تكلفة الوصفة'), T('هامش الربح'), T('يظهر في قائمة الطعام')]}>
         {rows.map((i) => {
           const margin = i.price_minor ? Math.round(((i.price_minor - i.cost_minor) / i.price_minor) * 10000) : 0;
           return (
@@ -88,7 +88,7 @@ function Items() {
               <Td className="num">{money(i.price_minor)}</Td>
               <Td className="num">{i.recipe.length ? money(i.cost_minor) : <span className="text-warning">{T('بدون وصفة')}</span>}</Td>
               <Td className={`num ${margin < 5000 ? 'text-danger' : 'text-primary'}`}>{i.recipe.length ? pct(margin) : '—'}</Td>
-              <Td><Switch checked={i.active} onChange={(v) => toggle(i, v)} label={T('يظهر في المنيو')} /></Td>
+              <Td><Switch checked={i.active} onChange={(v) => toggle(i, v)} label={T('يظهر في قائمة الطعام')} /></Td>
             </tr>
           );
         })}
@@ -129,14 +129,14 @@ function ItemDialog({ item, data, onClose, onSaved, onDelete }) {
           <div className="grid grid-cols-2 gap-3">
             <Field label={T('اسم الصنف')} className="col-span-2"><Input autoFocus value={f.name} onChange={set('name')} /></Field>
             <Field label={T('السعر')}><Input className="num" value={f.price} onChange={set('price')} /></Field>
-            <Field label={T('الكود')} hint={T('يُولَّد تلقائياً إن تُرك فارغاً')}><Input className="num" value={f.code} onChange={set('code')} /></Field>
+            <Field label={T('الرمز')} hint={T('يُولَّد تلقائياً إن تُرك فارغاً')}><Input className="num" value={f.code} onChange={set('code')} /></Field>
             <Field label={T('القسم')}>
               <Select value={f.category_id} onChange={(e) => setF({ ...f, category_id: e.target.value, sort: placeIn(e.target.value) })}>
                 <option value="">{T('— بدون —')}</option>{data.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </Select>
             </Field>
             <Field label={T('الترتيب في القسم')}><PositionSelect count={peers(f.category_id).length + 1} value={f.sort} onChange={(v) => setF({ ...f, sort: v })} /></Field>
-            <Field label={T('وقت التحضير التقديري (دقيقة)')} hint={T('بيتحسب منه الوقت المتوقع للطلب في المنيو الإلكتروني')} className="col-span-2">
+            <Field label={T('وقت التحضير التقديري (دقيقة)')} hint={T('يُحسب منه الوقت المتوقع للطلب في قائمة الطعام الإلكترونية')} className="col-span-2">
               <Input className="num" type="number" min={0} max={240} value={f.prep} onChange={set('prep')} />
             </Field>
           </div>
@@ -144,7 +144,7 @@ function ItemDialog({ item, data, onClose, onSaved, onDelete }) {
           <div className="flex items-center gap-3">
             {(image || f.image) && <img src={image || f.image} className="size-20 rounded-lg object-cover" alt="" />}
             <ImagePick onPick={setImage} hint="(1200 × 900)" />
-            <Checkbox label={T('يظهر في المنيو')} checked={f.active} onChange={(v) => setF({ ...f, active: v })} />
+            <Checkbox label={T('يظهر في قائمة الطعام')} checked={f.active} onChange={(v) => setF({ ...f, active: v })} />
           </div>
           <Field label={T('مجموعات الإضافات')}>
             <div className="flex flex-wrap gap-2">
@@ -339,7 +339,7 @@ function Tables() {
         <Modal open onClose={() => setEdit(null)} title={T('طاولة')} size="sm" footer={<>{edit.id && <DeleteButton onClick={async () => { if (await remove(edit)) setEdit(null); }} />}<Button busy={busy} onClick={save}>{T('حفظ')}</Button></>}>
           <div className="grid gap-3">
             <Field label={T('الاسم / الرقم')}><Input autoFocus value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
-            <Field label={T('المنطقة')}><Input value={edit.area} onChange={(e) => setEdit({ ...edit, area: e.target.value })} placeholder={T('الصالة، التراس، الدور الثاني')} /></Field>
+            <Field label={T('المنطقة')}><Input value={edit.area} onChange={(e) => setEdit({ ...edit, area: e.target.value })} placeholder={T('الصالة، الشرفة، الطابق الثاني')} /></Field>
             <Field label={T('عدد المقاعد')}><Input type="number" value={edit.seats} onChange={(e) => setEdit({ ...edit, seats: e.target.value })} /></Field>
             <Checkbox label={T('مفعّلة')} checked={edit.active} onChange={(v) => setEdit({ ...edit, active: v })} />
           </div>
@@ -372,7 +372,7 @@ function Stations() {
   });
   return (
     <>
-      <p className="mb-3 text-sm text-muted">{T('قسّم المطبخ لمحطات (مشويات، مشروبات، حلويات…) واربط كل قسم من المنيو بمحطة، ثم افتح شاشة المطبخ على كل محطة.')}</p>
+      <p className="mb-3 text-sm text-muted">{T('قسّم المطبخ إلى محطات (مشويات، مشروبات، حلويات…)، واربط كل قسم من قائمة الطعام بمحطة، ثم افتح شاشة المطبخ لكل محطة.')}</p>
       <Button className="mb-3" onClick={() => setEdit({ name: '', printer: '', active: true })}><Plus className="size-4" />{T('محطة')}</Button>
       <Table head={[T('المحطة'), T('الحالة')]}>
         {(data.data || []).map((s) => (

@@ -35,7 +35,7 @@ export function effectiveMode(menu, contact) {
   const modes = orderModes(menu);
   return modes.includes(contact.mode) ? contact.mode : modes[0] || '';
 }
-const phoneOK = (p) => (p.match(/[0-9٠-٩]/g) || []).length >= 7;
+export const phoneOK = (p) => (p.match(/[0-9٠-٩]/g) || []).length >= 7;
 export function contactReady(menu, contact) {
   const mode = effectiveMode(menu, contact);
   if (mode === 'hall') return !!(menu.table || menu.tables?.includes(contact.table));
@@ -133,9 +133,9 @@ export function Sheet({ onClose, children, label }) {
   useLockScroll();
   useEscape(onClose);
   return (
-    <div className="anim-fade fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-[2px]" onClick={onClose}>
+    <div className="anim-fade fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-[2px] md:items-center md:p-6" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={label} onClick={(e) => e.stopPropagation()}
-        className="anim-sheet flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-[28px] bg-bg shadow-2xl">
+        className="anim-sheet flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-[28px] bg-bg shadow-2xl md:max-h-[85dvh] md:max-w-lg md:rounded-[28px]">
         {children}
       </div>
     </div>

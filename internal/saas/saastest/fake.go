@@ -36,6 +36,19 @@ type Tenant struct {
 	GraceDays               int
 }
 
+// syncTunnel is what the Platform sends: the staff address only with the
+// remote-access feature.
+func (t *Tenant) syncTunnel() *saas.Tunnel {
+	if t.Tunnel == nil {
+		return nil
+	}
+	out := *t.Tunnel
+	if !t.Remote {
+		out.RemoteDomain = ""
+	}
+	return &out
+}
+
 func (t *Tenant) features() map[string]bool {
 	out := map[string]bool{"emenu": t.EMenu, "emenu_ordering": t.Ordering, "remote_access": t.Remote}
 	for k, v := range t.Extra {
@@ -285,7 +298,7 @@ func (f *Fake) handle(method, deviceID string, ts int64, nonce, body, sig string
 			out["available"], out["domain"] = true, sub+".menu.test"
 			if method == "claim_subdomain" {
 				f.takenSubdomains[sub] = true
-				t.Tunnel = &saas.Tunnel{Domain: sub + ".menu.test", ConnectorToken: "tok"}
+				t.Tunnel = &saas.Tunnel{Domain: sub + ".menu.test", RemoteDomain: sub + "-pos.menu.test", ConnectorToken: "tok"}
 				t.Ver++
 			}
 		}
@@ -327,7 +340,7 @@ func (f *Fake) reply(t *Tenant, deviceID, key string) map[string]any {
 	}
 	return map[string]any{
 		"license": f.Sign(claims),
-		"sync": map[string]any{"tunnel": t.Tunnel, "tunnel_error": t.TunnelError, "emenu": t.EMenuSettings, "integrations": t.Integrations,
+		"sync": map[string]any{"tunnel": t.syncTunnel(), "tunnel_error": t.TunnelError, "emenu": t.EMenuSettings, "integrations": t.Integrations,
 			"profile": t.Profile, "returning": t.Returning || t.Profile != nil,
 			"ver": t.Ver, "server_time": now.Unix()},
 	}

@@ -55,8 +55,8 @@ func defaultSettings() Settings {
 		PrintKitchen:      true,
 		AutoPrintReceipt:  true,
 		PaymentMethods: []PaymentMethod{
-			{Code: "cash", Name: "كاش", IsCash: true, Active: true},
-			{Code: "card", Name: "فيزا", Active: true},
+			{Code: "cash", Name: "نقداً", IsCash: true, Active: true},
+			{Code: "card", Name: "بطاقة مصرفية", Active: true},
 			{Code: "wallet", Name: "محفظة إلكترونية", Active: true},
 			{Code: "instapay", Name: "إنستاباي", Active: true},
 		},
@@ -149,7 +149,7 @@ func validateSettings(s *Settings) error {
 	for i, m := range s.PaymentMethods {
 		m.Code = strings.TrimSpace(strings.ToLower(m.Code))
 		if m.Code == "" || m.Name == "" || seen[m.Code] {
-			return invalid("طرق الدفع: الكود والاسم مطلوبان ولا يتكرر الكود")
+			return invalid("طرق الدفع: الرمز والاسم مطلوبان، ولا يجوز تكرار الرمز")
 		}
 		seen[m.Code] = true
 		cash = cash || (m.IsCash && m.Active)
